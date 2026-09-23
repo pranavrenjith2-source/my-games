@@ -1,6 +1,22 @@
 {
   "games": [
     {
+      "name": "a-full-platformer-with-15-handcrafted-le.html",
+      "url": "games/a-full-platformer-with-15-handcrafted-le.html",
+      "mtime": 1790130021845.2136,
+      "source": "upload",
+      "title": "A Full Platformer With 15+ Handcrafted Levels, Checkpoints And A Final Boss",
+      "description": "a full platformer with 15+ handcrafted levels, checkpoints and a final boss"
+    },
+    {
+      "name": "a-slider-that-shows-the-real-size-of-t.html",
+      "url": "games/a-slider-that-shows-the-real-size-of-t.html",
+      "mtime": 1790128880578.7866,
+      "source": "forge",
+      "title": "A Slider That Shows The Real Size Of Things Compared To A Human",
+      "description": "a slider that shows the real size of things compared to a human"
+    },
+    {
       "name": "gn-math.html",
       "url": "games/gn-math.html",
       "mtime": 1790125288149.1946,

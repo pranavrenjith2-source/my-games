@@ -111,12 +111,15 @@ async function callAPI(){
         { role: "user", content: prompt }
       ],
       temperature: 0.85,
-      max_tokens: 32000
+      max_tokens: 32000,
+      reasoning_effort: "none"   // this model otherwise spends every token on reasoning and emits no file
     })
   });
   if (!res.ok) throw new Error("API HTTP " + res.status + ": " + (await res.text()).slice(0, 300));
   const j = await res.json();
-  const msg = (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "";
+  const choice = (j.choices && j.choices[0]) || {};
+  const msg = (choice.message && choice.message.content) || "";
+  console.log("finish=" + (choice.finish_reason || "?") + " content=" + msg.length + " chars");
   return msg;
 }
 

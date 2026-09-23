@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Chrono Leap - Platformer</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:#0a0a14; font-family:'Segoe UI',Arial,sans-serif; }
+  #wrap { position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+  canvas { display:block; image-rendering:pixelated; box-shadow:0 0 40px rgba(80,120,255,0.4); border-radius:6px; background:#12122a; }
+  #overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background:radial-gradient(circle at 50% 30%, #1a1a3a 0%, #07070f 80%); color:#e8e8ff; text-align:center; user-select:none; }
+  #overlay h1 { font-size:clamp(32px,7vw,72px); letter-spacing:4px; margin-bottom:10px;
+    background:linear-gradient(180deg,#9fd0ff,#4a7bff); -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:0 0 30px rgba(80,140,255,0.5); font-weight:800; }
+  #overlay p { font-size:clamp(12px,2vw,18px); margin:6px 0; opacity:0.85; max-width:600px; line-height:1.5; }
+  #overlay .btn { margin-top:24px; padding:14px 36px; font-size:20px; font-weight:700; letter-spacing:2px;
+    background:linear-gradient(180deg,#4a7bff,#2a4bd0); color:#fff; border:none; border-radius:10px; cursor:pointer;
+    box-shadow:0 6px 0 #1a2b80, 0 0 30px rgba(80,140,255,0.6); transition:transform 0.08s; }
+  #overlay .btn:hover { transform:translateY(-2px); }
+  #overlay .btn:active { transform:translateY(3px); box-shadow:0 3px 0 #1a2b80; }
+  .hint { margin-top:20px; font-size:13px; opacity:0.6; }
+  #hud { position:absolute; top:10px; left:14px; right:14px; display:flex; justify-content:space-between;
+    color:#fff; font-size:16px; font-weight:700; text-shadow:0 2px 6px #000; pointer-events:none; letter-spacing:1px; }
+  #hud .right { text-align:right; }
+  .hidden { display:none !important; }
+  .sub { color:#8fb8ff; }
+  #levelLabel { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:48px; font-weight:800;
+    color:#fff; text-shadow:0 0 30px #4a7bff; opacity:0; pointer-events:none; transition:opacity 0.4s; letter-spacing:3px; }
+  .fadein { opacity:1 !important; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game" width="960" height="540"></canvas>
+  <div id="hud" class="hidden">
+    <div class="left">LEVEL <span id="lvlNum">1</span> <span class="sub" id="lvlName"></span></div>
+    <div class="right">❤ <span id="hpTxt">3</span> &nbsp; ⭐ <span id="scoreTxt">0</span> &nbsp; 💎 <span id="gemTxt">0/0</span></div>
+  </div>
+  <div id="levelLabel"></div>
+  <div id="overlay">
+    <h1>CHRONO LEAP</h1>
+    <p>A time-bending platformer across <b>16 handcrafted levels</b>.</p>
+    <p>Reach the portal. Collect gems. Defeat the Chrono Warden.</p>
+    <p class="sub" style="margin-top:14px">← → / A D &nbsp;Move &nbsp;•&nbsp; SPACE / W / ↑ &nbsp;Jump &nbsp;•&nbsp; R &nbsp;Restart</p>
+    <button class="btn" id="startBtn">START GAME</button>
+    <p class="hint">Tip: Hold jump for higher leaps. Press DOWN to fast-fall.</p>
+  </div>
+</div>
+<script>
+(function(){
+"use strict";
+
+// ---------- Canvas ----------
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+// ---------- Audio (lazy) ----------
+let actx = null;
+function initAudio(){
+  if(actx) return;
+  try {
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+  } catch(e){ actx = null; }
+}
+function sfx(freq, dur, type, vol){
+  if(!actx || actx.state !== 'running') return;
+  try {
+    const o = actx.createOscillator();
+    const g = actx.createGain();
+    o.type = type || 'square';
+    o.frequency.value = freq;
+    g.gain.value = vol || 0.06;
+    o.connect(g); g.connect(actx.destination);
+    const t = actx.currentTime;
+    g.gain.setValueAtTime(vol || 0.06, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.start(t); o.stop(t + dur);
+  } catch(e){}
+}
+function jumpSfx(){ sfx(520, 0.12, 'square', 0.05); }
+function gemSfx(){ sfx(880, 0.1, 'triangle', 0.07); setTimeout(()=>sfx(1320,0.1,'triangle',0.06),60); }
+function hurtSfx(){ sfx(160, 0.25, 'sawtooth', 0.08); }
+function winSfx(){ sfx(660,0.12,'square',0.07); setTimeout(()=>sfx(880,0.12,'square',0.07),110); setTimeout(()=>sfx(1320,0.2,'square',0.07),220); }
+function checkpointSfx(){ sfx(700,0.1,'sine',0.07); setTimeout(()=>sfx(1050,0.15,'sine',0.06),90); }
+function bossHitSfx(){ sfx(200,0.15,'square',0.09); }
+function bossDieSfx(){ for(let i=0;i<6;i++) setTimeout(()=>sfx(300+i*80,0.15,'sawtooth',0.06), i*80); }
+
+// ---------- Input ----------
+const keys = {};
+window.addEventListener('keydown', e=>{
+  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
+  keys[e.key.toLowerCase()] = true;
+  if(e.key === ' ' || e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') keys['jump'] = true;
+  if(e.key.toLowerCase() === 'r') restartLevel();
+  if(e.key === 'Enter' && overlayVisible) startGame();
+});
+window.addEventListener('keyup', e=>{
+  keys[e.key.toLowerCase()] = false;
+  if(e.key === ' ' || e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') keys['jump'] = false;
+});
+
+// ---------- Game State ----------
+const GRAVITY = 0.68;
+const MOVE_ACCEL = 0.9;
+const MAX_SPEED = 5.4;
+const FRICTION = 0.82;
+const JUMP_POWER = 13.2;
+const TILE = 40;
+
+let gameState = 'title'; // title, playing, dead, win, levelcomplete
+let overlayVisible = true;
+let currentLevel = 0;
+let score = 0;
+let gemsCollected = 0;
+let totalGems = 0;
+let hp = 3;
+let maxHp = 3;
+let levelName = '';
+let deathTimer = 0;
+let completeTimer = 0;
+let bossDefeated = false;
+let time = 0;
+
+// ---------- Level Data ----------
+// Legend: # wall, . empty, G gem, C checkpoint, S spawn, E exit portal, ^ spike, = platform(one-way), B boss arena
+// Levels are strings. Each char = 40px tile. Width flexible.
+
+const LEVELS = [
+  // 1 - First Steps
+  {
+    name: "First Steps",
+    map: [
+      "........................................",
+      "........................................",
+      "........................................",
+      "........................................",
+      "........................................",
+      "...............G........................",
+      "..............###.......................",
+      "..........................G.............",
+      ".........................###............",
+      ".....S..................................",
+      "#######......................#####....E.",
+      "#######......................#####....#.",
+      "#######^^^^^^^^^^^^^^^^^^^^^^#####....#.",
+    ]
+  },
+  // 2 - Gap Crossing
+  {
+    name: "Gap Crossing",
+    map: [
+      "........................................",
+      "........................................",
+      ".....................G..................",
+      "....................###.................",
+      "........................................",
+      "..........G.............................",
+      ".........###............................",
+      "........................................",
+      "....S...................................",
+      "#####........####........####.......E...",
+      "#####........####........####.......#...",
+      "#####^^^^^^^^####^^^^^^^^####^^^^^^^#...",
+    ]
+  },
+  // 3 - Checkpoint Run
+  {
+    name: "Checkpoint Run",
+    map: [
+      "..................................................",
+      "..................................................",
+      "..........G.......................................",
+      ".........###......................................",
+      "..................................................",
+      "..........................G.......................",
+      ".........................###......................",
+      "..................................................",
+      "....S.........C.........C.........................",
+      "#####....#######....#######....#####.........E....",
+      "#####....#######....#######....#####.........#....",
+      "#####^^^^#######^^^^#######^^^^#####^^^^^^^^^#....",
+    ]
+  },
+  // 4 - Spike Alley
+  {
+    name: "Spike Alley",
+    map: [
+      "..................................................",
+      "..................................................",
+      "............G.....................................",
+      "...........###....................................",
+      "..................................................",
+      "..................................................",
+      "....S.............................................",
+      "#####.....##.....##.....##.....##.....##.....E....",
+      "#####.....##.....##.....##.....##.....##.....#....",
+      "#####^^^^^##^^^^^##^^^^^##^^^^^##^^^^^##^^^^^#....",
+    ]
+  },
+  // 5 - Vertical Ascent
+  {
+    name: "Vertical Ascent",
+    map: [
+      "......................................",
+      "...................G..................",
+      "..................###.................",
+      "......................................",
+      "...........G..........................",
+      "..........###.........................",
+      "......................................",
+      "....G.................................",
+      "...###................................",
+      "......................................",
+      "..S...................................",
+      "#####....####....####....####....E....",
+      "#####....####....####....####....#....",
+      "#####^^^^####^^^^####^^^^####^^^^#....",
+    ]
+  },
+  // 6 - The Long Jump
+  {
+    name: "The Long Jump",
+    map: [
+      "........................................................",
+      "........................................................",
+      "........................................................",
+      ".................G......................................",
+      "................###.....................................",
+      "........................................................",
+      "........................................................",
+      "....S...................................................",
+      "#####..............####..............####..........E....",
+      "#####..............####..............####..........#....",
+      "#####^^^^^^^^^^^^^^####^^^^^^^^^^^^^^####^^^^^^^^^^#....",
+    ]
+  },
+  // 7 - Twin Towers
+  {
+    name: "Twin Towers",
+    map: [
+      "................................................",
+      "..........G.......................G.............",
+      ".........###....................###.............",
+      "................................................",
+      "................................................",
+      "....S.......................................C...",
+      "#####..........####..........####..........#####",
+      "#####..........####..........####..........#####",
+      "#####^^^^^^^^^^####^^^^^^^^^^####^^^^^^^...#####",
+      "#####..........####..........####.......E.#####",
+      "#####..........####..........####.......#.#####",
+    ]
+  },
+  // 8 - Precision
+  {
+    name: "Precision",
+    map: [
+      "......................................................",
+      "......................................................",
+      "........G.............................................",
+      ".......###............................................",
+      "......................................................",
+      "................G.....................................",
+      "...............###....................................",
+      "......................................................",
+      "....S.................................................",
+      "#####.....####.....####.....####.....####.......E.....",
+      "#####.....####.....####.....####.....####.......#.....",
+      "#####^^^^^####^^^^^####^^^^^####^^^^^####^^^^^^^#.....",
+    ]
+  },
+  // 9 - Checkpoint Maze
+  {
+    name: "Checkpoint Maze",
+    map: [
+      "............................................................",
+      "............................................................",
+      "..............G.............................................",
+      "............#####...........................................",
+      "............................................................",
+      "........................G...................................",
+      ".......................###..................................",
+      "............................................................",
+      "....S.........C...............C.............................",
+      "#####....#########....#########....#########...........E....",
+      "#####....#########....#########....#########...........#....",
+      "#####^^^^#########^^^^#########^^^^#########^^^^^^^^^^^#....",
+    ]
+  },
+  // 10 - High Road
+  {
+    name: "High Road",
+    map: [
+      "..............................................................",
+      "..............................................................",
+      "..............................................................",
+      "..........G...................................................",
+      ".........###..................................................",
+      "..............................................................",
+      "...................G..........................................",
+      "..................###.........................................",
+      "....S.........................................................",
+      "#####.....##.....##.....##.....##.....##.....##.......E......",
+      "#####.....##.....##.....##.....##.....##.....##.......#......",
+      "#####^^^^^##^^^^^##^^^^^##^^^^^##^^^^^##^^^^^##^^^^^^^#......",
+    ]
+  },
+  // 11 - Spike Gauntlet
+  {
+    name: "Spike Gauntlet",
+    map: [
+      "................................................................",
+      "................................................................",
+      "................................................................",
+      "............G...................................................",
+      "...........###..................................................",
+      "................................................................",
+      "................................................................",
+      "....S...........................................................",
+      "#####....##....##....##....##....##....##....##....##....E......",
+      "#####....##....##....##....##....##....##....##....##....#......",
+      "#####^^^^##^^^^##^^^^##^^^^##^^^^##^^^^##^^^^##^^^^##^^^^#......",
+    ]
+  },
+  // 12 - The Climb
+  {
+    name: "The Climb",
+    map: [
+      "..................................................",
+      "..........................G.......................",
+      ".........................###......................",
+      "..................................................",
+      "....................G.............................",
+      "...................###............................",
+      "..................................................",
+      "..............G...................................",
+      ".............###..................................",
+      "..................................................",
+      "....S........C....................................",
+      "#####....####....####....####....####....####....E",
+      "#####....####....####....####....####....####....#",
+      "#####^^^^####^^^^####^^^^####^^^^####^^^^####^^^^#",
+    ]
+  },
+  // 13 - Danger Zone
+  {
+    name: "Danger Zone",
+    map: [
+      "............................................................",
+      "............................................................",
+      "..........G..........................G......................",
+      ".........###........................###.....................",
+      "............................................................",
+      "............................................................",
+      "....S.......................................................",
+      "#####.....##.....##.....##.....##.....##.....##.....##.....E",
+      "#####.....##.....##.....##.....##.....##.....##.....##.....#",
+      "#####^^^^^##^^^^^##^^^^^##^^^^^##^^^^^##^^^^^##^^^^^##^^^^^#",
+    ]
+  },
+  // 14 - Sky Bridge
+  {
+    name: "Sky Bridge",
+    map: [
+      "....................................................................",
+      "....................................................................",
+      "....................................................................",
+      "...................G................................................",
+      "..................###...............................................",
+      "....................................................................",
+      "..........G.........................................................",
+      ".........###........................................................",
+      "....S...............................................................",
+      "#####.........####.........####.........####.........####.......E...",
+      "#####.........####.........####.........####.........####.......#...",
+      "#####^^^^^^^^^####^^^^^^^^^####^^^^^^^^^####^^^^^^^^^####^^^^^^^#...",
+    ]
+  },
+  // 15 - Final Approach
+  {
+    name: "Final Approach",
+    map: [
+      "..........................................................................",
+      "..........................................................................",
+      "..........................................................................",
+      "............G.............................................................",
+      "...........###............................................................",
+      "..........................................................................",
+      "..........................................................................",
+      "....S.........C.............C.............................................",
+      "#####....#########....#########....#########....#########...........E....",
+      "#####....#########....#########....#########....#########...........#....",
+      "#####^^^^#########^^^^#########^^^^#########^^^^#########^^^^^^^^^^^#....",
+    ]
+  },
+  // 16 - BOSS
+  {
+    name: "Chrono Warden",
+    map: [
+      "................................................................................",
+      "................................................................................",
+      "................................................................................",
+      "................................................................................",
+      "................................................................................",
+      "................................................................................",
+      "....S...........................................................................",
+      "####################............................................................",
+      "####################............................................................",
+      "####################............................................................",
+      "####################............................................................",
+      "####################............................................................",
+    ],
+    boss: true
+  }
+];
+
+// ---------- Player ----------
+let player = {
+  x: 0, y: 0, vx: 0, vy: 0, w: 26, h: 34,
+  onGround: false, facing: 1, coyote: 0, jumpBuffer: 0,
+  anim: 0, dead: false, invuln: 0, checkpointX: 0, checkpointY: 0
+};
+
+// ---------- Particles ----------
+let particles = [];
+function spawnParticles(x, y, color, n, speed){
+  for(let i=0;i<n;i++){
+    const a = Math.random()*Math.PI*2;
+    const s = Math.random()*(speed||4)+1;
+    particles.push({
+      x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s - 1,
+      life: 1, color, size: Math.random()*4+2
+    });
+  }
+}
+
+// ---------- Boss ----------
+let boss = null;
+function initBoss(){
+  boss = {
+    x: W - 200, y: H - 300, w: 60, h: 80,
+    hp: 10, maxHp: 10, vx: 0, vy: 0,
+    phase: 0, timer: 0, attackTimer: 0, hurtFlash: 0,
+    projectiles: [], onGround: false, facing: -1
+  };
+}
+
+// ---------- Level Parsing ----------
+let solidTiles = [];
+let spikes = [];
+let gems = [];
+let checkpoints = [];
+let exitPortal = null;
+let levelW = 0, levelH = 0;
+let camera = { x: 0, y: 0 };
+
+function loadLevel(idx){
+  currentLevel = idx;
+  const lvl = LEVELS[idx];
+  levelName = lvl.name;
+  const map = lvl.map;
+  levelH = map.length;
+  levelW = map[0].length;
+
+  solidTiles = [];
+  spikes = [];
+  gems = [];
+  checkpoints = [];
+  exitPortal = null;
+  particles = [];
+  boss = null;
+  bossDefeated = false;
+
+  for(let y=0; y<map.length; y++){
+    for(let x=0; x<map[y].length; x++){
+      const c = map[y][x];
+      const px = x*TILE, py = y*TILE;
+      if(c === '#') solidTiles.push({x:px, y:py, w:TILE, h:TILE, type:'wall'});
+      else if(c === '^') spikes.push({x:px, y:py, w:TILE, h:TILE});
+      else if(c === 'G') gems.push({x:px+TILE/2, y:py+TILE/2, collected:false, bob:Math.random()*6});
+      else if(c === 'C') checkpoints.push({x:px, y:py, active:false});
+      else if(c === 'S'){ player.x = px+TILE/2-player.w/2; player.y = py+TILE/2-player.h/2; }
+      else if(c === 'E') exitPortal = {x:px, y:py, w:TILE, h:TILE, active:false};
+    }
+  }
+  if(!exitPortal && !lvl.boss) exitPortal = {x:levelW*TILE-80, y:H-120, w:TILE, h:TILE, active:false};
+
+  player.checkpointX = player.x;
+  player.checkpointY = player.y;
+  player.vx = 0; player.vy = 0; player.dead = false;
+  player.invuln = 0;
+
+  totalGems = gems.length;
+  gemsCollected = 0;
+
+  if(lvl.boss) initBoss();
+
+  // camera snap
+  camera.x = Math.max(0, Math.min(player.x - W/2, levelW*TILE - W));
+  camera.y = Math.max(0, Math.min(player.y - H/2, levelH*TILE - H));
+  if(levelH*TILE < H) camera.y = 0;
+
+  updateHUD();
+  showLevelLabel();
+}
+
+function updateHUD(){
+  document.getElementById('lvlNum').textContent = (currentLevel+1);
+  document.getElementById('lvlName').textContent = "- " + levelName;
+  document.getElementById('hpTxt').textContent = hp;
+  document.getElementById('scoreTxt').textContent = score;
+  document.getElementById('gemTxt').textContent = gemsCollected + "/" + totalGems;
+}
+
+let labelTimeout = null;
+function showLevelLabel(){
+  const el = document.getElementById('levelLabel');
+  el.textContent = "LEVEL " + (currentLevel+1) + ": " + levelName.toUpperCase();
+  el.classList.add('fadein');
+  clearTimeout(labelTimeout);
+  labelTimeout = setTimeout(()=>el.classList.remove('fadein'), 1600);
+}
+
+// ---------- Collision ----------
+function aabb(a, b){
+  return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
+}
+
+function resolveCollisions(ent, isPlayer){
+  ent.onGround = false;
+  // Horizontal
+  ent.x += ent.vx;
+  for(const t of solidTiles){
+    if(aabb(ent, t)){
+      if(ent.vx > 0) ent.x = t.x - ent.w;
+      else if(ent.vx < 0) ent.x = t.x + t.w;
+      ent.vx = 0;
+    }
+  }
+  // Vertical
+  ent.y += ent.vy;
+  for(const t of solidTiles){
+    if(aabb(ent, t)){
+      if(ent.vy > 0){
+        ent.y = t.y - ent.h;
+        ent.onGround = true;
+      } else if(ent.vy < 0){
+        ent.y = t.y + t.h;
+      }
+      ent.vy = 0;
+    }
+  }
+}
+
+// ---------- Update ----------
+function update(dt){
+  if(gameState !== 'playing') return;
+  time += dt;
+
+  // Player input
+  const left = keys['arrowleft'] || keys['a'];
+  const right = keys['arrowright'] || keys['d'];
+  const down = keys['arrowdown'] || keys['s'];
+
+  if(!player.dead){
+    if(left){ player.vx -= MOVE_ACCEL; player.facing = -1; }
+    if(right){ player.vx += MOVE_ACCEL; player.facing = 1; }
+    if(!left && !right) player.vx *= FRICTION;
+    player.vx = Math.max(-MAX_SPEED, Math.min(MAX_SPEED, player.vx));
+    if(Math.abs(player.vx) < 0.05) player.vx = 0;
+
+    // Coyote time
+    if(player.onGround) player.coyote = 8; else if(player.coyote > 0) player.coyote--;
+
+    // Jump buffer
+    if(keys['jump']){
+      if(!player._jumpHeld){ player.jumpBuffer = 8; player._jumpHeld = true; }
+    } else { player._jumpHeld = false; }
+    if(player.jumpBuffer > 0) player.jumpBuffer--;
+
+    // Jump
+    if(player.jumpBuffer > 0 && player.coyote > 0){
+      player.vy = -JUMP_POWER;
+      player.coyote = 0;
+      player.jumpBuffer = 0;
+      jumpSfx();
+      spawnParticles(player.x+player.w/2, player.y+player.h, '#8fb8ff', 6, 3);
+    }
+    // Variable jump height
+    if(!keys['jump'] && player.vy < -4) player.vy *= 0.86;
+
+    // Fast fall
+    if(down && !player.onGround) player.vy += 0.5;
+
+    player.vy += GRAVITY;
+    if(player.vy > 18) player.vy = 18;
+
+    resolveCollisions(player, true);
+
+    // Clamp to level
+    if(player.x < 0){ player.x = 0; player.vx = 0; }
+    if(player.x + player.w > levelW*TILE){ player.x = levelW*TILE - player.w; player.vx = 0; }
+    if(player.y > levelH*TILE + 200){ killPlayer(); }
+
+    // Animation
+    if(Math.abs(player.vx) > 0.3) player.anim += dt*0.02;
+    else player.anim = 0;
+
+    // Invulnerability
+    if(player.invuln > 0) player.invuln -= dt;
+
+    // Spikes
+    for(const s of spikes){
+      if(aabb(player, {x:s.x+6, y:s.y+10, w:s.w-12, h:s.h-10})){
+        killPlayer();
+      }
+    }
+
+    // Gems
+    for(const g of gems){
+      if(!g.collected && Math.abs(g.x - (player.x+player.w/2)) < 22 && Math.abs(g.y - (player.y+player.h/2)) < 22){
+        g.collected = true;
+        gemsCollected++;
+        score += 10;
+        gemSfx();
+        spawnParticles(g.x, g.y, '#ffd94a', 10, 4);
+        updateHUD();
+      }
+    }
+
+    // Checkpoints
+    for(const c of checkpoints){
+      if(!c.active && aabb(player, {x:c.x, y:c.y, w:TILE, h:TILE})){
+        c.active = true;
+        player.checkpointX = c.x;
+        player.checkpointY = c.y + TILE - player.h;
+        checkpointSfx();
+        spawnParticles(c.x+TILE/2, c.y+TILE/2, '#5aff8f', 14, 4);
+      }
+    }
+
+    // Exit portal
+    if(exitPortal && !LEVELS[currentLevel].boss){
+      exitPortal.active = gemsCollected >= totalGems || totalGems === 0;
+      if(exitPortal.active && aabb(player, exitPortal)){
+        levelComplete();
+      }
+    }
+
+    // Boss logic
+    if(boss && !bossDefeated) updateBoss(dt);
+  }
+
+  // Particles
+  for(let i=particles.length-1; i>=0; i--){
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy;
+    p.vy += 0.25;
+    p.life -= dt*0.002;
+    if(p.life <= 0) particles.splice(i,1);
+  }
+
+  // Death timer
+  if(player.dead){
+    deathTimer -= dt;
+    if(deathTimer <= 0) respawn();
+  }
+
+  // Camera
+  const targetX = player.x + player.w/2 - W/2;
+  const targetY = player.y + player.h/2 - H/2;
+  camera.x += (targetX - camera.x) * 0.1;
+  camera.y += (targetY - camera.y) * 0.1;
+  camera.x = Math.max(0, Math.min(camera.x, levelW*TILE - W));
+  if(levelH*TILE > H) camera.y = Math.max(0, Math.min(camera.y, levelH*TILE - H));
+  else camera.y = 0;
+}
+
+function killPlayer(){
+  if(player.dead || player.invuln > 0) return;
+  player.dead = true;
+  hp--;
+  hurtSfx();
+  spawnParticles(player.x+player.w/2, player.y+player.h/2, '#ff5a5a', 16, 5);
+  deathTimer = 800;
+  updateHUD();
+  if(hp <= 0){
+    gameState = 'gameover';
+    showOverlay('GAME OVER', 'You ran out of hearts. Score: ' + score, 'RETRY');
+  }
+}
+
+function respawn(){
+  if(gameState !== 'playing') return;
+  player.dead = false;
+  player.x = player.checkpointX;
+  player.y = player.checkpointY;
+  player.vx = 0; player.vy = 0;
+  player.invuln = 60;
+}
+
+function restartLevel(){
+  if(gameState !== 'playing' && gameState !== 'levelcomplete') return;
+  hp = Math.max(hp, 1);
+  loadLevel(currentLevel);
+  gameState = 'playing';
+}
+
+function levelComplete(){
+  gameState = 'levelcomplete';
+  winSfx();
+  score += 50 + gemsCollected*5;
+  completeTimer = 1400;
+  spawnParticles(player.x+player.w/2, player.y+player.h/2, '#5aff8f', 30, 6);
+  updateHUD();
+}
+
+function nextLevel(){
+  if(currentLevel >= LEVELS.length - 1){
+    gameState = 'win';
+    showOverlay('VICTORY!', 'You defeated the Chrono Warden! Final Score: ' + score, 'PLAY AGAIN');
+  } else {
+    loadLevel(currentLevel + 1);
+    gameState = 'playing';
+  }
+}
+
+// ---------- Boss Update ----------
+function updateBoss(dt){
+  if(!boss) return;
+  boss.timer += dt;
+  boss.hurtFlash = Math.max(0, boss.hurtFlash - dt);
+
+  // Boss AI: hover and shoot projectiles
+  const targetX = player.x + player.w/2;
+  const targetY = player.y + player.h/2;
+
+  // Move toward player slowly
+  const dx = targetX - (boss.x + boss.w/2);
+  boss.vx = Math.sign(dx) * 1.2;
+  boss.x += boss.vx;
+  boss.facing = dx > 0 ? 1 : -1;
+
+  // Bob vertically
+  boss.y = H - 340 + Math.sin(boss.timer*0.003)*30;
+
+  // Clamp
+  if(boss.x < 400) boss.x = 400;
+  if(boss.x + boss.w > levelW*TILE - 40) boss.x = levelW*TILE - 40 - boss.w;
+
+  // Shoot projectiles
+  boss.attackTimer -= dt;
+  if(boss.attackTimer <= 0){
+    boss.attackTimer = 900;
+    const ang = Math.atan2(targetY - (boss.y + boss.h/2), targetX - (boss.x + boss.w/2));
+    boss.projectiles.push({
+      x: boss.x + boss.w/2, y: boss.y + boss.h/2,
+      vx: Math.cos(ang)*3.2, vy: Math.sin(ang)*3.2,
+      life: 4000, r: 10
+    });
+    sfx(300, 0.1, 'sawtooth', 0.05);
+  }
+
+  // Update projectiles
+  for(let i=boss.projectiles.length-1; i>=0; i--){
+    const p = boss.projectiles[i];
+    p.x += p.vx; p.y += p.vy;
+    p.life -= dt;
+    if(p.life <= 0 || p.x < 0 || p.x > levelW*TILE || p.y < 0 || p.y > levelH*TILE){
+      boss.projectiles.splice(i,1);
+      continue;
+    }
+    // Hit player
+    if(!player.dead && player.invuln <= 0 && Math.abs(p.x - (player.x+player.w/2)) < p.r + player.w/2 && Math.abs(p.y - (player.y+player.h/2)) < p.r + player.h/2){
+      boss.projectiles.splice(i,1);
+      killPlayer();
+    }
+  }
+
+  // Player stomp on boss
+  if(!player.dead && player.vy > 0 && aabb(player, boss)){
+    const playerBottom = player.y + player.h;
+    if(playerBottom < boss.y + 30){
+      boss.hp--;
+      boss.hurtFlash = 300;
+      player.vy = -10;
+      bossHitSfx();
+      spawnParticles(player.x+player.w/2, boss.y, '#ffd94a', 12, 5);
+      if(boss.hp <= 0){
+        bossDefeated = true;
+        bossDieSfx();
+        spawnParticles(boss.x+boss.w/2, boss.y+boss.h/2, '#ff5aff', 40, 8);
+        score += 500;
+        updateHUD();
+        setTimeout(()=>{ if(gameState==='playing') levelComplete(); }, 600);
+      }
+    } else {
+      killPlayer();
+    }
+  }
+}
+
+// ---------- Render ----------
+function draw(){
+  // Background
+  const grad = ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0, '#0e1030');
+  grad.addColorStop(1, '#1a1a3a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,W,H);
+
+  // Parallax stars
+  ctx.save();
+  for(let i=0;i<60;i++){
+    const sx = ((i*137 + time*0.01) % W);
+    const sy = (i*89) % H;
+    const alpha = 0.2 + (i%3)*0.15;
+    ctx.fillStyle = 'rgba(180,200,255,'+alpha+')';
+    ctx.fillRect(sx, sy, 2, 2);
+  }
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(-camera.x, -camera.y);
+
+  // Draw solid tiles
+  for(const t of solidTiles){
+    if(t.x - camera.x > W || t.x + t.w - camera.x < 0) continue;
+    const g = ctx.createLinearGradient(t.x, t.y, t.x, t.y+t.h);
+    g.addColorStop(0, '#3a4a8a');
+    g.addColorStop(1, '#1a2550');
+    ctx.fillStyle = g;
+    ctx.fillRect(t.x, t.y, t.w, t.h);
+    ctx.strokeStyle = 'rgba(120,160,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(t.x+0.5, t.y+0.5, t.w-1, t.h-1);
+    // Top highlight
+    ctx.fillStyle = 'rgba(140,180,255,0.25)';
+    ctx.fillRect(t.x, t.y, t.w, 3);
+  }
+
+  // Spikes
+  for(const s of spikes){
+    if(s.x - camera.x > W || s.x + s.w - camera.x < 0) continue;
+    ctx.fillStyle = '#ff4a6a';
+    for(let i=0;i<3;i++){
+      const sx = s.x + i*(s.w/3);
+      ctx.beginPath();
+      ctx.moveTo(sx, s.y + s.h);
+      ctx.lineTo(sx + s.w/6, s.y + 8);
+      ctx.lineTo(sx + s.w/3, s.y + s.h);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.fillRect(s.x, s.y+s.h-4, s.w, 4);
+  }
+
+  // Checkpoints
+  for(const c of checkpoints){
+    const cx = c.x + TILE/2;
+    const cy = c.y + TILE/2;
+    ctx.save();
+    ctx.translate(cx, cy);
+    const col = c.active ? '#5aff8f' : '#5a6a9a';
+    ctx.fillStyle = col;
+    ctx.shadowColor = col;
+    ctx.shadowBlur = c.active ? 15 : 0;
+    ctx.beginPath();
+    ctx.moveTo(0, -14);
+    ctx.lineTo(10, 0);
+    ctx.lineTo(0, 14);
+    ctx.lineTo(-10, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Gems
+  for(const g of gems){
+    if(g.collected) continue;
+    if(g.x - camera.x > W || g.x - camera.x < 0) continue;
+    const bob = Math.sin(time*0.004 + g.bob)*3;
+    ctx.save();
+    ctx.translate(g.x, g.y + bob);
+    ctx.rotate(time*0.002);
+    ctx.fillStyle = '#ffd94a';
+    ctx.shadowColor = '#ffd94a';
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.moveTo(0, -9);
+    ctx.lineTo(8, 0);
+    ctx.lineTo(0, 9);
+    ctx.lineTo(-8, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.beginPath();
+    ctx.moveTo(0, -5);
+    ctx.lineTo(4, 0);
+    ctx.lineTo(0, 5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Exit portal
+  if(exitPortal && !LEVELS[currentLevel].boss){
+    const active = exitPortal.active;
+    const cx = exitPortal.x + TILE/2;
+    const cy = exitPortal.y + TILE/2;
+    ctx.save();
+    ctx.translate(cx, cy);
+    const col = active ? '#5aff8f' : '#3a4a6a';
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 4;
+    ctx.shadowColor = col;
+    ctx.shadowBlur = active ? 20 : 0;
+    const r = 16 + Math.sin(time*0.005)*3;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, r*0.6, 0, Math.PI*2);
+    ctx.stroke();
+    if(active){
+      ctx.fillStyle = 'rgba(90,255,143,0.3)';
+      ctx.beginPath();
+      ctx.arc(0, 0, r*0.5, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // Boss
+  if(boss && !bossDefeated){
+    ctx.save();
+    ctx.translate(boss.x + boss.w/2, boss.y + boss.h/2);
+    const flash = boss.hurtFlash > 0;
+    ctx.fillStyle = flash ? '#ffffff' : '#8a2a5a';
+    ctx.shadowColor = '#ff2a8a';
+    ctx.shadowBlur = 20;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, boss.w/2, boss.h/2, 0, 0, Math.PI*2);
+    ctx.fill();
+    // Eyes
+    ctx.fillStyle = '#ffdd44';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(-12, -10, 7, 0, Math.PI*2);
+    ctx.arc(12, -10, 7, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.arc(-12 + boss.facing*2, -10, 3, 0, Math.PI*2);
+    ctx.arc(12 + boss.facing*2, -10, 3, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    // Projectiles
+    for(const p of boss.projectiles){
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.fillStyle = '#ff2a8a';
+      ctx.shadowColor = '#ff2a8a';
+      ctx.shadowBlur = 15;
+      ctx.beginPath();
+      ctx.arc(0, 0, p.r, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // Player
+  if(!player.dead){
+    const blink = player.invuln > 0 && Math.floor(time/80) % 2 === 0;
+    if(!blink){
+      ctx.save();
+      ctx.translate(player.x + player.w/2, player.y + player.h/2);
+      // Shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.beginPath();
+      ctx.ellipse(0, player.h/2 + 4, player.w/2, 4, 0, 0, Math.PI*2);
+      ctx.fill();
+      // Body
+      const grad2 = ctx.createLinearGradient(0, -player.h/2, 0, player.h/2);
+      grad2.addColorStop(0, '#7ad0ff');
+      grad2.addColorStop(1, '#2a6ad0');
+      ctx.fillStyle = grad2;
+      ctx.shadowColor = '#5ab0ff';
+      ctx.shadowBlur = 10;
+      const squash = player.onGround ? 0 : 1;
+      ctx.beginPath();
+      ctx.roundRect(-player.w/2, -player.h/2, player.w, player.h, 6);
+      ctx.fill();
+      // Eyes
+      ctx.fillStyle = '#fff';
+      ctx.shadowBlur = 0;
+      const eyeOff = player.facing * 4;
+      ctx.beginPath();
+      ctx.arc(-5 + eyeOff, -6, 4, 0, Math.PI*2);
+      ctx.arc(5 + eyeOff, -6, 4, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = '#1a2a4a';
+      ctx.beginPath();
+      ctx.arc(-5 + eyeOff + player.facing*1.5, -6, 2, 0, Math.PI*2);
+      ctx.arc(5 + eyeOff + player.facing*1.5, -6, 2, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // Particles
+  for(const p of particles){
+    ctx.globalAlpha = Math.max(0, p.life);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.restore();
+
+  // Boss HP bar
+  if(boss && !bossDefeated){
+    const bw = 300, bx = W/2 - bw/2, by = 20;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(bx-4, by-4, bw+8, 24);
+    ctx.fillStyle = '#3a0a1a';
+    ctx.fillRect(bx, by, bw, 16);
+    const frac = boss.hp / boss.maxHp;
+    const g3 = ctx.createLinearGradient(bx, 0, bx+bw, 0);
+    g3.addColorStop(0, '#ff2a8a');
+    g3.addColorStop(1, '#ff8a4a');
+    ctx.fillStyle = g3;
+    ctx.fillRect(bx, by, bw*frac, 16);
+    ctx.strokeStyle = '#ff8aca';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bx, by, bw, 16);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 12px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('CHRONO WARDEN', W/2, by + 13);
+    ctx.textAlign = 'left';
+  }
+
+  // Level complete flash
+  if(gameState === 'levelcomplete'){
+    ctx.fillStyle = 'rgba(90,255,143,' + (0.3 * (completeTimer/1400)) + ')';
+    ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 48px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('LEVEL COMPLETE!', W/2, H/2);
+    ctx.textAlign = 'left';
+  }
+
+  // Death flash
+  if(player.dead){
+    ctx.fillStyle = 'rgba(255,50,50,' + (0.25 * (deathTimer/800)) + ')';
+    ctx.fillRect(0,0,W,H);
+  }
+}
+
+// ---------- Overlay ----------
+const overlay = document.getElementById('overlay');
+function showOverlay(title, sub, btnText){
+  overlayVisible = true;
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = '<h1>' + title + '</h1><p>' + sub + '</p>' +
+    '<button class="btn" id="startBtn">' + btnText + '</button>' +
+    '<p class="hint">← → / A D Move • SPACE Jump • R Restart</p>';
+  document.getElementById('startBtn').addEventListener('click', ()=>{
+    initAudio();
+    if(actx && actx.state === 'suspended') actx.resume();
+    if(gameState === 'win' || gameState === 'gameover'){
+      // full restart
+      currentLevel = 0; score = 0; hp = maxHp;
+      loadLevel(0);
+      gameState = 'playing';
+    } else {
+      startGame();
+    }
+  });
+}
+function hideOverlay(){
+  overlayVisible = false;
+  overlay.classList.add('hidden');
+}
+
+function startGame(){
+  initAudio();
+  if(actx && actx.state === 'suspended') actx.resume();
+  hideOverlay();
+  currentLevel = 0;
+  score = 0;
+  hp = maxHp;
+  loadLevel(0);
+  gameState = 'playing';
+  document.getElementById('hud').classList.remove('hidden');
+}
+
+// ---------- Main Loop ----------
+let lastTime = performance.now();
+function loop(now){
+  const dt = Math.min(50, now - lastTime);
+  lastTime = now;
+
+  if(gameState === 'playing') update(dt);
+
+  if(gameState === 'levelcomplete'){
+    completeTimer -= dt;
+    if(completeTimer <= 0) nextLevel();
+  }
+
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// RoundRect polyfill
+if(!CanvasRenderingContext2D.prototype.roundRect){
+  CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r){
+    if(w < 2*r) r = w/2;
+    if(h < 2*r) r = h/2;
+    this.beginPath();
+    this.moveTo(x+r, y);
+    this.arcTo(x+w, y, x+w, y+h, r);
+    this.arcTo(x+w, y+h, x, y+h, r);
+    this.arcTo(x, y+h, x, y, r);
+    this.arcTo(x, y, x+w, y, r);
+    this.closePath();
+    return this;
+  };
+}
+
+// Start
+document.getElementById('startBtn').addEventListener('click', ()=>{
+  initAudio();
+  if(actx && actx.state === 'suspended') actx.resume();
+  startGame();
+});
+
+requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
