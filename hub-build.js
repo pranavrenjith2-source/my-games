@@ -10,54 +10,85 @@ const path = require("path");
 const ROOT = __dirname;
 const src = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 
+function readJSON(p, d){ try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch (e){ return d; } }
+const SNAPSHOT = {
+  games: (readJSON(path.join(ROOT, "games-index.json"), { games: [] }).games) || [],
+  drops: readJSON(path.join(ROOT, "drops.json"), []),
+  bugs: readJSON(path.join(ROOT, "bugs.json"), [])
+};
+
 const BOOT = `<script>
 (function(){
-  var host = location.hostname, proto = location.protocol;
+  var LOCAL = "http://127.0.0.1:8787";
+  var PUBLIC = "https://pranavrenjith2-source.github.io/my-games";
+  var SNAPSHOT = ${JSON.stringify(SNAPSHOT)};
+  var proto = location.protocol, host = location.hostname;
   var isFile = proto === "file:";
   var isLocal = /^(127\\.0\\.0\\.1|localhost)$/.test(host);
 
-  // --- opened as a plain file: talk to the local server for live data + games ---
-  if(isFile){
-    var BASE = "http://127.0.0.1:8787";
-    window.__HUB_BASE__ = BASE;
-    var _f = window.fetch ? window.fetch.bind(window) : null;
-    if(_f){
-      window.fetch = function(input, init){
-        var u = (typeof input === "string") ? input : (input && input.url) || "";
-        if(u && !/^([a-z][a-z0-9+.-]*:|\\/\\/)/i.test(u)) u = BASE + "/" + u.replace(/^\\/+/, "");
-        return _f(u, init);
-      };
-    }
-    document.addEventListener("click", function(e){
-      var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
-      if(!a) return;
-      var h = a.getAttribute("href") || "";
-      if(!h || /^([a-z][a-z0-9+.-]*:|\\/\\/|#)/i.test(h)) return;
-      a.setAttribute("href", BASE + "/" + h.replace(/^\\/+/, ""));
-    }, true);
-    return;
+  function hideServerOnly(){
+    try {
+      Array.prototype.forEach.call(document.querySelectorAll("section.devmon"), function(s){ s.style.display = "none"; });
+      var rf = document.getElementById("req-form");
+      if(rf && rf.closest){ var s2 = rf.closest("section"); if(s2) s2.style.display = "none"; }
+    } catch(e){}
   }
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", hideServerOnly); else hideServerOnly();
 
-  // --- hosted on a static host (GitHub Pages): no server APIs ---
-  if(!isLocal){
-    var _f2 = window.fetch ? window.fetch.bind(window) : null;
-    if(_f2){
+  // Served by the local server: behave exactly like the real site.
+  if(!isFile && isLocal) return;
+
+  // Hosted on a static host (GitHub Pages): no server APIs.
+  if(!isFile){
+    var _f0 = window.fetch ? window.fetch.bind(window) : null;
+    if(_f0){
       window.fetch = function(input, init){
         var u = (typeof input === "string") ? input : (input && input.url) || "";
         if(/\\/api\\/games(\\?|$)/.test(u)) u = "games-index.json";
-        return _f2(u, init);
+        return _f0(u, init);
       };
     }
-    function hideServerOnly(){
-      try {
-        Array.prototype.forEach.call(document.querySelectorAll("section.devmon"), function(s){ s.style.display = "none"; });
-        var rf = document.getElementById("req-form");
-        if(rf && rf.closest) { var s2 = rf.closest("section"); if(s2) s2.style.display = "none"; }
-      } catch(e){}
-    }
-    if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", hideServerOnly);
-    else hideServerOnly();
+    return;
   }
+
+  // Opened as a plain file: try the local server, then the public site, then the snapshot.
+  var _f = window.fetch ? window.fetch.bind(window) : null;
+  if(!_f) return;
+  function isRel(u){ return u && !/^([a-z][a-z0-9+.-]*:|\\/\\/)/i.test(u); }
+  function clean(u){ return String(u).replace(/^\\/+/, ""); }
+  function snap(u){
+    if(typeof Response === "undefined") return null;
+    var body = null;
+    if(/\\/api\\/games/.test(u)) body = { games: SNAPSHOT.games };
+    else if(/drops\\.json/.test(u)) body = SNAPSHOT.drops || [];
+    else if(/bugs\\.json/.test(u)) body = SNAPSHOT.bugs || [];
+    if(body === null) return null;
+    return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+  }
+  window.fetch = function(input, init){
+    var u = (typeof input === "string") ? input : (input && input.url) || "";
+    if(!isRel(u)) return _f(u, init);
+    var p = clean(u);
+    return _f(LOCAL + "/" + p, init).then(function(r){ if(!r.ok) throw new Error("local " + r.status); return r; })
+      .catch(function(){
+        var pp = /\\/api\\/games/.test(p) ? "games-index.json" : p;
+        return _f(PUBLIC + "/" + pp, init).then(function(r){ if(!r.ok) throw new Error("public " + r.status); return r; });
+      })
+      .catch(function(e){
+        var s = snap(u);
+        if(s) return s;
+        throw e;
+      });
+  };
+  var linkBase = PUBLIC;
+  _f(LOCAL + "/api/games", { cache: "no-store" }).then(function(r){ if(r.ok) linkBase = LOCAL; }).catch(function(){});
+  document.addEventListener("click", function(e){
+    var a = e.target && e.target.closest ? e.target.closest("a[href]") : null;
+    if(!a) return;
+    var h = a.getAttribute("href") || "";
+    if(!h || /^([a-z][a-z0-9+.-]*:|\\/\\/|#)/i.test(h)) return;
+    a.setAttribute("href", linkBase + "/" + clean(h));
+  }, true);
 })();
 </script>`;
 
