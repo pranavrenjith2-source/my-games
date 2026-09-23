@@ -16,3 +16,5 @@ a-language-generator-that-invents-word.html
 a-pixel-art-painter-with-8-colors.html
 a-rubber-band-physics-toy.html
 a-slider-that-shows-the-real-size-of-t.html
+a-full-platformer-with-15-handcrafted-le.html
+a-markdown-editor-with-live-preview-auto.html
