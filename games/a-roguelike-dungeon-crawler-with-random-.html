@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DEPTHS OF VELLUM — Roguelike</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; background:#0a0a0f; overflow:hidden;
+    font-family: 'Courier New', monospace; color:#d8d8e0; user-select:none; }
+  #game { position:absolute; inset:0; display:block; image-rendering:pixelated; }
+  .overlay { position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; z-index:10;
+    background:radial-gradient(ellipse at center, rgba(20,16,30,.92), rgba(4,4,8,.99)); }
+  .hidden { display:none !important; }
+  h1 { font-size:clamp(32px,7vw,72px); letter-spacing:.12em; color:#e8c86a;
+    text-shadow:0 0 24px rgba(232,200,106,.45), 0 4px 0 #4a3a12; margin-bottom:6px; }
+  h2 { font-size:clamp(20px,4vw,34px); letter-spacing:.1em; color:#c9b8ff;
+    text-shadow:0 0 16px rgba(160,130,255,.4); margin-bottom:18px; }
+  .sub { color:#8f8fa8; font-size:clamp(12px,2vw,16px); letter-spacing:.18em;
+    margin-bottom:34px; text-transform:uppercase; }
+  .menu { display:flex; flex-direction:column; gap:14px; margin-top:10px; }
+  button { font-family:inherit; font-size:clamp(14px,2.2vw,19px); letter-spacing:.14em;
+    padding:13px 42px; background:linear-gradient(180deg,#241f38,#15121f);
+    color:#d8d0ff; border:1px solid #4b3f78; border-radius:4px; cursor:pointer;
+    transition:all .12s; text-transform:uppercase; min-width:270px; }
+  button:hover { background:linear-gradient(180deg,#3a2f5c,#221c33); color:#fff;
+    border-color:#a68cff; box-shadow:0 0 20px rgba(150,120,255,.35); transform:translateY(-1px); }
+  button:active { transform:translateY(1px); }
+  .info { margin-top:30px; color:#6a6a80; font-size:12px; line-height:1.9; letter-spacing:.06em; }
+  .info b { color:#b0a0e0; }
+  #hud { position:absolute; top:0; left:0; right:0; padding:10px 16px; z-index:5;
+    display:flex; justify-content:space-between; align-items:flex-start;
+    pointer-events:none; font-size:13px; letter-spacing:.05em; }
+  .hudbox { background:rgba(8,8,16,.72); border:1px solid #2a2438; border-radius:4px;
+    padding:8px 12px; line-height:1.7; backdrop-filter:blur(3px); }
+  .bar { width:170px; height:11px; background:#1a1622; border:1px solid #3a3450;
+    border-radius:3px; margin-top:3px; overflow:hidden; }
+  .barfill { height:100%; transition:width .18s; }
+  #hpfill { background:linear-gradient(90deg,#c0392b,#e74c3c); }
+  #xpfill { background:linear-gradient(90deg,#2c7fb8,#54c8ff); }
+  #msglog { position:absolute; bottom:8px; left:8px; width:min(430px,52vw); z-index:5;
+    pointer-events:none; font-size:12.5px; line-height:1.65; }
+  .msg { background:rgba(8,8,16,.7); border-left:2px solid #4b3f78; padding:2px 9px;
+    margin-top:3px; border-radius:0 3px 3px 0; opacity:1; transition:opacity .6s; }
+  .msg.fade { opacity:0; }
+  #legend { position:absolute; bottom:8px; right:8px; z-index:5; pointer-events:none;
+    background:rgba(8,8,16,.72); border:1px solid #2a2438; border-radius:4px;
+    padding:8px 12px; font-size:11.5px; line-height:1.85; color:#8f8fa8; }
+  #legend b { color:#c9b8ff; }
+  #legend .k { color:#e8c86a; }
+  .flash { position:absolute; inset:0; z-index:8; pointer-events:none; opacity:0;
+    background:radial-gradient(ellipse at center, transparent 30%, rgba(200,30,30,.55)); }
+  .flash.on { animation:fl .32s ease-out; }
+  @keyframes fl { 0%{opacity:.9} 100%{opacity:0} }
+  #deathstats { color:#a0a0b8; font-size:15px; line-height:2.1; margin:14px 0 26px; }
+  #deathstats b { color:#e8c86a; }
+  .glow { animation:pulse 2.4s infinite ease-in-out; }
+  @keyframes pulse { 0%,100%{opacity:.85} 50%{opacity:1} }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud" class="hidden">
+  <div class="hudbox">
+    <div>HP <span id="hptext">20 / 20</span></div>
+    <div class="bar"><div id="hpfill" class="barfill" style="width:100%"></div></div>
+    <div style="margin-top:5px">XP <span id="xptext">0 / 10</span></div>
+    <div class="bar"><div id="xpfill" class="barfill" style="width:0%"></div></div>
+  </div>
+  <div class="hudbox" style="text-align:right">
+    <div>DEPTH <span id="depthtext" style="color:#e8c86a">1</span></div>
+    <div>LVL <span id="leveltext" style="color:#54c8ff">1</span></div>
+    <div>SCORE <span id="scoretext" style="color:#7ee08a">0</span></div>
+  </div>
+</div>
+
+<div id="msglog" class="hidden"></div>
+<div id="legend" class="hidden">
+  <b>MOVE</b> <span class="k">WASD</span>/<span class="k">Arrows</span><br>
+  <b>WAIT</b> <span class="k">Space</span> &nbsp; <b>STAIRS</b> <span class="k">&gt;</span><br>
+  <b>POTION</b> <span class="k">Q</span> &nbsp; <b>DESCEND</b> on <span style="color:#e8c86a">▼</span>
+</div>
+<div id="flash" class="flash"></div>
+
+<div id="titleScreen" class="overlay">
+  <h1 class="glow">DEPTHS OF VELLUM</h1>
+  <div class="sub">A Roguelike of Endless Descent</div>
+  <div class="menu">
+    <button id="btnStart">Begin the Descent</button>
+    <button id="btnHelp">How to Play</button>
+  </div>
+  <div class="info">
+    Every floor is random. Every death is final.<br>
+    Reach <b>Depth 10</b> to claim the Vellum Heart.
+  </div>
+</div>
+
+<div id="helpScreen" class="overlay hidden">
+  <h2>HOW TO PLAY</h2>
+  <div class="info" style="font-size:14px; text-align:left; max-width:560px; line-height:2.1">
+    <b>MOVE</b> — WASD or Arrow keys (turn-based)<br>
+    <b>WAIT</b> — Spacebar<br>
+    <b>USE POTION</b> — Q (heals, limited stock)<br>
+    <b>DESCEND</b> — Stand on <span style="color:#e8c86a">▼ stairs</span> and press &gt; or Enter<br>
+    <br>
+    <b style="color:#e74c3c">g</b> Goblin &nbsp; <b style="color:#e08a3c">r</b> Rat &nbsp; <b style="color:#a06ad0">s</b> Shade &nbsp; <b style="color:#e0d060">K</b> Knight &nbsp; <b style="color:#d04060">B</b> Boss<br>
+    <b style="color:#e8c86a">$</b> Gold &nbsp; <b style="color:#54c8ff">!</b> Potion &nbsp; <b style="color:#7ee08a">+</b> Sword &nbsp; <b style="color:#ffa040">[</b> Shield &nbsp; <b style="color:#e8c86a">▼</b> Stairs<br>
+    <br>
+    Kill enemies for XP. Level up for more HP &amp; damage.<br>
+    Descend deeper — the dark grows crueler.
+  </div>
+  <div class="menu" style="margin-top:24px">
+    <button id="btnBack">Back</button>
+  </div>
+</div>
+
+<div id="deathScreen" class="overlay hidden">
+  <h1 style="color:#c0392b; text-shadow:0 0 24px rgba(192,57,43,.5), 0 4px 0 #3a0f0a">YOU DIED</h1>
+  <div id="deathstats"></div>
+  <div class="menu">
+    <button id="btnRetry">Descend Again</button>
+    <button id="btnTitle">Return to Title</button>
+  </div>
+</div>
+
+<div id="winScreen" class="overlay hidden">
+  <h1 style="color:#7ee08a; text-shadow:0 0 28px rgba(126,224,138,.5), 0 4px 0 #1a3a1a">VICTORY</h1>
+  <div class="sub" style="color:#c9b8ff">You claimed the Vellum Heart</div>
+  <div id="winstats" class="info" style="font-size:15px; line-height:2.2"></div>
+  <div class="menu" style="margin-top:20px">
+    <button id="btnRetry2">Descend Again</button>
+    <button id="btnTitle2">Return to Title</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+
+/* ============ CANVAS / VIEW ============ */
+const cv = document.getElementById('game');
+const ctx = cv.getContext('2d');
+let VW = 0, VH = 0, DPR = 1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  VW = window.innerWidth; VH = window.innerHeight;
+  cv.width = Math.floor(VW*DPR); cv.height = Math.floor(VH*DPR);
+  cv.style.width = VW+'px'; cv.style.height = VH+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.imageSmoothingEnabled = false;
+}
+window.addEventListener('resize', resize); resize();
+
+/* ============ AUDIO (lazy, guarded) ============ */
+let AC = null;
+function audioReady(){
+  if (!AC) return false;
+  if (AC.state === 'suspended') AC.resume().catch(()=>{});
+  return AC.state === 'running';
+}
+function initAudio(){
+  if (AC) { if (AC.state==='suspended') AC.resume().catch(()=>{}); return; }
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    AC = new Ctx();
+    if (AC.state === 'suspended') AC.resume().catch(()=>{});
+  } catch(e){ AC = null; }
+}
+function tone(freq, dur, type, vol, slide){
+  if (!audioReady()) return;
+  try{
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = type || 'square';
+    o.frequency.setValueAtTime(freq, AC.currentTime);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(40,slide), AC.currentTime+dur);
+    g.gain.setValueAtTime(vol||0.08, AC.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime+dur);
+    o.connect(g); g.connect(AC.destination);
+    o.start(); o.stop(AC.currentTime+dur+0.02);
+  }catch(e){}
+}
+const SFX = {
+  hit(){ tone(160,0.09,'square',0.09,80); },
+  hurt(){ tone(110,0.16,'sawtooth',0.10,55); },
+  kill(){ tone(300,0.10,'square',0.08,600); },
+  pickup(){ tone(660,0.07,'triangle',0.09,990); },
+  gold(){ tone(880,0.06,'triangle',0.07,1320); },
+  stairs(){ tone(330,0.18,'sine',0.10,660); },
+  level(){ [523,659,784].forEach((f,i)=>setTimeout(()=>tone(f,0.14,'triangle',0.09),i*80)); },
+  death(){ [220,180,140,90].forEach((f,i)=>setTimeout(()=>tone(f,0.28,'sawtooth',0.10),i*130)); },
+  win(){ [523,659,784,1046,1318].forEach((f,i)=>setTimeout(()=>tone(f,0.22,'triangle',0.10),i*130)); },
+  step(){ tone(90,0.03,'sine',0.02); },
+  potion(){ tone(500,0.14,'sine',0.09,900); }
+};
+
+/* ============ GAME STATE ============ */
+const MAPW = 42, MAPH = 26;
+const TILE = { WALL:0, FLOOR:1, STAIRS:2 };
+let map, visible, seen;
+let player, enemies, items, depth, turn, score, gameOver, won;
+let msgQueue = [];
+
+function randInt(n){ return Math.floor(Math.random()*n); }
+function randRange(a,b){ return a + Math.floor(Math.random()*(b-a+1)); }
+function choice(arr){ return arr[randInt(arr.length)]; }
+
+/* ============ MAP GEN ============ */
+function genMap(){
+  map = [];
+  for (let y=0;y<MAPH;y++){
+    map[y] = [];
+    for (let x=0;x<MAPW;x++) map[y][x] = TILE.WALL;
+  }
+  // room-based generation
+  const rooms = [];
+  const attempts = 90;
+  for (let i=0;i<attempts;i++){
+    const w = randRange(5,10), h = randRange(4,7);
+    const x = randRange(1, MAPW-w-1), y = randRange(1, MAPH-h-1);
+    let overlap = false;
+    for (const r of rooms){
+      if (x <= r.x+r.w+1 && x+w+1 >= r.x && y <= r.y+r.h+1 && y+h+1 >= r.y){ overlap=true; break; }
+    }
+    if (overlap) continue;
+    rooms.push({x,y,w,h});
+    for (let yy=y; yy<y+h; yy++)
+      for (let xx=x; xx<x+w; xx++) map[yy][xx] = TILE.FLOOR;
+  }
+  // corridors
+  for (let i=1;i<rooms.length;i++){
+    const a = rooms[i-1], b = rooms[i];
+    let ax = Math.floor(a.x+a.w/2), ay = Math.floor(a.y+a.h/2);
+    let bx = Math.floor(b.x+b.w/2), by = Math.floor(b.y+b.h/2);
+    if (Math.random()<0.5){
+      for (let x=Math.min(ax,bx); x<=Math.max(ax,bx); x++) map[ay][x]=TILE.FLOOR;
+      for (let y=Math.min(ay,by); y<=Math.max(ay,by); y++) map[y][bx]=TILE.FLOOR;
+    } else {
+      for (let y=Math.min(ay,by); y<=Math.max(ay,by); y++) map[y][ax]=TILE.FLOOR;
+      for (let x=Math.min(ax,bx); x<=Math.max(ax,bx); x++) map[by][x]=TILE.FLOOR;
+    }
+  }
+  if (rooms.length === 0){
+    // fallback: open field
+    for (let y=1;y<MAPH-1;y++) for (let x=1;x<MAPW-1;x++) map[y][x]=TILE.FLOOR;
+    rooms.push({x:1,y:1,w:MAPW-2,h:MAPH-2});
+  }
+  return rooms;
+}
+
+function floorTiles(){
+  const list = [];
+  for (let y=0;y<MAPH;y++) for (let x=0;x<MAPW;x++)
+    if (map[y][x] === TILE.FLOOR) list.push({x,y});
+  return list;
+}
+
+/* ============ ENEMY DEFINITIONS ============ */
+const ENEMY_TYPES = [
+  { id:'rat',    ch:'r', color:'#e08a3c', name:'Rat',       hp:5,  atk:2, xp:4,  score:8,  minDepth:1 },
+  { id:'goblin', ch:'g', color:'#e74c3c', name:'Goblin',    hp:9,  atk:3, xp:7,  score:14, minDepth:1 },
+  { id:'shade',  ch:'s', color:'#a06ad0', name:'Shade',     hp:14, atk:5, xp:12, score:24, minDepth:3 },
+  { id:'knight', ch:'K', color:'#e0d060', name:'Dark Knight',hp:22, atk:7, xp:20, score:42, minDepth:5 },
+  { id:'wraith', ch:'w', color:'#6ad0e0', name:'Wraith',    hp:18, atk:6, xp:17, score:36, minDepth:4 },
+  { id:'boss',   ch:'B', color:'#d04060', name:'Vellum Warden', hp:60, atk:12, xp:80, score:200, minDepth:10, boss:true }
+];
+
+function spawnEnemies(rooms, count, d){
+  enemies = [];
+  const pool = ENEMY_TYPES.filter(t => d >= t.minDepth && !t.boss);
+  for (let i=0;i<count;i++){
+    const r = choice(rooms);
+    const x = randRange(r.x, r.x+r.w-1), y = randRange(r.y, r.y+r.h-1);
+    if (x===player.x && y===player.y) continue;
+    if (enemies.some(e=>e.x===x&&e.y===y)) continue;
+    const t = choice(pool);
+    const scale = 1 + (d-1)*0.10;
+    enemies.push({
+      type:t, x, y,
+      hp: Math.round(t.hp*scale), maxHp: Math.round(t.hp*scale),
+      atk: Math.round(t.atk*scale), xp:t.xp, score:t.score,
+      ch:t.ch, color:t.color, name:t.name, boss:!!t.boss
+    });
+  }
+  if (d === 10){
+    const r = rooms[rooms.length-1];
+    enemies.push({
+      type:ENEMY_TYPES[5],
+      x: r.x+Math.floor(r.w/2), y: r.y+Math.floor(r.h/2),
+      hp: 60, maxHp:60, atk:12, xp:80, score:200,
+      ch:'B', color:'#d04060', name:'Vellum Warden', boss:true
+    });
+  }
+}
+
+function spawnItems(rooms, d){
+  items = [];
+  const goldCount = randRange(4,8);
+  for (let i=0;i<goldCount;i++){
+    const r = choice(rooms);
+    const x = randRange(r.x, r.x+r.w-1), y = randRange(r.y, r.y+r.h-1);
+    if (items.some(it=>it.x===x&&it.y===y)) continue;
+    items.push({ x, y, kind:'gold', ch:'$', color:'#e8c86a', val: randRange(3,10)+d*2 });
+  }
+  const potCount = randRange(1,3);
+  for (let i=0;i<potCount;i++){
+    const r = choice(rooms);
+    const x = randRange(r.x, r.x+r.w-1), y = randRange(r.y, r.y+r.h-1);
+    if (items.some(it=>it.x===x&&it.y===y)) continue;
+    items.push({ x, y, kind:'potion', ch:'!', color:'#54c8ff' });
+  }
+  if (Math.random() < 0.6){
+    const r = choice(rooms);
+    const x = randRange(r.x, r.x+r.w-1), y = randRange(r.y, r.y+r.h-1);
+    if (!items.some(it=>it.x===x&&it.y===y))
+      items.push({ x, y, kind:'sword', ch:'+', color:'#7ee08a', val:1+Math.floor(d/2) });
+  }
+  if (Math.random() < 0.5){
+    const r = choice(rooms);
+    const x = randRange(r.x, r.x+r.w-1), y = randRange(r.y, r.y+r.h-1);
+    if (!items.some(it=>it.x===x&&it.y===y))
+      items.push({ x, y, kind:'shield', ch:'[', color:'#ffa040', val:1 });
+  }
+}
+
+/* ============ PLAYER ============ */
+function makePlayer(){
+  return {
+    x:0, y:0, hp:24, maxHp:24, atk:4, def:0, level:1, xp:0, xpNext:12,
+    potions:2, gold:0
+  };
+}
+
+/* ============ NEW GAME / FLOOR ============ */
+function newGame(){
+  player = makePlayer();
+  depth = 1; turn = 0; score = 0; gameOver = false; won = false;
+  msgQueue = [];
+  buildFloor(true);
+  document.getElementById('msglog').innerHTML = '';
+  pushMsg('You descend into the Depths of Vellum...', '#c9b8ff');
+  pushMsg('Find the stairs ▼ and go deeper.', '#8f8fa8');
+}
+
+function buildFloor(first){
+  const rooms = genMap();
+  // place player
+  const r0 = rooms[0];
+  player.x = Math.floor(r0.x + r0.w/2);
+  player.y = Math.floor(r0.y + r0.h/2);
+  // stairs in last room
+  const rl = rooms[rooms.length-1];
+  let sx = Math.floor(rl.x + rl.w/2), sy = Math.floor(rl.y + rl.h/2);
+  if (sx===player.x && sy===player.y) sx = Math.max(1, sx-1);
+  map[sy][sx] = TILE.STAIRS;
+
+  // visibility
+  visible = []; seen = [];
+  for (let y=0;y<MAPH;y++){ visible[y]=[]; seen[y]=[]; for (let x=0;x<MAPW;x++){ visible[y][x]=false; seen[y][x]=false; } }
+
+  spawnEnemies(rooms, Math.min(3 + depth, 12), depth);
+  spawnItems(rooms, depth);
+  computeFOV();
+  updateHUD();
+  if (!first) pushMsg('You arrive at Depth ' + depth + '.', '#e8c86a');
+}
+
+function descend(){
+  if (map[player.y][player.x] !== TILE.STAIRS){ pushMsg('No stairs here.', '#8f8fa8'); return; }
+  if (depth >= 10){
+    // victory requires boss dead
+    const bossAlive = enemies.some(e=>e.boss);
+    if (bossAlive){ pushMsg('The Vellum Warden blocks your path!', '#d04060'); return; }
+    won = true; gameOver = true;
+    score += 500;
+    SFX.win();
+    showWin();
+    return;
+  }
+  depth++;
+  score += 25;
+  SFX.stairs();
+  buildFloor(false);
+}
+
+/* ============ FOV ============ */
+function computeFOV(){
+  for (let y=0;y<MAPH;y++) for (let x=0;x<MAPW;x++) visible[y][x]=false;
+  const R = 8;
+  visible[player.y][player.x] = true;
+  seen[player.y][player.x] = true;
+  for (let a=0; a<360; a+=3){
+    const rad = a*Math.PI/180;
+    let ox = player.x+0.5, oy = player.y+0.5;
+    const dx = Math.cos(rad), dy = Math.sin(rad);
+    for (let i=0;i<R;i++){
+      ox += dx; oy += dy;
+      const tx = Math.floor(ox), ty = Math.floor(oy);
+      if (tx<0||ty<0||tx>=MAPW||ty>=MAPH) break;
+      visible[ty][tx] = true; seen[ty][tx] = true;
+      if (map[ty][tx] === TILE.WALL) break;
+    }
+  }
+  // also reveal the current room fully for readability
+  const R2 = 2;
+  for (let y=player.y-R2;y<=player.y+R2;y++)
+    for (let x=player.x-R2;x<=player.x+R2;x++)
+      if (x>=0&&y>=0&&x<MAPW&&y<MAPH){ visible[y][x]=true; seen[y][x]=true; }
+}
+
+/* ============ MESSAGES ============ */
+function pushMsg(text, color){
+  const log = document.getElementById('msglog');
+  const div = document.createElement('div');
+  div.className = 'msg';
+  div.textContent = text;
+  if (color) div.style.color = color;
+  log.appendChild(div);
+  while (log.children.length > 5) log.removeChild(log.firstChild);
+  setTimeout(()=>{ div.classList.add('fade'); }, 4200);
+  setTimeout(()=>{ if (div.parentNode) div.parentNode.removeChild(div); }, 5200);
+}
+
+/* ============ HUD ============ */
+function updateHUD(){
+  document.getElementById('hptext').textContent = Math.max(0,player.hp) + ' / ' + player.maxHp;
+  document.getElementById('hpfill').style.width = Math.max(0, (player.hp/player.maxHp*100)) + '%';
+  document.getElementById('xptext').textContent = player.xp + ' / ' + player.xpNext;
+  document.getElementById('xpfill').style.width = Math.min(100,(player.xp/player.xpNext*100)) + '%';
+  document.getElementById('depthtext').textContent = depth;
+  document.getElementById('leveltext').textContent = player.level;
+  document.getElementById('scoretext').textContent = score;
+}
+
+/* ============ COMBAT / XP ============ */
+function gainXP(n){
+  player.xp += n;
+  while (player.xp >= player.xpNext){
+    player.xp -= player.xpNext;
+    player.level++;
+    player.maxHp += 6;
+    player.hp = Math.min(player.maxHp, player.hp + 6);
+    player.atk += 2;
+    player.xpNext = Math.round(player.xpNext * 1.5);
+    SFX.level();
+    pushMsg('LEVEL UP! You are now level ' + player.level + '.', '#54c8ff');
+  }
+  updateHUD();
+}
+
+function attackEnemy(e){
+  const dmg = Math.max(1, player.atk + randInt(3) - 1);
+  e.hp -= dmg;
+  SFX.hit();
+  if (e.hp <= 0){
+    enemies.splice(enemies.indexOf(e),1);
+    SFX.kill();
+    score += e.score;
+    pushMsg('You slay the ' + e.name + ' (+' + e.xp + 'xp, +' + e.score + 'pts).', '#7ee08a');
+    gainXP(e.xp);
+    if (e.boss){
+      pushMsg('The Vellum Warden falls! The way to the Heart is clear.', '#e8c86a');
+      score += 100;
+    }
+  } else {
+    pushMsg('You hit the ' + e.name + ' for ' + dmg + '.', '#d8d8e0');
+  }
+  updateHUD();
+}
+
+function enemyTurn(){
+  for (const e of enemies){
+    const dx = player.x - e.x, dy = player.y - e.y;
+    const dist = Math.abs(dx) + Math.abs(dy);
+    if (dist === 1){
+      let dmg = Math.max(1, e.atk - player.def + randInt(2) - 1);
+      player.hp -= dmg;
+      SFX.hurt();
+      flashDamage();
+      pushMsg(e.name + ' hits you for ' + dmg + '.', '#e74c3c');
+      if (player.hp <= 0){ player.hp = 0; updateHUD(); die(); return; }
+    } else if (dist <= 9 && visible[e.y][e.x]){
+      // step toward player
+      let nx = e.x, ny = e.y;
+      if (Math.abs(dx) > Math.abs(dy)) nx += Math.sign(dx);
+      else ny += Math.sign(dy);
+      if (canWalk(nx,ny) && !enemies.some(o=>o.x===nx&&o.y===ny) && !(nx===player.x&&ny===player.y)){
+        e.x = nx; e.y = ny;
+      } else {
+        // try other axis
+        if (Math.abs(dx) > Math.abs(dy)) ny += Math.sign(dy);
+        else nx += Math.sign(dx);
+        if (canWalk(nx,ny) && !enemies.some(o=>o.x===nx&&o.y===ny) && !(nx===player.x&&ny===player.y)){
+          e.x = nx; e.y = ny;
+        }
+      }
+    } else if (Math.random() < 0.35){
+      // wander
+      const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+      const d = choice(dirs);
+      const nx = e.x+d[0], ny = e.y+d[1];
+      if (canWalk(nx,ny) && !enemies.some(o=>o.x===nx&&o.y===ny) && !(nx===player.x&&ny===player.y)){
+        e.x = nx; e.y = ny;
+      }
+    }
+  }
+  updateHUD();
+}
+
+function canWalk(x,y){
+  if (x<0||y<0||x>=MAPW||y>=MAPH) return false;
+  return map[y][x] !== TILE.WALL;
+}
+
+/* ============ PLAYER ACTIONS ============ */
+function tryMove(dx,dy){
+  if (gameOver) return;
+  const nx = player.x+dx, ny = player.y+dy;
+  const e = enemies.find(o=>o.x===nx&&o.y===ny);
+  if (e){ attackEnemy(e); }
+  else if (canWalk(nx,ny)){
+    player.x = nx; player.y = ny;
+    SFX.step();
+    pickupHere();
+  } else return;
+  turn++;
+  computeFOV();
+  enemyTurn();
+  if (!gameOver) updateHUD();
+}
+
+function waitTurn(){
+  if (gameOver) return;
+  turn++;
+  computeFOV();
+  enemyTurn();
+  if (!gameOver) updateHUD();
+}
+
+function usePotion(){
+  if (gameOver) return;
+  if (player.potions <= 0){ pushMsg('No potions left.', '#8f8fa8'); return; }
+  player.potions--;
+  const heal = Math.round(player.maxHp*0.4) + 5;
+  player.hp = Math.min(player.maxHp, player.hp + heal);
+  SFX.potion();
+  pushMsg('You drink a potion. (+' + heal + ' HP, ' + player.potions + ' left)', '#54c8ff');
+  turn++;
+  enemyTurn();
+  updateHUD();
+}
+
+function pickupHere(){
+  const idx = items.findIndex(it=>it.x===player.x&&it.y===player.y);
+  if (idx < 0) return;
+  const it = items[idx];
+  items.splice(idx,1);
+  if (it.kind === 'gold'){
+    player.gold += it.val; score += it.val;
+    SFX.gold();
+    pushMsg('You found ' + it.val + ' gold.', '#e8c86a');
+  } else if (it.kind === 'potion'){
+    player.potions++;
+    SFX.pickup();
+    pushMsg('You found a potion. (' + player.potions + ' total)', '#54c8ff');
+  } else if (it.kind === 'sword'){
+    player.atk += it.val;
+    SFX.pickup();
+    pushMsg('You found a sharp blade! (+' + it.val + ' ATK)', '#7ee08a');
+  } else if (it.kind === 'shield'){
+    player.def += it.val;
+    SFX.pickup();
+    pushMsg('You found a shield! (+' + it.val + ' DEF)', '#ffa040');
+  }
+  updateHUD();
+}
+
+function die(){
+  gameOver = true;
+  SFX.death();
+  const stats = document.getElementById('deathstats');
+  stats.innerHTML =
+    'You perished at <b>Depth ' + depth + '</b><br>' +
+    'Level <b>' + player.level + '</b> &nbsp;•&nbsp; Gold <b>' + player.gold + '</b><br>' +
+    'Final Score: <b>' + score + '</b>';
+  document.getElementById('deathScreen').classList.remove('hidden');
+  document.getElementById('hud').classList.add('hidden');
+  document.getElementById('msglog').classList.add('hidden');
+  document.getElementById('legend').classList.add('hidden');
+}
+
+function showWin(){
+  const stats = document.getElementById('winstats');
+  stats.innerHTML =
+    'Depth <b>10</b> cleared &nbsp;•&nbsp; Level <b>' + player.level + '</b><br>' +
+    'Gold <b>' + player.gold + '</b> &nbsp;•&nbsp; Final Score: <b>' + score + '</b>';
+  document.getElementById('winScreen').classList.remove('hidden');
+  document.getElementById('hud').classList.add('hidden');
+  document.getElementById('msglog').classList.add('hidden');
+  document.getElementById('legend').classList.add('hidden');
+}
+
+function flashDamage(){
+  const f = document.getElementById('flash');
+  f.classList.remove('on'); void f.offsetWidth; f.classList.add('on');
+}
+
+/* ============ INPUT ============ */
+window.addEventListener('keydown', (e)=>{
+  initAudio();
+  if (document.getElementById('titleScreen').classList.contains('hidden') === false) return;
+  if (document.getElementById('helpScreen').classList.contains('hidden') === false) return;
+  if (document.getElementById('deathScreen').classList.contains('hidden') === false) return;
+  if (document.getElementById('winScreen').classList.contains('hidden') === false) return;
+  if (gameOver) return;
+  let handled = true;
+  switch(e.key){
+    case 'w': case 'W': case 'ArrowUp': tryMove(0,-1); break;
+    case 's': case 'S': case 'ArrowDown': tryMove(0,1); break;
+    case 'a': case 'A': case 'ArrowLeft': tryMove(-1,0); break;
+    case 'd': case 'D': case 'ArrowRight': tryMove(1,0); break;
+    case ' ': waitTurn(); break;
+    case 'q': case 'Q': usePotion(); break;
+    case '>': case 'Enter': descend(); break;
+    default: handled = false;
+  }
+  if (handled) e.preventDefault();
+});
+
+/* ============ RENDER ============ */
+let camX = 0, camY = 0;
+let renderT = 0;
+
+function tileSize(){
+  // fit map to view with padding
+  const padX = 40, padY = 130;
+  const availW = Math.max(200, VW - padX);
+  const availH = Math.max(200, VH - padY);
+  const ts = Math.max(12, Math.floor(Math.min(availW/MAPW, availH/MAPH)));
+  return ts;
+}
+
+function draw(){
+  renderT += 0.05;
+  ctx.clearRect(0,0,VW,VH);
+  // background gradient
+  const g = ctx.createRadialGradient(VW/2, VH/2, 60, VW/2, VH/2, Math.max(VW,VH)*0.75);
+  g.addColorStop(0, '#12101c');
+  g.addColorStop(1, '#05050a');
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,VW,VH);
+
+  const ts = tileSize();
+  const mapW = MAPW*ts, mapH = MAPH*ts;
+  const ox = Math.floor((VW - mapW)/2);
+  const oy = Math.floor((VH - mapH)/2) + 8;
+
+  // draw tiles
+  for (let y=0;y<MAPH;y++){
+    for (let x=0;x<MAPW;x++){
+      if (!seen[y][x]) continue;
+      const px = ox + x*ts, py = oy + y*ts;
+      const vis = visible[y][x];
+      const t = map[y][x];
+      if (t === TILE.WALL){
+        ctx.fillStyle = vis ? '#2a2438' : '#161320';
+        ctx.fillRect(px,py,ts,ts);
+        ctx.fillStyle = vis ? '#3a3450' : '#1e1a2c';
+        ctx.fillRect(px,py,ts,Math.max(1,Math.floor(ts*0.14)));
+      } else if (t === TILE.STAIRS){
+        ctx.fillStyle = vis ? '#1a1a26' : '#0e0e16';
+        ctx.fillRect(px,py,ts,ts);
+        ctx.fillStyle = vis ? '#e8c86a' : '#5a4a20';
+        const s = Math.floor(ts*0.62);
+        const pad = Math.floor((ts-s)/2);
+        // draw stair glyph
+        ctx.font = 'bold ' + Math.floor(ts*0.9) + 'px monospace';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('▼', px+ts/2, py+ts/2+1);
+      } else {
+        ctx.fillStyle = vis ? '#1c1a26' : '#0e0d15';
+        ctx.fillRect(px,py,ts,ts);
+        // subtle floor speckle
+        if (vis){
+          ctx.fillStyle = 'rgba(255,255,255,0.025)';
+          ctx.fillRect(px+Math.floor(ts*0.2), py+Math.floor(ts*0.3), Math.max(1,Math.floor(ts*0.12)), Math.max(1,Math.floor(ts*0.12)));
+        }
+      }
+    }
+  }
+
+  // draw items
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const it of items){
+    if (!seen[it.y][it.x]) continue;
+    const px = ox + it.x*ts + ts/2, py = oy + it.y*ts + ts/2;
+    const vis = visible[it.y][it.x];
+    ctx.globalAlpha = vis ? 1 : 0.4;
+    ctx.font = 'bold ' + Math.floor(ts*0.85) + 'px monospace';
+    ctx.fillStyle = it.color;
+    ctx.shadowColor = it.color; ctx.shadowBlur = vis ? 10 : 0;
+    ctx.fillText(it.ch, px, py+1);
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+
+  // draw enemies
+  for (const e of enemies){
+    if (!seen[e.y][e.x]) continue;
+    const px = ox + e.x*ts + ts/2, py = oy + e.y*ts + ts/2;
+    const vis = visible[e.y][e.x];
+    ctx.globalAlpha = vis ? 1 : 0.35;
+    ctx.font = 'bold ' + Math.floor(ts*0.9) + 'px monospace';
+    ctx.fillStyle = e.color;
+    ctx.shadowColor = e.color; ctx.shadowBlur = vis ? (e.boss?18:9) : 0;
+    ctx.fillText(e.ch, px, py+1);
+    ctx.shadowBlur = 0;
+    // hp bar
+    if (vis && e.hp < e.maxHp){
+      const bw = ts*0.8, bh = Math.max(2, Math.floor(ts*0.1));
+      const bx = px - bw/2, by = py - ts*0.55;
+      ctx.fillStyle = '#1a1622';
+      ctx.fillRect(bx,by,bw,bh);
+      ctx.fillStyle = e.boss ? '#d04060' : '#e74c3c';
+      ctx.fillRect(bx,by,bw*Math.max(0,e.hp/e.maxHp),bh);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // draw player
+  {
+    const px = ox + player.x*ts + ts/2, py = oy + player.y*ts + ts/2;
+    // glow ring
+    const pulse = 0.5 + 0.5*Math.sin(renderT*2);
+    ctx.beginPath();
+    ctx.arc(px, py, ts*0.55 + pulse*2, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(160,130,255,' + (0.10 + pulse*0.08) + ')';
+    ctx.fill();
+    ctx.font = 'bold ' + Math.floor(ts*0.95) + 'px monospace';
+    ctx.fillStyle = '#c9b8ff';
+    ctx.shadowColor = '#a68cff'; ctx.shadowBlur = 14;
+    ctx.fillText('@', px, py+1);
+    ctx.shadowBlur = 0;
+  }
+
+  // vignette
+  const vg = ctx.createRadialGradient(VW/2,VH/2, Math.min(VW,VH)*0.35, VW/2,VH/2, Math.max(VW,VH)*0.7);
+  vg.addColorStop(0,'rgba(0,0,0,0)');
+  vg.addColorStop(1,'rgba(0,0,0,0.55)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0,0,VW,VH);
+
+  requestAnimationFrame(draw);
+}
+
+/* ============ UI WIRING ============ */
+function showGame(){
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('helpScreen').classList.add('hidden');
+  document.getElementById('deathScreen').classList.add('hidden');
+  document.getElementById('winScreen').classList.add('hidden');
+  document.getElementById('hud').classList.remove('hidden');
+  document.getElementById('msglog').classList.remove('hidden');
+  document.getElementById('legend').classList.remove('hidden');
+}
+
+document.getElementById('btnStart').addEventListener('click', ()=>{
+  initAudio();
+  newGame();
+  showGame();
+});
+document.getElementById('btnHelp').addEventListener('click', ()=>{
+  initAudio();
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('helpScreen').classList.remove('hidden');
+});
+document.getElementById('btnBack').addEventListener('click', ()=>{
+  document.getElementById('helpScreen').classList.add('hidden');
+  document.getElementById('titleScreen').classList.remove('hidden');
+});
+document.getElementById('btnRetry').addEventListener('click', ()=>{
+  initAudio();
+  newGame();
+  showGame();
+});
+document.getElementById('btnRetry2').addEventListener('click', ()=>{
+  initAudio();
+  newGame();
+  showGame();
+});
+document.getElementById('btnTitle').addEventListener('click', ()=>{
+  document.getElementById('deathScreen').classList.add('hidden');
+  document.getElementById('titleScreen').classList.remove('hidden');
+});
+document.getElementById('btnTitle2').addEventListener('click', ()=>{
+  document.getElementById('winScreen').classList.add('hidden');
+  document.getElementById('titleScreen').classList.remove('hidden');
+});
+
+/* ============ BOOT ============ */
+// init a dummy player so draw() doesn't crash before start
+player = makePlayer();
+map = []; visible = []; seen = [];
+for (let y=0;y<MAPH;y++){ map[y]=[]; visible[y]=[]; seen[y]=[];
+  for (let x=0;x<MAPW;x++){ map[y][x]=TILE.WALL; visible[y][x]=false; seen[y][x]=false; } }
+enemies = []; items = [];
+depth = 1; turn = 0; score = 0; gameOver = false; won = false;
+
+requestAnimationFrame(draw);
+
+})();
+</script>
+</body>
+</html>

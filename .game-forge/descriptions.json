@@ -78,5 +78,9 @@
   "a-markdown-editor-with-live-preview-auto.html": {
     "title": "A Markdown Editor With Live Preview, Autosave And Export",
     "description": "a markdown editor with live preview, autosave and export"
+  },
+  "a-roguelike-dungeon-crawler-with-random-.html": {
+    "title": "A Roguelike Dungeon Crawler With Random Floors, Items, And Permadeath",
+    "description": "a roguelike dungeon crawler with random floors, items, and permadeath"
   }
 }

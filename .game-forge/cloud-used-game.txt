@@ -1,1 +1,2 @@
 a full platformer with 15+ handcrafted levels, checkpoints and a final boss
+a roguelike dungeon crawler with random floors, items, and permadeath
