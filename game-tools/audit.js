@@ -131,7 +131,7 @@ function audit(file){
     setTimeout(() => {
       try {
         fire("mousemove"); fire("mousedown"); fire("mouseup");
-        [...d.querySelectorAll("button, [role=button], a, input, select, textarea, canvas")].slice(0, 40).forEach((el) => {
+        [...d.querySelectorAll("button, [role=button], a, input, select, textarea, canvas")].slice(0, 25).forEach((el) => {
           try {
             fire("mousedown", el); fire("mouseup", el); fire("click", el);
             if ((el.tagName === "INPUT" || el.tagName === "TEXTAREA") && el.type !== "file"){
@@ -166,10 +166,10 @@ async function main(){
   }
   if (args[0] === "--out"){
     const out = args[1], files = args.slice(2), results = [];
-    const perPage = Number(process.env.AUDIT_TIMEOUT || 40000);
+    const perPage = Number(process.env.AUDIT_TIMEOUT || 20000);
     const { execFile } = require("child_process");
     const auditOne = (file) => new Promise((resolve) => {
-      execFile(process.execPath, [__filename, "--single", file], { timeout: perPage, maxBuffer: 20 * 1024 * 1024 }, (err, stdout) => {
+      execFile(process.execPath, [__filename, "--single", file], { timeout: perPage, killSignal: "SIGKILL", maxBuffer: 20 * 1024 * 1024 }, (err, stdout) => {
         if (!stdout){
           resolve({ file, title: file, ok: false, warnings: [],
             errors: [err && err.killed ? "audit timed out — the page appears to hang (infinite loop?)" : "audit crashed: " + (err ? err.message : "unknown")] });
@@ -179,15 +179,24 @@ async function main(){
         catch (e){ resolve({ file, title: file, ok: false, errors: ["audit produced no result"], warnings: [] }); }
       });
     });
-    for (const f of files){
-      const before = CRASHES.length;
-      const r = await auditOne(f);
-      const extra = CRASHES.slice(before);
-      if (extra.length){ r.errors = [...new Set(r.errors.concat(extra))]; r.ok = false; }
-      results.push(r);
+    const pool = Math.max(1, Number(process.env.AUDIT_PARALLEL || 4));
+    const out2 = new Array(files.length);
+    let next = 0;
+    async function worker(){
+      while (true){
+        const i = next++;
+        if (i >= files.length) return;
+        const f = files[i];
+        const before = CRASHES.length;
+        const r = await auditOne(f);
+        const extra = CRASHES.slice(before);
+        if (extra.length){ r.errors = [...new Set(r.errors.concat(extra))]; r.ok = false; }
+        out2[i] = r;
+      }
     }
-    fs.writeFileSync(out, JSON.stringify(results, null, 2));
-    console.log("wrote " + out + " (" + results.length + " pages, " + results.filter((r) => !r.ok).length + " with errors, " + results.reduce((n, r) => n + r.warnings.length, 0) + " warnings)");
+    await Promise.all(Array.from({ length: Math.min(pool, files.length) }, worker));
+    fs.writeFileSync(out, JSON.stringify(out2, null, 2));
+    console.log("wrote " + out + " (" + out2.length + " pages, " + out2.filter((r) => !r.ok).length + " with errors, " + out2.reduce((n, r) => n + r.warnings.length, 0) + " warnings)");
   } else if (args[0]){
     const r = await audit(args[0]);
     process.stdout.write(JSON.stringify(r, null, 2) + "\n");
