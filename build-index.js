@@ -15,7 +15,7 @@ const manifest = {};
 lines(path.join(FORGE, "manifest.txt")).forEach((l) => { manifest[l] = 1; });
 const meta = readJSON(path.join(FORGE, "descriptions.json"), {});
 let files = [];
-try { files = fs.readdirSync(GAMES).filter((f) => /\.html?$/i.test(f)); } catch (e){}
+try { files = fs.readdirSync(GAMES).filter((f) => /\.html?$/i.test(f) && manifest[f]); } catch (e){}
 
 const games = files.map((f) => {
   const st = fs.statSync(path.join(GAMES, f));
