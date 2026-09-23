@@ -113,6 +113,11 @@ function audit(file){
       try{ if(!window.URL.createObjectURL) window.URL.createObjectURL=function(){ return 'blob:stub'; }; if(!window.URL.revokeObjectURL) window.URL.revokeObjectURL=function(){}; }catch(e){}
       try{ if(!window.requestAnimationFrame) window.requestAnimationFrame=function(cb){ return setTimeout(function(){ cb(Date.now()); }, 16); }; }catch(e){}
       try{ if(window.HTMLMediaElement){ window.HTMLMediaElement.prototype.play=function(){ return Promise.resolve(); }; window.HTMLMediaElement.prototype.pause=function(){}; window.HTMLMediaElement.prototype.load=function(){}; } }catch(e){}
+      try{ if(!window.CanvasRenderingContext2D) window.CanvasRenderingContext2D=function(){}; }catch(e){}
+      try{ if(!window.Path2D) window.Path2D=function(){ return { addPath:function(){}, moveTo:function(){}, lineTo:function(){}, closePath:function(){}, arc:function(){}, rect:function(){} }; }; }catch(e){}
+      try{ if(!window.ImageData) window.ImageData=function(){ return { data:new Uint8ClampedArray(4), width:1, height:1 }; }; }catch(e){}
+      try{ if(!window.Image) window.Image=function(){ var s=this; s.src=''; s.width=1; s.height=1; s.addEventListener=function(){}; s.removeEventListener=function(){}; s.onload=null; s.onerror=null; }; }catch(e){}
+      try{ if(!window.OffscreenCanvas) window.OffscreenCanvas=function(){ return { getContext:function(){ return null; }, width:1, height:1 }; }; }catch(e){}
     })();</script>`;
 
     let dom;

@@ -39,6 +39,11 @@ const prelude = `<script>(function(){
   try{ if(!window.fetch) window.fetch=function(){ return Promise.reject(new Error('offline (smoke test)')); }; }catch(e){}
   try{ if(!window.matchMedia) window.matchMedia=function(){ return { matches:false, addListener:function(){}, removeListener:function(){}, addEventListener:function(){}, removeEventListener:function(){} }; }; }catch(e){}
   try{ if(!window.crypto) window.crypto={ getRandomValues:function(a){ for(var i=0;i<a.length;i++)a[i]=Math.floor(Math.random()*256); return a; }, randomUUID:function(){ return 'id-'+Math.random().toString(36).slice(2); } }; }catch(e){}
+  try{ if(!window.CanvasRenderingContext2D) window.CanvasRenderingContext2D=function(){}; }catch(e){}
+  try{ if(!window.Path2D) window.Path2D=function(){ return { addPath:function(){}, moveTo:function(){}, lineTo:function(){}, closePath:function(){}, arc:function(){}, rect:function(){} }; }; }catch(e){}
+  try{ if(!window.ImageData) window.ImageData=function(){ return { data:new Uint8ClampedArray(4), width:1, height:1 }; }; }catch(e){}
+  try{ if(!window.Image) window.Image=function(){ var s=this; s.src=''; s.width=1; s.height=1; s.addEventListener=function(){}; s.removeEventListener=function(){}; s.onload=null; s.onerror=null; }; }catch(e){}
+  try{ if(!window.OffscreenCanvas) window.OffscreenCanvas=function(){ return { getContext:function(){ return null; }, width:1, height:1 }; }; }catch(e){}
 })();</script>`;
 
 let dom;
