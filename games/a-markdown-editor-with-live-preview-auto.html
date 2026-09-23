@@ -434,4 +434,450 @@ Complete the quests in the bottom-right corner to earn XP and level up!"></texta
       var line = lines[i];
 
       // fenced code
-      var fence = line.match(/^\s*
+      var fence = line.match(/^\s*```\s*([\w-]*)\s*$/);
+      if (inCode) {
+        if (fence) { flushCode(); i++; continue; }
+        codeBuf.push(line);
+        i++;
+        continue;
+      }
+      if (fence) {
+        closeLists();
+        closeBlockquote();
+        inCode = true;
+        codeLang = fence[1] || "";
+        i++;
+        continue;
+      }
+
+      // blank line
+      if (/^\s*$/.test(line)) {
+        closeLists();
+        closeBlockquote();
+        i++;
+        continue;
+      }
+
+      // horizontal rule
+      if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) {
+        closeLists();
+        closeBlockquote();
+        out.push("<hr>");
+        i++;
+        continue;
+      }
+
+      // heading
+      var heading = line.match(/^(#{1,6})\s+(.*?)\s*#*\s*$/);
+      if (heading) {
+        closeLists();
+        closeBlockquote();
+        var hlevel = heading[1].length;
+        out.push("<h" + hlevel + ">" + inline(heading[2]) + "</h" + hlevel + ">");
+        i++;
+        continue;
+      }
+
+      // blockquote
+      var quote = line.match(/^\s*>\s?(.*)$/);
+      if (quote) {
+        closeLists();
+        if (!inBlockquote) { out.push("<blockquote>"); inBlockquote = true; }
+        out.push("<p>" + inline(quote[1]) + "</p>");
+        i++;
+        continue;
+      }
+      closeBlockquote();
+
+      // table
+      if (line.indexOf("|") !== -1 && i + 1 < lines.length &&
+          /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(lines[i + 1])) {
+        closeLists();
+        var headCells = splitRow(line);
+        i += 2;
+        var bodyRows = [];
+        while (i < lines.length && lines[i].indexOf("|") !== -1 && !/^\s*$/.test(lines[i])) {
+          bodyRows.push(splitRow(lines[i]));
+          i++;
+        }
+        var table = "<table><thead><tr>";
+        headCells.forEach(function (c) { table += "<th>" + inline(c) + "</th>"; });
+        table += "</tr></thead><tbody>";
+        bodyRows.forEach(function (r) {
+          table += "<tr>";
+          for (var ci = 0; ci < headCells.length; ci++) {
+            table += "<td>" + inline(r[ci] || "") + "</td>";
+          }
+          table += "</tr>";
+        });
+        table += "</tbody></table>";
+        out.push(table);
+        continue;
+      }
+
+      // lists
+      var ulMatch = line.match(/^\s*[-*+]\s+(.*)$/);
+      var olMatch = line.match(/^\s*\d+[.)]\s+(.*)$/);
+      if (ulMatch || olMatch) {
+        var listType = ulMatch ? "ul" : "ol";
+        var item = ulMatch ? ulMatch[1] : olMatch[1];
+        if (listStack.length === 0 || listStack[listStack.length - 1] !== listType) {
+          closeLists();
+          out.push("<" + listType + ">");
+          listStack.push(listType);
+        }
+        var task = item.match(/^\[([ xX])\]\s+(.*)$/);
+        if (task) {
+          var checked = task[1].toLowerCase() === "x" ? " checked" : "";
+          out.push('<li class="task"><input type="checkbox" disabled' + checked + "> " + inline(task[2]) + "</li>");
+        } else {
+          out.push("<li>" + inline(item) + "</li>");
+        }
+        i++;
+        continue;
+      }
+
+      // paragraph
+      closeLists();
+      out.push("<p>" + inline(line.trim()) + "</p>");
+      i++;
+    }
+
+    closeLists();
+    closeBlockquote();
+    if (inCode) flushCode();
+    return out.join("\n");
+  }
+
+  function splitRow(line) {
+    return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(function (c) {
+      return c.trim();
+    });
+  }
+
+  /* ============================================================
+     STATE
+  ============================================================ */
+  var STORAGE_KEY = "markdown-forge-doc";
+  var STATE_KEY = "markdown-forge-state";
+  var state = { xp: 0, level: 1, levelStart: 0, completed: {}, words: 0 };
+
+  function xpToNext(level) { return 100 + (level - 1) * 60; }
+
+  function countWords(src) {
+    var m = String(src).trim().match(/\S+/g);
+    return m ? m.length : 0;
+  }
+
+  var quests = [
+    { id: "words100", text: "Write 100 words", xp: 40, test: function (s) { return countWords(s) >= 100; } },
+    { id: "heading", text: "Add a heading", xp: 20, test: function (s) { return /^#{1,6}\s+\S/m.test(s); } },
+    { id: "bold", text: "Use **bold**", xp: 20, test: function (s) { return /\*\*[^*\n]+\*\*/.test(s); } },
+    { id: "italic", text: "Use *italic*", xp: 20, test: function (s) { return /(^|[^*\w])\*[^*\n]+\*(?!\*)/m.test(s); } },
+    { id: "list", text: "Make a list", xp: 25, test: function (s) { return /^\s*([-*+]|\d+[.)])\s+\S/m.test(s); } },
+    { id: "quote", text: "Quote something", xp: 25, test: function (s) { return /^\s*>\s?\S/m.test(s); } },
+    { id: "link", text: "Add a link", xp: 30, test: function (s) { return /\[[^\]]+\]\([^)]+\)/.test(s); } },
+    { id: "code", text: "Add a code block", xp: 35, test: function (s) { return /```/.test(s); } },
+    { id: "table", text: "Build a table", xp: 45, test: function (s) { return /\|[^|\n]+\|/.test(s); } },
+    { id: "words500", text: "Write 500 words", xp: 90, test: function (s) { return countWords(s) >= 500; } }
+  ];
+
+  /* ============================================================
+     RENDERING
+  ============================================================ */
+  function renderQuests() {
+    questList.innerHTML = "";
+    quests.forEach(function (q) {
+      var li = document.createElement("li");
+      if (state.completed[q.id]) li.className = "done";
+      var check = document.createElement("span");
+      check.className = "check";
+      check.textContent = state.completed[q.id] ? "\u2713" : "";
+      var text = document.createElement("span");
+      text.className = "qText";
+      text.textContent = q.text;
+      var xp = document.createElement("span");
+      xp.className = "qXp";
+      xp.textContent = "+" + q.xp + " XP";
+      li.appendChild(check);
+      li.appendChild(text);
+      li.appendChild(xp);
+      questList.appendChild(li);
+    });
+    var done = quests.filter(function (q) { return state.completed[q.id]; }).length;
+    questBadge.textContent = done + " / " + quests.length;
+    statQuests.textContent = done + "/" + quests.length;
+  }
+
+  function updateStats() {
+    statLevel.textContent = state.level;
+    statXp.textContent = state.xp;
+    statWords.textContent = state.words;
+    var need = xpToNext(state.level);
+    var got = state.xp - state.levelStart;
+    var pct = Math.max(0, Math.min(100, (got / need) * 100));
+    xpBar.style.width = pct + "%";
+  }
+
+  function toast(msg, gold) {
+    var el = document.createElement("div");
+    el.className = "toast" + (gold ? " gold" : "");
+    el.textContent = msg;
+    toasts.appendChild(el);
+    setTimeout(function () {
+      if (el.parentNode) el.parentNode.removeChild(el);
+    }, 2800);
+  }
+
+  function levelUp() {
+    toast("Level " + state.level + "!", true);
+    flash.classList.remove("go");
+    void flash.offsetWidth;
+    flash.classList.add("go");
+    sfx("level");
+  }
+
+  function addXp(amount) {
+    state.xp += amount;
+    while (state.xp - state.levelStart >= xpToNext(state.level)) {
+      state.levelStart += xpToNext(state.level);
+      state.level += 1;
+      levelUp();
+    }
+    updateStats();
+  }
+
+  /* ============================================================
+     PERSISTENCE
+  ============================================================ */
+  var saveTimer = null;
+
+  function persistState() {
+    try {
+      localStorage.setItem(STATE_KEY, JSON.stringify({
+        xp: state.xp,
+        level: state.level,
+        levelStart: state.levelStart,
+        completed: state.completed
+      }));
+    } catch (e) { /* ignore */ }
+  }
+
+  function scheduleSave() {
+    saveIndicator.textContent = "\u25CF Saving\u2026";
+    saveIndicator.classList.remove("saved");
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      try { localStorage.setItem(STORAGE_KEY, editor.value); } catch (e) { /* ignore */ }
+      persistState();
+      saveIndicator.textContent = "\u25CF Saved";
+      saveIndicator.classList.add("saved");
+    }, 400);
+  }
+
+  function loadSaved() {
+    try {
+      var doc = localStorage.getItem(STORAGE_KEY);
+      if (doc !== null) editor.value = doc;
+      var raw = localStorage.getItem(STATE_KEY);
+      if (raw) {
+        var saved = JSON.parse(raw);
+        if (saved && typeof saved === "object") {
+          state.xp = saved.xp || 0;
+          state.level = saved.level || 1;
+          state.levelStart = saved.levelStart || 0;
+          state.completed = saved.completed || {};
+        }
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  /* ============================================================
+     MAIN UPDATE
+  ============================================================ */
+  function update() {
+    var src = editor.value;
+    preview.innerHTML = parseMarkdown(src);
+    state.words = countWords(src);
+
+    var newly = [];
+    quests.forEach(function (q) {
+      if (!state.completed[q.id] && q.test(src)) {
+        state.completed[q.id] = true;
+        newly.push(q);
+      }
+    });
+
+    renderQuests();
+    updateStats();
+
+    newly.forEach(function (q) {
+      toast("Quest complete: " + q.text + " (+" + q.xp + " XP)");
+      sfx("quest");
+      addXp(q.xp);
+    });
+
+    scheduleSave();
+  }
+
+  /* ============================================================
+     EXPORT MODAL
+  ============================================================ */
+  function openExport() {
+    modalTitle.textContent = "Export Markdown";
+    modalSub.textContent = "Your document, ready to copy or download.";
+    modalText.value = editor.value;
+    modal.classList.add("on");
+    try { modalText.focus(); } catch (e) { /* ignore */ }
+  }
+
+  function closeModal() {
+    modal.classList.remove("on");
+  }
+
+  function copyExport() {
+    modalText.select();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(modalText.value).then(function () {
+        toast("Copied to clipboard");
+      }, function () {
+        legacyCopy();
+      });
+    } else {
+      legacyCopy();
+    }
+  }
+
+  function legacyCopy() {
+    var ok = false;
+    try {
+      if (document.execCommand) ok = document.execCommand("copy");
+    } catch (e) { ok = false; }
+    toast(ok ? "Copied to clipboard" : "Press Ctrl/Cmd+C to copy");
+  }
+
+  function downloadExport() {
+    try {
+      var blob = new Blob([editor.value], { type: "text/markdown" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = "document.md";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      toast("Downloaded document.md");
+    } catch (e) {
+      toast("Download not supported");
+    }
+  }
+
+  /* ============================================================
+     EDITOR HELPERS
+  ============================================================ */
+  function wrapSelection(before, after) {
+    var start = editor.selectionStart;
+    var end = editor.selectionEnd;
+    var val = editor.value;
+    var sel = val.slice(start, end);
+    editor.value = val.slice(0, start) + before + sel + after + val.slice(end);
+    var pos = start + before.length + sel.length + after.length;
+    try { editor.selectionStart = editor.selectionEnd = pos; } catch (e) { /* ignore */ }
+    editor.focus();
+    update();
+  }
+
+  /* ============================================================
+     EVENTS
+  ============================================================ */
+  $("startBtn").addEventListener("click", function () {
+    titleScreen.classList.add("hidden");
+    app.classList.add("on");
+    ensureAudio();
+    sfx("click");
+    editor.focus();
+    setTimeout(function () { titleScreen.style.display = "none"; }, 650);
+  });
+
+  editor.addEventListener("input", update);
+
+  editor.addEventListener("keydown", function (e) {
+    var mod = e.ctrlKey || e.metaKey;
+    if (mod && (e.key === "b" || e.key === "B")) {
+      e.preventDefault();
+      wrapSelection("**", "**");
+    } else if (mod && (e.key === "k" || e.key === "K")) {
+      e.preventDefault();
+      if (editor.selectionStart !== editor.selectionEnd) {
+        wrapSelection("[", "](url)");
+      } else {
+        wrapSelection("[", "](url)");
+      }
+    } else if (mod && (e.key === "s" || e.key === "S")) {
+      e.preventDefault();
+      openExport();
+    } else if (e.key === "Tab") {
+      e.preventDefault();
+      wrapSelection("  ", "");
+    } else if (e.key.length === 1) {
+      sfx("key");
+    }
+  });
+
+  $("toggleQuestsBtn").addEventListener("click", function () {
+    questsPanel.classList.toggle("collapsed");
+  });
+
+  $("hideQuests").addEventListener("click", function () {
+    questsPanel.classList.add("collapsed");
+  });
+
+  var clearArmed = false;
+  var clearArmTimer = null;
+  var clearBtn = $("clearBtn");
+  clearBtn.addEventListener("click", function () {
+    if (editor.value && !clearArmed) {
+      clearArmed = true;
+      clearBtn.textContent = "Confirm?";
+      toast("Click Clear again to confirm");
+      clearTimeout(clearArmTimer);
+      clearArmTimer = setTimeout(function () {
+        clearArmed = false;
+        clearBtn.textContent = "Clear";
+      }, 3000);
+      return;
+    }
+    clearArmed = false;
+    clearTimeout(clearArmTimer);
+    clearBtn.textContent = "Clear";
+    editor.value = "";
+    update();
+    editor.focus();
+  });
+
+  $("exportBtn").addEventListener("click", openExport);
+  $("modalClose").addEventListener("click", closeModal);
+  $("modalCopy").addEventListener("click", copyExport);
+  $("modalDownload").addEventListener("click", downloadExport);
+
+  modal.addEventListener("click", function (e) {
+    if (e.target === modal) closeModal();
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && modal.classList.contains("on")) closeModal();
+  });
+
+  /* ============================================================
+     INIT
+  ============================================================ */
+  loadSaved();
+  renderQuests();
+  state.words = countWords(editor.value);
+  updateStats();
+  preview.innerHTML = parseMarkdown(editor.value);
+})();
+</script>
+</body>
+</html>

@@ -24,8 +24,23 @@ PROMPT="$(cat "$PROMPT_FILE")"
 ollama_ready(){ curl -s -m 3 -o /dev/null "$OLLAMA_URL"; }
 online(){ curl -s -m 4 -o /dev/null "$CLOUD_PING"; }
 
-run_cloud(){ "$OPENCODE" run --auto --dir "$DIR" "$PROMPT" >> "$LOG" 2>&1; }
-run_local(){ "$OPENCODE" run --auto --model "$LOCAL_MODEL" --dir "$DIR" "$PROMPT" >> "$LOG" 2>&1; }
+# Run a command with a hard time limit (macOS has no `timeout`).
+TIMEOUT="${FORGE_TIMEOUT:-900}"
+run_limited(){
+  "$@" >> "$LOG" 2>&1 &
+  local pid=$!
+  ( sleep "$TIMEOUT"; kill -TERM "$pid" 2>/dev/null; sleep 5; kill -KILL "$pid" 2>/dev/null ) &
+  local wd=$!
+  disown "$wd" 2>/dev/null || true   # keep the watchdog alive even if we are killed
+  wait "$pid" 2>/dev/null
+  local rc=$?
+  kill "$wd" 2>/dev/null
+  wait "$wd" 2>/dev/null
+  return $rc
+}
+
+run_cloud(){ run_limited "$OPENCODE" run --auto --dir "$DIR" "$PROMPT"; }
+run_local(){ run_limited "$OPENCODE" run --auto --model "$LOCAL_MODEL" --dir "$DIR" "$PROMPT"; }
 
 if [ "${FORGE_FORCE_LOCAL:-0}" = "1" ] || ! online; then
   if ollama_ready; then

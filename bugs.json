@@ -223,10 +223,8 @@
   {
     "file": "games/a-markdown-editor-with-live-preview-auto.html",
     "title": "Markdown Forge",
-    "ok": false,
-    "errors": [
-      "jsdomError: Uncaught [SyntaxError: Invalid regular expression: missing /]"
-    ],
+    "ok": true,
+    "errors": [],
     "warnings": []
   }
 ]

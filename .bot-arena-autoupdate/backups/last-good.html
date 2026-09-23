@@ -732,7 +732,8 @@ var SPELL_SEEDS = [
   'function cast(caster, foe) {\n  spell.teleport();\n  spell.beam({ dmg: 15, color: "#4dd0ff" });\n  spell.label("VOID STEP");\n}',
   'function cast(caster, foe) {\n  for (var i = 0; i < 8; i++) { spell.projectile({ speed: 7, dmg: 6, spread: 1.2, color: "#7aff4d" }); }\n  spell.label("SPORE STORM");\n}',
   'function cast(caster, foe) {\n  spell.jump(16);\n  spell.dash(18);\n  spell.projectile({ speed: 11, dmg: 14, count: 2, spread: 0.2, color: "#ff4d94" });\n  spell.label("METEOR DIVE");\n}',
-  'function cast(caster, foe) {\n  spell.homing({ speed: 5, dmg: 11, count: 2, spread: 0.9, color: "#2bd4a0" });\n  spell.label("SEEKER SWARM");\n}'
+  'function cast(caster, foe) {\n  spell.homing({ speed: 5, dmg: 11, count: 2, spread: 0.9, color: "#2bd4a0" });\n  spell.label("SEEKER SWARM");\n}',
+  'function cast(caster, foe) {\n  spell.gravity({ dmg: 3, radius: 170, duration: 140, pull: 0.9, color: "#b14dff" });\n  spell.label("SINGULARITY");\n}'
 ];
 var currentSpellBuffer = null;
 function spellAPI() {
@@ -746,6 +747,7 @@ function spellAPI() {
     teleport: function () { push('teleport', {}); },
     beam: function (o) { push('beam', o); },
     homing: function (o) { push('homing', o); },
+    gravity: function (o) { push('gravity', o); },
     label: function (s) { push('label', { text: String(s) }); }
   };
 }
@@ -778,12 +780,12 @@ function addSpell(bot, code, name) {
 }
 function mutateSpell(code) {
   code = code || choose(SPELL_SEEDS);
-  var methods = ['projectile', 'dash', 'jump', 'heal', 'shield', 'teleport', 'beam', 'homing'];
+  var methods = ['projectile', 'dash', 'jump', 'heal', 'shield', 'teleport', 'beam', 'homing', 'gravity'];
   var op = Math.random();
   if (op < 0.4) {
     code = code.replace(/[0-9]+(\.[0-9]+)?/g, function (m) { return Math.random() < 0.6 ? m : String(Math.max(0, Math.round((parseFloat(m) + rand(-6, 8)) * 100) / 100)); });
   } else if (op < 0.65) {
-    code = code.replace(/spell\.(projectile|dash|jump|heal|shield|teleport|beam|homing)/, 'spell.' + choose(methods));
+    code = code.replace(/spell\.(projectile|dash|jump|heal|shield|teleport|beam|homing|gravity)/, 'spell.' + choose(methods));
   } else if (op < 0.85) {
     var lines = code.split('\n');
     lines.splice(lines.length - 1, 0, '  spell.' + choose(methods) + '({ speed: ' + irand(5, 12) + ', dmg: ' + irand(4, 20) + ' });');
@@ -821,6 +823,20 @@ function applySpellEffects(f, o, buf, name) {
         var hang = (hn > 1 ? (hh / (hn - 1) - 0.5) * (op.spread || 0.8) * 2 : 0);
         f.projectiles.push({ x: f.x + f.w / 2, y: f.y + 18, vx: f.facing * hspd * Math.cos(hang), vy: hspd * Math.sin(hang), dmg: hdmg * powerMul(f), owner: f, color: op.color || col, r: 7, homing: true, life: clamp(op.life || 120, 30, 300) });
       }
+    }
+    else if (e.k === 'gravity') {
+      var gx = clamp(Number(op.x) || (o.x + o.w / 2), 20, CANVAS_W - 20);
+      var gy = clamp(Number(op.y) || (o.y + o.h / 2), 20, FLOOR - 10);
+      f.projectiles.push({
+        well: true, x: gx, y: gy,
+        r: clamp(op.radius || 150, 60, 320),
+        dmg: clamp(op.dmg || 2, 1, 12) * powerMul(f),
+        pull: clamp(op.pull || 0.6, 0.05, 2),
+        owner: f, color: op.color || '#b14dff',
+        life: clamp(op.duration || 120, 30, 300),
+        tick: 0, tickMax: 22
+      });
+      if (op.color) col = op.color;
     }
   }
   if (name) announce = { text: name, t: 100 };
@@ -1229,6 +1245,20 @@ function hitFighter(o, f, dmg, kb, dir) {
 function updateProjectiles(f, o) {
   for (var i = f.projectiles.length - 1; i >= 0; i--) {
     var p = f.projectiles[i];
+    // GRAVITY wells are stationary: they drag the foe inward and tick damage.
+    if (p.well) {
+      p.life = (p.life || 120) - 1;
+      if (p.life <= 0) { f.projectiles.splice(i, 1); continue; }
+      var wdx = p.x - (o.x + o.w / 2), wdy = p.y - (o.y + o.h / 2);
+      var wd = Math.sqrt(wdx * wdx + wdy * wdy) || 1;
+      if (wd < p.r) {
+        p.tick = (p.tick || 0) - 1;
+        if (p.tick <= 0) { p.tick = p.tickMax || 22; hitFighter(o, f, p.dmg, 1, wdx > 0 ? 1 : -1); spawnHitSparks(o.x + o.w / 2, o.y + o.h / 2, p.color, 1.1); }
+        // pull applied AFTER hitFighter so its knockback doesn't erase it
+        o.vx += (wdx / wd) * p.pull;
+      }
+      continue;
+    }
     // HOMING spells steer toward the foe for a limited lifetime.
     if (p.homing) {
       var tx = (o.x + o.w / 2) - p.x, ty = (o.y + o.h / 2) - p.y;
@@ -1870,6 +1900,20 @@ function drawFighter(f) {
 function drawProjectiles(f) {
   for (var i = 0; i < f.projectiles.length; i++) {
     var p = f.projectiles[i];
+    if (p.well) {
+      var spin = (f.anim || 0) * 0.06;
+      var fade = Math.min(1, (p.life || 0) / 30);
+      ctx.save();
+      ctx.globalAlpha = 0.14 * fade; ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 0.55, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.85 * fade; ctx.strokeStyle = p.color; ctx.lineWidth = 2;
+      for (var w = 0; w < 3; w++) {
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (0.3 + w * 0.2), spin * (w + 1), spin * (w + 1) + Math.PI * 1.5); ctx.stroke();
+      }
+      ctx.globalAlpha = fade; ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(p.x, p.y, 3 + Math.sin(spin * 6) * 1.5, 0, Math.PI * 2); ctx.fill();
+      ctx.restore(); continue;
+    }
     if (p.beam) {
       ctx.save(); ctx.translate(p.x, p.y);
       ctx.fillStyle = p.color; ctx.fillRect(-28, -5, 56, 10);

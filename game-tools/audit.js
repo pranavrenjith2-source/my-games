@@ -151,18 +151,37 @@ function audit(file){
         if (!text && !hasCanvas) errors.push("page looks blank (no text, no canvas)");
         try { dom.window.close(); } catch (e){}
         resolve({ file, title, ok: errors.length === 0, errors: [...new Set(errors)], warnings: [...new Set(warnings)] });
-      }, 1400);
-    }, 900);
+      }, 700);
+    }, 500);
   });
 }
 
 async function main(){
   const args = process.argv.slice(2);
+  if (args[0] === "--single"){
+    const r = await audit(args[1]);
+    process.stdout.write(JSON.stringify(r));
+    process.exit(0);
+    return;
+  }
   if (args[0] === "--out"){
     const out = args[1], files = args.slice(2), results = [];
+    const perPage = Number(process.env.AUDIT_TIMEOUT || 40000);
+    const { execFile } = require("child_process");
+    const auditOne = (file) => new Promise((resolve) => {
+      execFile(process.execPath, [__filename, "--single", file], { timeout: perPage, maxBuffer: 20 * 1024 * 1024 }, (err, stdout) => {
+        if (!stdout){
+          resolve({ file, title: file, ok: false, warnings: [],
+            errors: [err && err.killed ? "audit timed out — the page appears to hang (infinite loop?)" : "audit crashed: " + (err ? err.message : "unknown")] });
+          return;
+        }
+        try { resolve(JSON.parse(stdout)); }
+        catch (e){ resolve({ file, title: file, ok: false, errors: ["audit produced no result"], warnings: [] }); }
+      });
+    });
     for (const f of files){
       const before = CRASHES.length;
-      const r = await audit(f);
+      const r = await auditOne(f);
       const extra = CRASHES.slice(before);
       if (extra.length){ r.errors = [...new Set(r.errors.concat(extra))]; r.ok = false; }
       results.push(r);
