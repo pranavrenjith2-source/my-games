@@ -74,5 +74,9 @@
   "a-full-platformer-with-15-handcrafted-le.html": {
     "title": "A Full Platformer With 15+ Handcrafted Levels, Checkpoints And A Final Boss",
     "description": "a full platformer with 15+ handcrafted levels, checkpoints and a final boss"
+  },
+  "a-markdown-editor-with-live-preview-auto.html": {
+    "title": "A Markdown Editor With Live Preview, Autosave And Export",
+    "description": "a markdown editor with live preview, autosave and export"
   }
 }
