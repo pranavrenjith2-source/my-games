@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>CRASH! — A Tiny Stock Market</title>
+<style>
+  :root{
+    --bg:#080d1a;
+    --panel:#111a30;
+    --panel2:#0c1426;
+    --line:#22314f;
+    --text:#e9effc;
+    --muted:#8ea0c4;
+    --green:#38e08a;
+    --red:#ff5d6c;
+    --amber:#ffce54;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 700px at 50% -12%, #1b2a4d 0%, transparent 62%),
+      var(--bg);
+    color:var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing:antialiased;
+    display:flex;
+    justify-content:center;
+    padding:16px 14px 26px;
+    min-height:100%;
+    overflow-x:hidden;
+  }
+  .wrap{width:100%;max-width:940px;display:flex;flex-direction:column;gap:12px}
+
+  .head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+  h1{
+    margin:0;
+    font-size:clamp(28px,6vw,44px);
+    line-height:1;
+    letter-spacing:-1.5px;
+    font-weight:900;
+    background:linear-gradient(92deg,#38e08a 0%,#8ef0c0 40%,#ff5d6c 100%);
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+  }
+  h1 .bang{color:var(--amber);-webkit-text-fill-color:var(--amber)}
+  .sub{margin:7px 0 0;color:var(--muted);font-size:clamp(12.5px,2.6vw,14.5px);line-height:1.45;max-width:640px}
+  .sub b{color:var(--text)}
+  .sub .g{color:var(--green)}
+  .sub .r{color:var(--red)}
+
+  .mute{
+    flex:0 0 auto;
+    width:44px;height:44px;border-radius:12px;
+    border:1px solid var(--line);
+    background:var(--panel);
+    color:var(--text);
+    font-size:19px;cursor:pointer;
+    transition:transform .08s ease,background .15s ease;
+  }
+  .mute:hover{background:#17233d}
+  .mute:active{transform:scale(.93)}
+
+  .stats{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:8px;
+  }
+  .stat{
+    background:linear-gradient(180deg,var(--panel),var(--panel2));
+    border:1px solid var(--line);
+    border-radius:13px;
+    padding:9px 11px;
+    min-width:0;
+  }
+  .stat label{display:block;font-size:10px;letter-spacing:1.3px;color:var(--muted);font-weight:700;margin-bottom:3px}
+  .stat .v{
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size:clamp(15px,3.4vw,20px);
+    font-weight:700;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+
+  .chartbox{
+    position:relative;
+    height:clamp(240px,40vh,400px);
+    background:linear-gradient(180deg,#0d1526,#0a1120);
+    border:1px solid var(--line);
+    border-radius:16px;
+    overflow:hidden;
+    transition:box-shadow .18s ease;
+    box-shadow:0 10px 40px rgba(0,0,0,.35);
+  }
+  .chartbox.flash-good{box-shadow:0 0 0 2px rgba(56,224,138,.75),0 0 45px rgba(56,224,138,.22) inset}
+  .chartbox.flash-bad{box-shadow:0 0 0 2px rgba(255,93,108,.8),0 0 45px rgba(255,93,108,.24) inset}
+  canvas{display:block;width:100%;height:100%}
+
+  .badge{
+    position:absolute;top:10px;left:10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size:12.5px;font-weight:700;
+    padding:4px 9px;border-radius:999px;
+    border:1px solid transparent;
+    backdrop-filter:blur(6px);
+  }
+  .badge.up{color:var(--green);background:rgba(56,224,138,.12);border-color:rgba(56,224,138,.35)}
+  .badge.down{color:var(--red);background:rgba(255,93,108,.12);border-color:rgba(255,93,108,.35)}
+
+  .ticker{
+    position:absolute;left:10px;right:10px;bottom:9px;
+    font-size:12px;color:#a9b8d6;
+    background:rgba(6,10,20,.7);
+    border:1px solid rgba(120,150,200,.14);
+    border-radius:9px;
+    padding:5px 9px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    backdrop-filter:blur(6px);
+  }
+
+  .controls{display:grid;grid-template-columns:1fr 1fr 1.6fr;gap:9px}
+  .btn{
+    position:relative;
+    border:0;border-radius:14px;
+    padding:14px 10px 12px;
+    font-family:inherit;
+    font-size:clamp(13px,3vw,16px);
+    font-weight:900;letter-spacing:.6px;
+    color:#06101f;
+    cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+    transition:transform .07s ease,filter .15s ease,opacity .15s ease;
+    user-select:none;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .btn .key{font-size:9.5px;font-weight:800;letter-spacing:1.2px;opacity:.55}
+  .btn:hover{filter:brightness(1.08)}
+  .btn:active{transform:translateY(2px) scale(.985)}
+  .btn.buy{background:linear-gradient(180deg,#4cf39b,#23c074);box-shadow:0 6px 0 #0f8a50}
+  .btn.sell{background:linear-gradient(180deg,#ff8590,#ef4050);color:#1c0306;box-shadow:0 6px 0 #b81f2d}
+  .btn.crash{
+    background:linear-gradient(180deg,#ffd76b,#ff9f1c);
+    box-shadow:0 6px 0 #c26a00;
+    color:#241100;
+    animation:pulse 2.2s ease-in-out infinite;
+  }
+  .btn.crash:active{animation:none}
+  @keyframes pulse{
+    0%,100%{filter:brightness(1)}
+    50%{filter:brightness(1.16) saturate(1.15)}
+  }
+  .btn:disabled{cursor:not-allowed;opacity:.5;box-shadow:0 6px 0 #2a3550;filter:grayscale(.55);animation:none}
+
+  .goal{display:flex;align-items:center;gap:11px;font-size:12px;color:var(--muted)}
+  .bar{
+    flex:1;height:10px;border-radius:999px;background:#141d33;
+    border:1px solid var(--line);overflow:hidden;
+  }
+  .bar i{
+    display:block;height:100%;width:0%;
+    background:linear-gradient(90deg,#38e08a,#8ef0c0);
+    border-radius:999px;
+    transition:width .25s ease;
+  }
+  .goal span{font-family: ui-monospace, SFMono-Regular, Menlo, monospace;font-weight:700;color:#c7d4ee;white-space:nowrap}
+
+  .overlay{
+    position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(4,7,14,.78);
+    backdrop-filter:blur(7px);
+    opacity:0;pointer-events:none;transition:opacity .28s ease;
+    padding:20px;z-index:20;
+  }
+  .overlay.show{opacity:1;pointer-events:auto}
+  .card{
+    width:100%;max-width:400px;text-align:center;
+    background:linear-gradient(180deg,#16203a,#0d1424);
+    border:1px solid var(--line);border-radius:20px;
+    padding:28px 24px 24px;
+    transform:translateY(12px) scale(.97);
+    transition:transform .3s cubic-bezier(.2,1.4,.4,1);
+    box-shadow:0 24px 70px rgba(0,0,0,.55);
+  }
+  .overlay.show .card{transform:translateY(0) scale(1)}
+  .card h2{margin:0 0 8px;font-size:28px;letter-spacing:-.5px}
+  .card p{margin:0 0 20px;color:var(--muted);font-size:14px;line-height:1.55}
+  .card button{
+    width:100%;border:0;border-radius:13px;padding:14px;
+    font-family:inherit;font-size:16px;font-weight:900;letter-spacing:.5px;
+    background:linear-gradient(180deg,#4cf39b,#23c074);color:#06101f;
+    cursor:pointer;box-shadow:0 5px 0 #0f8a50;
+    transition:transform .07s ease,filter .15s ease;
+  }
+  .card button:hover{filter:brightness(1.07)}
+  .card button:active{transform:translateY(2px) scale(.985)}
+
+  @media (max-width:560px){
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .controls{grid-template-columns:1fr 1fr}
+    .btn.crash{grid-column:1 / -1}
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="head">
+      <div>
+        <h1>CRASH<span class="bang">!</span></h1>
+        <p class="sub">
+          Sell at the top, hit <b class="r">CRASH</b>, buy the dip — grow <b>$1,000</b> into
+          <b class="g">$10,000</b>. Keyboard: <b>B</b> buy, <b>S</b> sell, <b>Space</b> crash.
+        </p>
+      </div>
+      <button class="mute" id="mute" title="Toggle sound" aria-label="Toggle sound">🔊</button>
+    </header>
+
+    <div class="stats">
+      <div class="stat"><label>PRICE</label><div class="v" id="price">$100.00</div></div>
+      <div class="stat"><label>CASH</label><div class="v" id="cash">$1,000</div></div>
+      <div class="stat"><label>SHARES</label><div class="v" id="shares">0</div></div>
+      <div class="stat"><label>NET WORTH</label><div class="v" id="net">$1,000</div></div>
+    </div>
+
+    <div class="chartbox">
+      <canvas id="chart"></canvas>
+      <div class="badge up" id="trend">▲ 0.0%</div>
+      <div class="ticker" id="ticker">Markets open. Good luck.</div>
+    </div>
+
+    <div class="controls">
+      <button class="btn buy" id="buy"><span class="lbl">BUY</span><span class="key">B</span></button>
+      <button class="btn sell" id="sell"><span class="lbl">SELL</span><span class="key">S</span></button>
+      <button class="btn crash" id="crash"><span class="lbl">CRASH THE MARKET</span><span class="key">SPACE</span></button>
+    </div>
+
+    <div class="goal">
+      <div class="bar"><i id="barfill"></i></div>
+      <span id="goaltxt">$1,000 / $10,000</span>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="card">
+      <h2 id="ovtitle">You win!</h2>
+      <p id="ovmsg"></p>
+      <button id="ovbtn">Play again</button>
+    </div>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+
+  var $ = function(id){ return document.getElementById(id); };
+  var canvas = $('chart');
+  var ctx = canvas.getContext('2d');
+  var chartbox = document.querySelector('.chartbox');
+
+  var TICK_MS   = 130;
+  var HISTORY   = 220;
+  var BASE_VOL  = 0.005;
+  var START_CASH = 1000;
+  var GOAL      = 10000;
+  var BUST      = 100;
+  var CRASH_CD  = 5000;
+
+  function randn(){
+    var u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  /* ---------- state ---------- */
+  var cash, shares, avgCost, price, fair, vol, hist, markers,
+      crashCd, state, tickAcc, viewMin, viewMax, startPrice,
+      tickerMsg, tickerUntil, lastTicker;
+
+  /* ---------- audio (lazy + guarded) ---------- */
+  var actx = null, muted = false;
+
+  function audioCtx(){
+    if (actx) return actx;
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      actx = new AC();
+    } catch (e) { actx = null; }
+    return actx;
+  }
+  function resumeAudio(){
+    var c = audioCtx();
+    if (c && c.state === 'suspended'){
+      try { c.resume(); } catch (e) {}
+    }
+  }
+  // Unlock audio on the first user gesture (autoplay policy).
+  ["pointerdown", "keydown", "touchstart", "click"].forEach(function (ev) {
+    window.addEventListener(ev, resumeAudio, { passive: true });
+  });
+  function beep(freq, dur, type, volLevel, slideTo){
+    if (muted) return;
+    var c = audioCtx();
+    if (!c) return;
+    var play = function () {
+      try {
+        var t = c.currentTime;
+        var o = c.createOscillator();
+        var g = c.createGain();
+        o.type = type || 'sine';
+        o.frequency.setValueAtTime(freq, t);
+        if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+        g.gain.setValueAtTime(volLevel || 0.1, t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        o.connect(g); g.connect(c.destination);
+        o.start(t); o.stop(t + dur + 0.03);
+      } catch (e) { }
+    };
+    if (c.state === 'suspended' && c.resume) c.resume().then(play).catch(function () { }); else play();
+  }
+
+  /* ---------- helpers ---------- */
+  function setTicker(msg, ms){
+    tickerMsg = msg;
+    tickerUntil = performance.now() + (ms || 3000);
+  }
+  function fmtMoney(n){
+    return '$' + Math.round(n).toLocaleString('en-US');
+  }
+  var flashTimer = null;
+  function flash(kind){
+    chartbox.classList.remove('flash-good', 'flash-bad');
+    void chartbox.offsetWidth;
+    chartbox.classList.add(kind === 'good' ? 'flash-good' : 'flash-bad');
+    if (flashTimer) clearTimeout(flashTimer);
+    flashTimer = setTimeout(function(){
+      chartbox.classList.remove('flash-good', 'flash-bad');
+    }, 380);
+  }
+
+  /* ---------- game setup ---------- */
+  function reset(){
+    cash = START_CASH;
+    shares = 0;
+    avgCost = null;
+    price = 100;
+    fair = 100;
+    vol = BASE_VOL;
+    hist = [];
+    for (var i = 0; i < 70; i++) hist.push(100 + randn() * 0.35);
+    price = hist[hist.length - 1];
+    fair = price;
+    startPrice = price;
+    markers = [];
+    crashCd = 0;
+    tickAcc = 0;
+    state = 'play';
+    viewMin = price - 3;
+    viewMax = price + 3;
+    lastTicker = '';
+    setTicker('Markets open. Good luck.', 2500);
+    $('overlay').classList.remove('show');
+    updateCrashBtn();
+  }
+
+  /* ---------- market simulation ---------- */
+  var EVENTS = [
+    ['Earnings beat expectations!', 0.055],
+    ['Analysts upgrade to STRONG BUY', 0.045],
+    ['Viral product launch', 0.07],
+    ['Buyback announced', 0.05],
+    ['Earnings miss expectations', -0.055],
+    ['CEO resigns unexpectedly', -0.06],
+    ['Regulators open an investigation', -0.075],
+    ['Supply chain problems', -0.045],
+    ['Insider selling reported', -0.05],
+    ['Short seller report released', -0.08]
+  ];
+
+  function maybeEvent(){
+    if (Math.random() > 0.006) return;
+    var e = EVENTS[(Math.random() * EVENTS.length) | 0];
+    price *= (1 + e[1]);
+    fair *= (1 + e[1]);
+    if (fair < 20) fair = 20;
+    markers.push({ i: hist.length - 1, type: e[1] >= 0 ? 'good' : 'bad', price: price });
+    setTicker((e[1] >= 0 ? '📈 ' : '📉 ') + e[0], 3000);
+    flash(e[1] >= 0 ? 'good' : 'bad');
+    beep(e[1] >= 0 ? 880 : 180, 0.16, e[1] >= 0 ? 'triangle' : 'sawtooth', 0.09);
+  }
+
+  function tick(){
+    fair += randn() * 0.14;
+    if (fair < 20) fair = 20;
+    if (fair > 600) fair = 600;
+
+    var pull = ((fair - price) / price) * 0.012;
+    var r = pull + randn() * vol;
+    price *= (1 + r);
+    if (price < 1) price = 1;
+    if (price > 5000) price = 5000;
+    vol += (BASE_VOL - vol) * 0.03;
+
+    hist.push(price);
+    if (hist.length > HISTORY){
+      hist.shift();
+      for (var i = 0; i < markers.length; i++) markers[i].i--;
+      markers = markers.filter(function(m){ return m.i >= 0; });
+    }
+
+    maybeEvent();
+    checkEnd();
+  }
+
+  function netWorth(){ return cash + shares * price; }
+
+  function checkEnd(){
+    var net = netWorth();
+    if (net >= GOAL){
+      state = 'win';
+      showOverlay(true, net);
+      beepWin();
+    } else if (net < BUST){
+      state = 'lose';
+      showOverlay(false, net);
+      beepLose();
+    }
+  }
+
+  /* ---------- actions ---------- */
+  function buy(){
+    if (state !== 'play') return;
+    if (cash < 0.01){
+      setTicker('No cash left to buy.', 1600);
+      beep(150, 0.1, 'square', 0.06);
+      return;
+    }
+    var qty = cash / price;
+    var newShares = shares + qty;
+    avgCost = (avgCost === null) ? price : (avgCost * shares + price * qty) / newShares;
+    shares = newShares;
+    cash = 0;
+    markers.push({ i: hist.length - 1, type: 'buy', price: price });
+    setTicker('Bought ' + qty.toFixed(2) + ' shares @ $' + price.toFixed(2), 2200);
+    beep(620, 0.09, 'square', 0.08);
+    setTimeout(function(){ beep(880, 0.07, 'square', 0.06); }, 70);
+    updateCrashBtn();
+  }
+
+  function sell(){
+    if (state !== 'play') return;
+    if (shares <= 0.0000001){
+      setTicker('You have no shares to sell.', 1600);
+      beep(150, 0.1, 'square', 0.06);
+      return;
+    }
+    var qty = shares;
+    var gained = shares * price;
+    cash += gained;
+    shares = 0;
+    avgCost = null;
+    markers.push({ i: hist.length - 1, type: 'sell', price: price });
+    setTicker('Sold ' + qty.toFixed(2) + ' shares for ' + fmtMoney(gained), 2200);
+    beep(440, 0.1, 'square', 0.08);
+    updateCrashBtn();
+  }
+
+  function crash(){
+    if (state !== 'play') return;
+    if (crashCd > 0){
+      setTicker('The button is still recharging…', 1400);
+      return;
+    }
+    price *= 0.70;
+    vol = 0.032;
+    crashCd = CRASH_CD;
+    markers.push({ i: hist.length - 1, type: 'crash', price: price });
+    setTicker('💥 You crashed the market!', 3000);
+    flash('bad');
+    beep(260, 0.55, 'sawtooth', 0.18, 55);
+    updateCrashBtn();
+  }
+
+  function beepWin(){
+    var notes = [523, 659, 784, 1047];
+    for (var i = 0; i < notes.length; i++){
+      (function(f, d){
+        setTimeout(function(){ beep(f, 0.18, 'triangle', 0.12); }, d);
+      })(notes[i], i * 120);
+    }
+  }
+  function beepLose(){
+    var notes = [392, 311, 233, 155];
+    for (var i = 0; i < notes.length; i++){
+      (function(f, d){
+        setTimeout(function(){ beep(f, 0.25, 'sawtooth', 0.12); }, d);
+      })(notes[i], i * 150);
+    }
+  }
+
+  function showOverlay(win, net){
+    $('ovtitle').textContent = win ? '💰 You win!' : '💀 Wiped out';
+    $('ovmsg').textContent = win
+      ? 'You turned $1,000 into ' + fmtMoney(net) + '. Wall Street is nervous.'
+      : 'You ended with ' + fmtMoney(net) + '. The market always wins… until you crash it.';
+    $('ovbtn').textContent = win ? 'Play again' : 'Try again';
+    $('overlay').classList.add('show');
+  }
+
+  /* ---------- HUD ---------- */
+  function updateCrashBtn(){
+    var b = $('crash');
+    var lbl = b.querySelector('.lbl');
+    if (crashCd > 0){
+      b.disabled = true;
+      b.classList.add('cooling');
+      lbl.textContent = 'RECHARGING ' + (crashCd / 1000).toFixed(1) + 's';
+    } else {
+      b.disabled = false;
+      b.classList.remove('cooling');
+      lbl.textContent = 'CRASH THE MARKET';
+    }
+  }
+
+  function updateTicker(now){
+    var txt;
+    if (now < tickerUntil){
+      txt = tickerMsg;
+    } else if (shares > 0){
+      txt = 'You are holding ' + shares.toFixed(2) + ' shares. A crash right now would hurt.';
+    } else if (netWorth() >= START_CASH){
+      txt = 'All cash. Sell high → CRASH → buy the dip.';
+    } else {
+      txt = 'Bruised but alive. Buy low, sell high.';
+    }
+    if (txt !== lastTicker){
+      $('ticker').textContent = txt;
+      lastTicker = txt;
+    }
+  }
+
+  function updateHUD(now){
+    var net = netWorth();
+    $('price').textContent = '$' + price.toFixed(2);
+    $('cash').textContent = fmtMoney(cash);
+    $('shares').textContent = shares > 0 ? shares.toFixed(2) : '0';
+    var netEl = $('net');
+    netEl.textContent = fmtMoney(net);
+    netEl.style.color = net >= START_CASH ? 'var(--green)' : 'var(--red)';
+
+    var pct = (price / startPrice - 1) * 100;
+    var tb = $('trend');
+    tb.textContent = (pct >= 0 ? '▲ ' : '▼ ') + Math.abs(pct).toFixed(1) + '%';
+    tb.className = 'badge ' + (pct >= 0 ? 'up' : 'down');
+
+    var fill = Math.max(0, Math.min(100, net / GOAL * 100));
+    $('barfill').style.width = fill + '%';
+    $('goaltxt').textContent = fmtMoney(net) + ' / ' + fmtMoney(GOAL);
+
+    updateTicker(now);
+    if (state === 'play') updateCrashBtn();
+  }
+
+  /* ---------- rendering ---------- */
+  function draw(){
+    var W = canvas.clientWidth, H = canvas.clientHeight;
+    if (!W || !H) return;
+    var dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)){
+      canvas.width = Math.round(W * dpr);
+      canvas.height = Math.round(H * dpr);
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var N = hist.length;
+    if (N < 2) return;
+
+    var mn = Infinity, mx = -Infinity;
+    for (var i = 0; i < N; i++){
+      if (hist[i] < mn) mn = hist[i];
+      if (hist[i] > mx) mx = hist[i];
+    }
+    var pad = (mx - mn) * 0.18 + 0.6;
+    viewMin += ((mn - pad) - viewMin) * 0.12;
+    viewMax += ((mx + pad) - viewMax) * 0.12;
+    if (viewMax - viewMin < 0.5){
+      var mid = (viewMax + viewMin) / 2;
+      viewMin = mid - 0.25;
+      viewMax = mid + 0.25;
+    }
+
+    var padL = 10, padR = 58, padT = 16, padB = 34;
+    var plotW = W - padL - padR;
+    var plotH = H - padT - padB;
+    if (plotW < 10 || plotH < 10) return;
+
+    var xOf = function(idx){ return padL + (idx / (HISTORY - 1)) * plotW; };
+    var yOf = function(v){ return padT + (viewMax - v) / (viewMax - viewMin) * plotH; };
+
+    ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+    ctx.textBaseline = 'middle';
+
+    var lines = 4, g, val, y;
+    for (g = 0; g <= lines; g++){
+      val = viewMin + (viewMax - viewMin) * (g / lines);
+      y = yOf(val);
+      ctx.strokeStyle = 'rgba(120,150,200,0.10)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(padL, Math.round(y) + 0.5);
+      ctx.lineTo(W - padR, Math.round(y) + 0.5);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(142,160,196,0.7)';
+      ctx.textAlign = 'left';
+      ctx.fillText('$' + val.toFixed(1), W - padR + 8, y);
+    }
+
+    var up = hist[N - 1] >= hist[0];
+    var col = up ? '#38e08a' : '#ff5d6c';
+    var j, k;
+
+    var grad = ctx.createLinearGradient(0, padT, 0, padT + plotH);
+    grad.addColorStop(0, up ? 'rgba(56,224,138,0.28)' : 'rgba(255,93,108,0.28)');
+    grad.addColorStop(1, 'rgba(56,224,138,0)');
+
+    ctx.beginPath();
+    ctx.moveTo(xOf(0), yOf(hist[0]));
+    for (j = 1; j < N; j++) ctx.lineTo(xOf(j), yOf(hist[j]));
+    ctx.save();
+    ctx.lineTo(xOf(N - 1), padT + plotH);
+    ctx.lineTo(xOf(0), padT + plotH);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.restore();
+
+    ctx.beginPath();
+    ctx.moveTo(xOf(0), yOf(hist[0]));
+    for (k = 1; k < N; k++) ctx.lineTo(xOf(k), yOf(hist[k]));
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    if (shares > 0 && avgCost !== null){
+      var yc = yOf(avgCost);
+      ctx.save();
+      ctx.setLineDash([5, 5]);
+      ctx.strokeStyle = 'rgba(255,206,84,0.85)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(padL, yc);
+      ctx.lineTo(W - padR, yc);
+      ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = 'rgba(255,206,84,0.95)';
+      ctx.textAlign = 'right';
+      ctx.fillText('cost $' + avgCost.toFixed(1), W - padR - 6, yc - 10);
+    }
+
+    for (var m = 0; m < markers.length; m++){
+      var mk = markers[m];
+      var mxp = xOf(mk.i), myp = yOf(mk.price);
+      ctx.beginPath();
+      if (mk.type === 'buy'){
+        ctx.moveTo(mxp, myp - 10);
+        ctx.lineTo(mxp - 5, myp - 1);
+        ctx.lineTo(mxp + 5, myp - 1);
+        ctx.closePath();
+        ctx.fillStyle = '#38e08a';
+        ctx.fill();
+      } else if (mk.type === 'sell'){
+        ctx.moveTo(mxp, myp + 10);
+        ctx.lineTo(mxp - 5, myp + 1);
+        ctx.lineTo(mxp + 5, myp + 1);
+        ctx.closePath();
+        ctx.fillStyle = '#ff5d6c';
+        ctx.fill();
+      } else if (mk.type === 'crash'){
+        ctx.arc(mxp, myp, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffce54';
+        ctx.fill();
+      } else {
+        ctx.arc(mxp, myp, 3, 0, Math.PI * 2);
+        ctx.fillStyle = mk.type === 'good' ? '#38e08a' : '#ff5d6c';
+        ctx.fill();
+      }
+    }
+
+    var lx = xOf(N - 1), ly = yOf(hist[N - 1]);
+    ctx.beginPath();
+    ctx.arc(lx, ly, 9, 0, Math.PI * 2);
+    ctx.fillStyle = up ? 'rgba(56,224,138,0.22)' : 'rgba(255,93,108,0.22)';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(lx, ly, 4, 0, Math.PI * 2);
+    ctx.fillStyle = col;
+    ctx.fill();
+  }
+
+  /* ---------- main loop ---------- */
+  var lastT = 0;
+  function frame(now){
+    if (!lastT) lastT = now;
+    var dt = now - lastT;
+    lastT = now;
+    if (dt > 100) dt = 100;
+    if (dt < 0) dt = 0;
+
+    if (state === 'play'){
+      tickAcc += dt;
+      var guard = 0;
+      while (tickAcc >= TICK_MS && guard < 8 && state === 'play'){
+        tickAcc -= TICK_MS;
+        tick();
+        guard++;
+      }
+      if (crashCd > 0) crashCd = Math.max(0, crashCd - dt);
+    }
+
+    draw();
+    updateHUD(now);
+    requestAnimationFrame(frame);
+  }
+
+  /* ---------- input ---------- */
+  $('buy').addEventListener('click', function(e){ e.preventDefault(); resumeAudio(); buy(); });
+  $('sell').addEventListener('click', function(e){ e.preventDefault(); resumeAudio(); sell(); });
+  $('crash').addEventListener('click', function(e){ e.preventDefault(); resumeAudio(); crash(); });
+  $('ovbtn').addEventListener('click', function(e){ e.preventDefault(); resumeAudio(); reset(); });
+  $('mute').addEventListener('click', function(e){
+    e.preventDefault();
+    resumeAudio();
+    muted = !muted;
+    $('mute').textContent = muted ? '🔇' : '🔊';
+  });
+
+  window.addEventListener('keydown', function(e){
+    resumeAudio();
+    var k = e.key ? e.key.toLowerCase() : '';
+    if (k === 'b'){ e.preventDefault(); buy(); }
+    else if (k === 's'){ e.preventDefault(); sell(); }
+    else if (e.code === 'Space' || k === ' '){ e.preventDefault(); crash(); }
+    else if (k === 'enter' && state !== 'play'){ e.preventDefault(); reset(); }
+  });
+
+  window.addEventListener('pointerdown', resumeAudio, { passive: true });
+
+  /* ---------- go ---------- */
+  reset();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

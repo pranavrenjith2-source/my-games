@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Word Forge — a language generator that invents words</title>
+<style>
+  :root{
+    --bg1:#eef2ff;
+    --bg2:#e0e7ff;
+    --accent:#4f46e5;
+    --accent2:#7c3aed;
+    --ink:#1e1b4b;
+    --card:#ffffff;
+    --muted:#6b7280;
+    --good:#16a34a;
+    --bad:#dc2626;
+    --shadow:0 20px 45px -20px rgba(30,27,75,.45);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(1200px 700px at 10% -10%, var(--bg2), transparent 60%),
+      radial-gradient(900px 600px at 110% 10%, var(--bg1), transparent 55%),
+      linear-gradient(160deg, var(--bg1), var(--bg2));
+    background-attachment:fixed;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:28px 16px 64px;
+    min-height:100%;
+  }
+  .app{
+    width:100%;
+    max-width:760px;
+  }
+  header{text-align:center;margin-bottom:18px}
+  h1{
+    margin:0 0 6px;
+    font-size:clamp(30px,6vw,46px);
+    letter-spacing:-.02em;
+    line-height:1.05;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+    font-weight:800;
+  }
+  .how{
+    margin:0;
+    color:var(--muted);
+    font-size:15px;
+  }
+  .card{
+    background:var(--card);
+    border-radius:22px;
+    box-shadow:var(--shadow);
+    border:1px solid rgba(255,255,255,.7);
+    overflow:hidden;
+  }
+  .langbar{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    align-items:center;
+    justify-content:space-between;
+    padding:14px 18px;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));
+    color:#fff;
+  }
+  .langbar .name{font-size:15px;opacity:.95}
+  .langbar .name b{font-family:"Iowan Old Style",Georgia,serif;font-size:19px;letter-spacing:.02em}
+  button{font-family:inherit;cursor:pointer;border:none}
+  .btn{
+    border-radius:999px;
+    padding:9px 16px;
+    font-size:14px;
+    font-weight:600;
+    background:rgba(255,255,255,.18);
+    color:#fff;
+    border:1px solid rgba(255,255,255,.45);
+    transition:transform .12s ease, background .2s ease;
+  }
+  .btn:hover{background:rgba(255,255,255,.32);transform:translateY(-1px)}
+  .btn:active{transform:translateY(0)}
+  .tabs{display:flex;gap:6px;padding:12px 14px 0}
+  .tab{
+    flex:1;
+    padding:11px 8px;
+    background:transparent;
+    border-radius:12px 12px 0 0;
+    font-size:14px;
+    font-weight:600;
+    color:var(--muted);
+    border-bottom:3px solid transparent;
+    transition:color .15s ease, border-color .15s ease;
+  }
+  .tab:hover{color:var(--ink)}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+  .panel{padding:20px 18px 24px;display:none}
+  .panel.active{display:block;animation:fade .25s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  .inputrow{display:flex;gap:10px;flex-wrap:wrap}
+  input[type=text]{
+    flex:1 1 220px;
+    min-width:0;
+    padding:15px 16px;
+    font-size:17px;
+    border-radius:14px;
+    border:2px solid #e5e7eb;
+    outline:none;
+    color:var(--ink);
+    background:#fafafa;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  input[type=text]:focus{border-color:var(--accent);background:#fff}
+  .primary{
+    padding:15px 22px;
+    border-radius:14px;
+    font-size:16px;
+    font-weight:700;
+    color:#fff;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    box-shadow:0 10px 20px -10px var(--accent);
+    transition:transform .12s ease, filter .15s ease;
+  }
+  .primary:hover{transform:translateY(-1px);filter:brightness(1.05)}
+  .primary:active{transform:translateY(0)}
+  .ghost{
+    padding:15px 16px;
+    border-radius:14px;
+    font-size:15px;
+    font-weight:600;
+    color:var(--accent);
+    background:color-mix(in srgb, var(--accent) 10%, white);
+  }
+  .ghost:hover{background:color-mix(in srgb, var(--accent) 18%, white)}
+
+  .result{
+    margin-top:22px;
+    text-align:center;
+    min-height:120px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+  }
+  .bigword{
+    font-family:"Iowan Old Style",Georgia,"Times New Roman",serif;
+    font-size:clamp(38px,10vw,68px);
+    line-height:1.05;
+    font-weight:700;
+    color:var(--accent);
+    word-break:break-word;
+  }
+  .bigword.pop{animation:pop .45s cubic-bezier(.2,1.4,.5,1)}
+  @keyframes pop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
+  .sub{color:var(--muted);font-size:14px}
+  .meaning{font-size:18px}
+  .meaning b{color:var(--accent);font-family:"Iowan Old Style",Georgia,serif}
+  .hint{color:#9ca3af;font-size:14px;text-align:center;margin-top:18px}
+  .speak{
+    margin-top:8px;
+    background:color-mix(in srgb, var(--accent) 12%, white);
+    color:var(--accent);
+    border-radius:999px;
+    padding:7px 14px;
+    font-size:13px;
+    font-weight:600;
+  }
+  .speak:hover{background:color-mix(in srgb, var(--accent) 20%, white)}
+
+  .scorebar{display:flex;justify-content:space-between;font-size:14px;color:var(--muted);font-weight:600;margin-bottom:14px}
+  .scorebar b{color:var(--ink)}
+  .prompt{text-align:center;font-size:15px;color:var(--muted);margin-bottom:8px}
+  .promptword{
+    text-align:center;
+    font-family:"Iowan Old Style",Georgia,serif;
+    font-size:clamp(32px,8vw,52px);
+    font-weight:700;
+    color:var(--accent);
+    margin-bottom:20px;
+    word-break:break-word;
+  }
+  .options{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:480px){.options{grid-template-columns:1fr}}
+  .opt{
+    padding:16px 12px;
+    border-radius:14px;
+    background:#f4f4f7;
+    font-size:17px;
+    font-weight:600;
+    color:var(--ink);
+    border:2px solid transparent;
+    transition:transform .1s ease, background .15s ease, border-color .15s ease;
+    word-break:break-word;
+  }
+  .opt.serif{font-family:"Iowan Old Style",Georgia,serif}
+  .opt:hover{background:#ebebf2;transform:translateY(-1px)}
+  .opt.correct{background:#dcfce7;border-color:var(--good);color:#14532d}
+  .opt.wrong{background:#fee2e2;border-color:var(--bad);color:#7f1d1d}
+  .opt:disabled{cursor:default;transform:none}
+  .feedback{text-align:center;margin-top:14px;font-weight:700;min-height:22px}
+  .feedback.good{color:var(--good)}
+  .feedback.bad{color:var(--bad)}
+
+  .dict{list-style:none;margin:0;padding:0;max-height:400px;overflow:auto}
+  .dict li{
+    display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+    padding:12px 6px;
+    border-bottom:1px solid #f1f1f4;
+    animation:fade .25s ease;
+  }
+  .dict .inv{font-family:"Iowan Old Style",Georgia,serif;font-size:21px;font-weight:700;color:var(--accent)}
+  .dict .arrow{color:#c7c7d1}
+  .dict .en{color:var(--muted)}
+  .empty{text-align:center;color:#9ca3af;padding:34px 10px;font-size:15px}
+  footer{text-align:center;color:#9ca3af;font-size:12px;margin-top:18px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>The Word Forge</h1>
+    <p class="how">Type an English word &amp; press Enter — your brand-new language invents a word for it.</p>
+  </header>
+
+  <div class="card">
+    <div class="langbar">
+      <div class="name">Language: <b id="langName">—</b></div>
+      <button class="btn" id="newLang">⚒️ Forge a new language</button>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="translate">Translate</button>
+      <button class="tab" data-tab="quiz">Quiz</button>
+      <button class="tab" data-tab="dict">Dictionary</button>
+    </div>
+
+    <section class="panel active" id="panel-translate">
+      <div class="inputrow">
+        <input type="text" id="wordInput" placeholder="try: fire, moon, friend…" autocomplete="off" spellcheck="false" />
+        <button class="primary" id="goBtn">Translate</button>
+        <button class="ghost" id="randomBtn">🎲 Random</button>
+      </div>
+      <div class="result" id="result">
+        <div class="sub">Your dictionary is empty. Give it a word.</div>
+      </div>
+      <p class="hint">Same word always gets the same translation. Type an invented word back to see what it means.</p>
+    </section>
+
+    <section class="panel" id="panel-quiz">
+      <div class="scorebar">
+        <div>Score: <b id="score">0</b></div>
+        <div>Streak: <b id="streak">0</b></div>
+      </div>
+      <div class="prompt" id="quizPrompt">Loading…</div>
+      <div class="promptword" id="quizWord"></div>
+      <div class="options" id="quizOptions"></div>
+      <div class="feedback" id="quizFeedback"></div>
+    </section>
+
+    <section class="panel" id="panel-dict">
+      <ul class="dict" id="dictList"></ul>
+      <div class="empty" id="dictEmpty">No words yet — translate something first.</div>
+    </section>
+  </div>
+  <footer>Everything is generated in your browser. No network, no nonsense.</footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------------- tiny deterministic RNG ---------------- */
+  function mulberry32(a) {
+    a = a | 0;
+    return function () {
+      a = (a + 0x6d2b79f5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function hashString(str) {
+    var h = 2166136261;
+    for (var i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+  function pick(rng, arr) {
+    return arr[Math.floor(rng() * arr.length)];
+  }
+  function shuffled(rng, arr) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(rng() * (i + 1));
+      var t = a[i];
+      a[i] = a[j];
+      a[j] = t;
+    }
+    return a;
+  }
+  function cap(s) {
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+  }
+
+  /* ---------------- phonology pools ---------------- */
+  var VOWEL_SETS = [
+    ["a", "e", "i", "o", "u"],
+    ["a", "e", "i", "o", "u", "y"],
+    ["a", "e", "i", "o", "u", "á", "é", "í", "ó", "ú"],
+    ["a", "e", "i", "o", "u", "ä", "ö", "ü"],
+    ["a", "e", "i", "o", "u", "å", "ø", "æ"],
+    ["a", "e", "i", "o", "u", "aa", "ee", "oo"]
+  ];
+  var CONSONANT_SETS = [
+    ["b", "d", "f", "g", "k", "l", "m", "n", "p", "r", "s", "t", "v", "z"],
+    ["b", "d", "g", "h", "k", "l", "m", "n", "r", "s", "t", "w", "sh", "th"],
+    ["b", "d", "f", "g", "j", "k", "l", "m", "n", "p", "r", "s", "t", "v", "ch", "sh"],
+    ["p", "t", "k", "m", "n", "s", "l", "r", "v", "j", "th", "kh", "rr", "ll"],
+    ["b", "d", "g", "v", "z", "zh", "dr", "gr", "tr", "br", "kr", "sl", "sn"]
+  ];
+  var PATTERN_SETS = [
+    ["CV", "CVC", "VC", "CVV"],
+    ["CV", "CVC", "CCV", "CVCC"],
+    ["CV", "VC", "CVC", "CV"],
+    ["CVV", "CV", "CVC", "V"]
+  ];
+
+  /* ---------------- language model ---------------- */
+  function makeSyllable(rng, phon) {
+    var p = pick(rng, phon.patterns);
+    var out = "";
+    for (var i = 0; i < p.length; i++) {
+      if (p.charAt(i) === "C") {
+        var c = pick(rng, phon.consonants);
+        if (c === out) c = pick(rng, phon.consonants);
+        out += c;
+      } else {
+        out += pick(rng, phon.vowels);
+      }
+    }
+    return out;
+  }
+  function inventWith(phon, key) {
+    var rng = mulberry32(hashString(phon.seed + "|" + String(key).toLowerCase()));
+    var clean = String(key).replace(/[^a-z']/gi, "");
+    var len = clean.length || 3;
+    var n = Math.round(len / 3);
+    n = Math.max(1, Math.min(4, n));
+    if (rng() < 0.3) n = Math.max(1, n - 1);
+    var out = "";
+    for (var i = 0; i < n; i++) out += makeSyllable(rng, phon);
+    return out;
+  }
+  function makeLanguage() {
+    var seed = (Math.random() * 1e9) | 0;
+    var rng = mulberry32(seed);
+    var consonants = shuffled(rng, pick(rng, CONSONANT_SETS)).slice(0, 8 + Math.floor(rng() * 5));
+    var vowels = pick(rng, VOWEL_SETS).slice();
+    var patterns = pick(rng, PATTERN_SETS).slice();
+    var phon = { seed: seed, consonants: consonants, vowels: vowels, patterns: patterns };
+
+    var nameRng = mulberry32((seed ^ 0x9e3779b9) >>> 0);
+    var name = cap(makeSyllable(nameRng, phon) + makeSyllable(nameRng, phon));
+
+    var hue = Math.floor(rng() * 360);
+    return {
+      seed: seed,
+      consonants: consonants,
+      vowels: vowels,
+      patterns: patterns,
+      name: name,
+      colors: {
+        bg1: "hsl(" + hue + ",72%,94%)",
+        bg2: "hsl(" + ((hue + 45) % 360) + ",70%,87%)",
+        accent: "hsl(" + ((hue + 200) % 360) + ",62%,48%)",
+        accent2: "hsl(" + ((hue + 255) % 360) + ",60%,52%)",
+        ink: "hsl(" + hue + ",42%,20%)"
+      }
+    };
+  }
+
+  var lang = makeLanguage();
+  var dict = [];            // [{en, inv}]
+  var reverse = Object.create(null);
+
+  function applyTheme() {
+    var c = lang.colors;
+    var root = document.documentElement.style;
+    root.setProperty("--bg1", c.bg1);
+    root.setProperty("--bg2", c.bg2);
+    root.setProperty("--accent", c.accent);
+    root.setProperty("--accent2", c.accent2);
+    root.setProperty("--ink", c.ink);
+    document.getElementById("langName").textContent = lang.name;
+  }
+
+  /* ---------------- sound (guarded) ---------------- */
+  var actx = null;
+  function audioCtx() {
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      if (!actx) actx = new AC();
+      return actx;
+    } catch (e) { return null; }
+  }
+  // Unlock audio on the first user gesture (autoplay policy).
+  ["pointerdown", "keydown", "touchstart", "click"].forEach(function (ev) {
+    window.addEventListener(ev, function () { var a = audioCtx(); if (a && a.state === "suspended" && a.resume) a.resume(); }, { passive: true });
+  });
+  function speak(word) {
+    try {
+      var a = audioCtx();
+      if (!a) return;
+      var play = function () {
+        try {
+          var now = a.currentTime;
+          var syls = Math.max(1, Math.min(4, Math.ceil(word.length / 2)));
+          var t = now;
+          for (var i = 0; i < syls; i++) {
+            var o = a.createOscillator();
+            var g = a.createGain();
+            o.type = "sine";
+            var code = word.charCodeAt(i % word.length) || 97;
+            o.frequency.value = 200 + (code % 6) * 42 + (i % 3) * 30;
+            g.gain.setValueAtTime(0.0001, t);
+            g.gain.exponentialRampToValueAtTime(0.14, t + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+            o.connect(g);
+            g.connect(a.destination);
+            o.start(t);
+            o.stop(t + 0.24);
+            t += 0.17;
+          }
+        } catch (e) { }
+      };
+      if (a.state === "suspended" && a.resume) a.resume().then(play).catch(function () { });
+      else play();
+    } catch (e) { /* audio is a bonus, never a requirement */ }
+  }
+
+  /* ---------------- word bank ---------------- */
+  var WORDS = ["fire","water","moon","sun","star","tree","river","stone","wind","cloud",
+    "rain","snow","mountain","ocean","forest","flower","bird","fish","wolf","bear",
+    "horse","dragon","king","queen","child","friend","dream","song","story","light",
+    "shadow","night","day","time","love","fear","hope","death","life","home",
+    "road","door","key","sword","shield","crown","gold","silver","iron","blood",
+    "bone","heart","mind","soul","ghost","angel","demon","god","magic","spell",
+    "witch","wizard","castle","tower","bridge","garden","desert","island","valley","cave",
+    "cliff","storm","thunder","lightning","ice","flame","smoke","dust","sand","glass",
+    "mirror","book","letter","word","name","secret","truth","lie","joy","sorrow",
+    "anger","peace","war","hunt","feast","gift","curse","blessing","market","harbor"];
+
+  /* ---------------- dictionary ---------------- */
+  function addToDict(en, inv) {
+    if (reverse[inv]) return;
+    reverse[inv] = en;
+    dict.unshift({ en: en, inv: inv });
+    renderDict();
+  }
+  function renderDict() {
+    var list = document.getElementById("dictList");
+    var empty = document.getElementById("dictEmpty");
+    list.innerHTML = "";
+    if (dict.length === 0) {
+      empty.style.display = "block";
+      return;
+    }
+    empty.style.display = "none";
+    for (var i = 0; i < dict.length; i++) {
+      var li = document.createElement("li");
+      var a = document.createElement("span");
+      a.className = "inv";
+      a.textContent = dict[i].inv;
+      var arrow = document.createElement("span");
+      arrow.className = "arrow";
+      arrow.textContent = "→";
+      var b = document.createElement("span");
+      b.className = "en";
+      b.textContent = dict[i].en;
+      li.appendChild(a);
+      li.appendChild(arrow);
+      li.appendChild(b);
+      list.appendChild(li);
+    }
+  }
+
+  /* ---------------- translate ---------------- */
+  var resultEl = document.getElementById("result");
+
+  function renderWord(inv, en, note) {
+    resultEl.innerHTML = "";
+    var w = document.createElement("div");
+    w.className = "bigword pop";
+    w.textContent = inv;
+    var s = document.createElement("div");
+    s.className = "sub";
+    s.textContent = note;
+    var speakBtn = document.createElement("button");
+    speakBtn.className = "speak";
+    speakBtn.textContent = "🔊 Hear it";
+    speakBtn.addEventListener("click", function () {
+      speak(inv);
+      speakBtn.textContent = "\uD83D\uDD0A \u2026";
+      setTimeout(function () { speakBtn.textContent = "\uD83D\uDD0A Hear it"; }, 700);
+    });
+    resultEl.appendChild(w);
+    resultEl.appendChild(s);
+    resultEl.appendChild(speakBtn);
+  }
+
+  function renderMeaning(en, inv) {
+    resultEl.innerHTML = "";
+    var w = document.createElement("div");
+    w.className = "bigword pop";
+    w.textContent = inv;
+    var m = document.createElement("div");
+    m.className = "meaning";
+    m.innerHTML = "";
+    m.appendChild(document.createTextNode("means “"));
+    var b = document.createElement("b");
+    b.textContent = en;
+    m.appendChild(b);
+    m.appendChild(document.createTextNode("”"));
+    var s = document.createElement("div");
+    s.className = "sub";
+    s.textContent = "in " + lang.name;
+    resultEl.appendChild(w);
+    resultEl.appendChild(m);
+    resultEl.appendChild(s);
+  }
+
+  function translate(raw) {
+    var text = String(raw).trim();
+    if (!text) return;
+
+    var low = text.toLowerCase();
+    if (reverse[low]) {
+      renderMeaning(reverse[low], low);
+      return;
+    }
+
+    var tokens = text.split(/\s+/);
+    var parts = [];
+    var firstEn = tokens[0].toLowerCase();
+    for (var i = 0; i < tokens.length; i++) {
+      parts.push(inventWith(lang, tokens[i]));
+    }
+    var inv = parts.join(" ");
+    if (tokens.length === 1 && /^[a-z']+$/i.test(tokens[0])) {
+      addToDict(firstEn, inv);
+      renderWord(inv, firstEn, "“" + firstEn + "” in " + lang.name);
+    } else {
+      renderWord(inv, text, "your phrase in " + lang.name);
+    }
+  }
+
+  var input = document.getElementById("wordInput");
+  document.getElementById("goBtn").addEventListener("click", function () {
+    translate(input.value);
+  });
+  input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") translate(input.value);
+  });
+  document.getElementById("randomBtn").addEventListener("click", function () {
+    var w = WORDS[Math.floor(Math.random() * WORDS.length)];
+    input.value = w;
+    translate(w);
+  });
+
+  /* ---------------- quiz ---------------- */
+  var scoreEl = document.getElementById("score");
+  var streakEl = document.getElementById("streak");
+  var promptEl = document.getElementById("quizPrompt");
+  var quizWordEl = document.getElementById("quizWord");
+  var optionsEl = document.getElementById("quizOptions");
+  var feedbackEl = document.getElementById("quizFeedback");
+  var score = 0;
+  var streak = 0;
+  var locked = false;
+
+  function newQuestion() {
+    locked = false;
+    feedbackEl.textContent = "";
+    feedbackEl.className = "feedback";
+    optionsEl.innerHTML = "";
+
+    var pool = shuffled(mulberry32((Math.random() * 1e9) | 0), WORDS).slice(0, 4);
+    var correct = pool[0];
+    var mode = Math.random() < 0.5 ? "meaning" : "word";
+    var options;
+
+    if (mode === "meaning") {
+      promptEl.textContent = "What does this word mean?";
+      quizWordEl.textContent = inventWith(lang, correct);
+      options = shuffled(mulberry32((Math.random() * 1e9) | 0), pool).map(function (w) {
+        return { text: w, correct: w === correct, serif: false };
+      });
+    } else {
+      promptEl.textContent = "How do you say “" + correct + "”?";
+      quizWordEl.textContent = correct;
+      options = shuffled(mulberry32((Math.random() * 1e9) | 0), pool).map(function (w) {
+        return { text: inventWith(lang, w), correct: w === correct, serif: true };
+      });
+    }
+
+    for (var i = 0; i < options.length; i++) {
+      (function (opt) {
+        var b = document.createElement("button");
+        b.className = "opt" + (opt.serif ? " serif" : "");
+        b.textContent = opt.text;
+        b.addEventListener("click", function () {
+          if (locked) return;
+          locked = true;
+          var kids = optionsEl.children;
+          for (var k = 0; k < kids.length; k++) {
+            kids[k].disabled = true;
+            if (options[k].correct) kids[k].classList.add("correct");
+          }
+          if (opt.correct) {
+            score += 10;
+            streak += 1;
+            feedbackEl.textContent = "Correct!";
+            feedbackEl.className = "feedback good";
+          } else {
+            streak = 0;
+            b.classList.add("wrong");
+            feedbackEl.textContent = "Not quite.";
+            feedbackEl.className = "feedback bad";
+          }
+          scoreEl.textContent = score;
+          streakEl.textContent = streak;
+          window.setTimeout(newQuestion, 950);
+        });
+        optionsEl.appendChild(b);
+      })(options[i]);
+    }
+  }
+
+  /* ---------------- tabs ---------------- */
+  var tabs = document.querySelectorAll(".tab");
+  for (var ti = 0; ti < tabs.length; ti++) {
+    (function (tab) {
+      tab.addEventListener("click", function () {
+        var name = tab.getAttribute("data-tab");
+        for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove("active");
+        tab.classList.add("active");
+        var panels = document.querySelectorAll(".panel");
+        for (var j = 0; j < panels.length; j++) panels[j].classList.remove("active");
+        document.getElementById("panel-" + name).classList.add("active");
+        if (name === "quiz" && !optionsEl.children.length) newQuestion();
+      });
+    })(tabs[ti]);
+  }
+
+  /* ---------------- new language ---------------- */
+  document.getElementById("newLang").addEventListener("click", function () {
+    lang = makeLanguage();
+    dict = [];
+    reverse = Object.create(null);
+    applyTheme();
+    renderDict();
+    resultEl.innerHTML = '<div class="sub">A fresh language. Give it a word.</div>';
+    input.value = "";
+    input.focus();
+    score = 0;
+    streak = 0;
+    scoreEl.textContent = "0";
+    streakEl.textContent = "0";
+    if (optionsEl.children.length) newQuestion();
+  });
+
+  /* ---------------- boot ---------------- */
+  applyTheme();
+  renderDict();
+  input.focus();
+})();
+</script>
+</body>
+</html>

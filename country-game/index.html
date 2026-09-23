@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Daily Geography Puzzle</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="app-header">
+        <p class="eyebrow">Daily Geography Puzzle</p>
+        <h1>Mapboard Challenge</h1>
+        <p class="subtitle">Solve five country puzzles every 24 hours with rotating puzzle modes.</p>
+      </header>
+
+      <section id="intro" class="panel">
+        <h2>Today's mode</h2>
+        <p id="mode-description" class="mode-description"></p>
+        <p id="next-mode" class="lock-note"></p>
+        <button id="start-btn" class="btn btn-primary" type="button">Start Today's Puzzle Set</button>
+      </section>
+
+      <section id="quiz" class="panel hidden" aria-live="polite">
+        <div class="progress-wrap" aria-hidden="true">
+          <div id="progress-bar" class="progress-bar"></div>
+        </div>
+        <p id="progress-text" class="progress-text">Puzzle 1 of 5</p>
+
+        <div class="puzzle-grid">
+          <article class="clue-tile">
+            <h3>Scrambled Country</h3>
+            <p id="scrambled-text" class="scrambled"></p>
+          </article>
+
+          <article class="clue-tile">
+            <h3>Fact Clue</h3>
+            <p id="question" class="question"></p>
+          </article>
+        </div>
+
+        <section id="seterra-board" class="mapboard hidden">
+          <h3 class="mapboard-title">Seterra Style: locate the country</h3>
+          <div class="map-canvas-wrap">
+            <svg id="seterra-map" class="seterra-map" viewBox="0 0 960 500" aria-label="Interactive country map"></svg>
+          </div>
+          <ul id="seterra-options" class="seterra-options" aria-label="Candidate countries"></ul>
+          <p id="seterra-help" class="share-status"></p>
+          <div id="answers" class="answers hidden"></div>
+        </section>
+
+        <section id="geo-board" class="mapboard hidden">
+          <h3 class="mapboard-title">Geo-Games Style: type the country</h3>
+          <div class="guess-row">
+            <input id="guess-input" class="guess-input" type="text" autocomplete="off" placeholder="Enter country name" />
+            <button id="guess-btn" class="btn btn-primary" type="button">Check</button>
+            <button id="hint-btn" class="btn btn-ghost" type="button">Hint</button>
+          </div>
+          <p id="hint-text" class="share-status"></p>
+        </section>
+
+        <section id="geogrid-board" class="mapboard hidden">
+          <h3 class="mapboard-title">GeoGrid Style: fill the board</h3>
+          <div id="geogrid-grid" class="geogrid-grid" aria-label="Daily geography grid"></div>
+          <div class="guess-row geogrid-controls">
+            <input id="geogrid-input" class="guess-input" type="text" autocomplete="off" placeholder="Enter a country for the selected cell" />
+            <button id="geogrid-submit" class="btn btn-primary" type="button">Place</button>
+            <button id="geogrid-hint" class="btn btn-ghost" type="button">Hint</button>
+          </div>
+          <p id="geogrid-status" class="share-status"></p>
+        </section>
+
+        <p id="feedback" class="feedback"></p>
+        <button id="next-btn" class="btn btn-secondary hidden" type="button">Next Puzzle</button>
+      </section>
+
+      <section id="result" class="panel hidden">
+        <h2>Puzzle Set Complete</h2>
+        <p id="score-text" class="score"></p>
+        <p class="lock-note">Today is complete. A new puzzle set unlocks in 24 hours.</p>
+        <div class="actions">
+          <button id="share-btn" class="btn btn-primary" type="button">Share</button>
+          <button id="retry-info-btn" class="btn btn-ghost" type="button">When does it unlock?</button>
+        </div>
+        <p id="share-status" class="share-status" aria-live="polite"></p>
+      </section>
+
+      <section id="locked" class="panel hidden">
+        <h2>Today's Puzzle Set Is Locked</h2>
+        <p id="locked-message"></p>
+        <p class="lock-note">You can play the next five-country set after the lock window expires.</p>
+      </section>
+
+      <section id="error" class="panel hidden">
+        <h2>Couldn’t load puzzles</h2>
+        <p id="error-text">Please check your internet connection and try again.</p>
+        <button id="reload-btn" class="btn btn-primary" type="button">Reload</button>
+      </section>
+    </main>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>

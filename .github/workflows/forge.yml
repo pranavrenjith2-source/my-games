@@ -1,0 +1,52 @@
+name: Cloud Forge
+
+# Creates one new game/utility in the cloud (no Mac needed) and publishes it.
+on:
+  schedule:
+    - cron: "0 14 * * *"      # every day at 14:00 UTC
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: "game or utility (blank = alternate by day)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cloud-forge
+  cancel-in-progress: false
+
+jobs:
+  forge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Generate a new game
+        env:
+          PARTICLE_API_KEY: ${{ secrets.PARTICLE_API_KEY }}
+          PARTICLE_BASE_URL: ${{ secrets.PARTICLE_BASE_URL }}
+          PARTICLE_MODEL: ${{ secrets.PARTICLE_MODEL }}
+          FORGE_KIND: ${{ github.event.inputs.kind }}
+        run: node cloud-forge.js
+
+      - name: Refresh the static index
+        run: node build-index.js
+
+      - name: Publish
+        run: |
+          git config user.name "cloud-forge"
+          git config user.email "cloud-forge@users.noreply.github.com"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "nothing new this run"
+          else
+            git commit -m "cloud drop: $(date -u +%Y-%m-%d)"
+            git push
+          fi

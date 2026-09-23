@@ -1,0 +1,402 @@
+:root {
+  --bg: #efe6cf;
+  --bg-alt: #dce8df;
+  --ink: #0f2433;
+  --ink-soft: #31546a;
+  --accent: #005f7a;
+  --accent-strong: #00475b;
+  --success: #14643a;
+  --error: #9f1f1f;
+  --card: rgba(255, 255, 255, 0.95);
+  --shadow: 0 20px 44px rgba(10, 31, 42, 0.2);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 20% 10%, rgba(255, 255, 255, 0.55), transparent 36%),
+    linear-gradient(18deg, var(--bg), var(--bg-alt));
+  position: relative;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: url("world-map.svg") center / cover no-repeat;
+  opacity: 0.18;
+  z-index: -1;
+  filter: contrast(1.1);
+}
+
+.app-shell {
+  width: min(980px, 100% - 2rem);
+  margin: 1.5rem auto;
+  display: grid;
+  gap: 1rem;
+}
+
+.app-header,
+.panel {
+  background: var(--card);
+  border: 2px solid rgba(15, 36, 51, 0.12);
+  border-radius: 18px;
+  padding: 1.2rem;
+  box-shadow: var(--shadow);
+}
+
+.app-header h1 {
+  margin: 0.25rem 0;
+  font-family: "Merriweather", Georgia, serif;
+  font-size: clamp(1.75rem, 3.6vw, 2.5rem);
+}
+
+.eyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent-strong);
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+.subtitle,
+.mode-description,
+.lock-note,
+.share-status {
+  color: var(--ink-soft);
+}
+
+h2,
+h3 {
+  margin-top: 0;
+  font-family: "Merriweather", Georgia, serif;
+}
+
+.hidden {
+  display: none;
+}
+
+.progress-wrap {
+  width: 100%;
+  height: 12px;
+  border-radius: 999px;
+  background: #ccdae0;
+  overflow: hidden;
+}
+
+.progress-bar {
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #0091b0, #006e88);
+  transition: width 0.25s ease;
+}
+
+.progress-text {
+  margin: 0.65rem 0 1rem;
+  font-weight: 700;
+}
+
+.puzzle-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.clue-tile {
+  background: #fbfdff;
+  border: 2px solid rgba(15, 36, 51, 0.14);
+  border-radius: 14px;
+  padding: 0.8rem;
+}
+
+.scrambled {
+  margin: 0;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  font-size: 1.08rem;
+  color: #0a5572;
+}
+
+.question {
+  margin: 0;
+  line-height: 1.35;
+}
+
+.mapboard {
+  margin-top: 0.95rem;
+  padding: 0.9rem;
+  border-radius: 14px;
+  border: 2px solid rgba(15, 36, 51, 0.14);
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.35)),
+    url("world-map.svg") center / cover no-repeat;
+}
+
+#geogrid-board {
+  overflow-x: auto;
+}
+
+.map-canvas-wrap {
+  border: 2px solid rgba(15, 36, 51, 0.18);
+  border-radius: 12px;
+  background: rgba(243, 250, 255, 0.8);
+  overflow: hidden;
+}
+
+.seterra-map {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.country-shape {
+  fill: #dde7ec;
+  stroke: #7a97a6;
+  stroke-width: 0.8;
+  vector-effect: non-scaling-stroke;
+}
+
+.country-shape.candidate {
+  fill: #b9d8e4;
+  stroke: #356b84;
+  cursor: pointer;
+}
+
+.country-shape.candidate:hover {
+  fill: #9fcbdb;
+}
+
+.country-shape.correct {
+  fill: #9dd7b4;
+  stroke: #1f6f42;
+}
+
+.country-shape.wrong {
+  fill: #f0b7b7;
+  stroke: #9f1f1f;
+}
+
+.option-label {
+  fill: #0f2433;
+  font-size: 16px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3px;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+.seterra-options {
+  margin: 0.65rem 0 0;
+  padding-left: 1.15rem;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.answers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin-top: 0.7rem;
+}
+
+.answer-btn {
+  min-height: 60px;
+  border: 2px solid rgba(15, 36, 51, 0.25);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.97);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0.6rem;
+}
+
+.answer-btn:hover {
+  border-color: var(--accent);
+}
+
+.answer-btn:disabled {
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.answer-btn.correct {
+  border-color: var(--success);
+  background: #e8f6ee;
+}
+
+.answer-btn.wrong {
+  border-color: var(--error);
+  background: #fbeaea;
+}
+
+.guess-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.6rem;
+}
+
+.geogrid-grid {
+  display: grid;
+  grid-template-columns: 1.15fr repeat(3, 1fr);
+  gap: 0.45rem;
+  margin-bottom: 0.9rem;
+  min-width: 680px;
+}
+
+.geogrid-header,
+.geogrid-corner,
+.geogrid-cell {
+  min-height: 74px;
+  border-radius: 12px;
+  padding: 0.75rem;
+}
+
+.geogrid-header,
+.geogrid-corner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.92);
+  border: 2px solid rgba(15, 36, 51, 0.18);
+  font-weight: 700;
+}
+
+.geogrid-corner {
+  background: linear-gradient(145deg, rgba(0, 95, 122, 0.16), rgba(255, 255, 255, 0.94));
+  color: var(--accent-strong);
+}
+
+.geogrid-cell {
+  border: 2px solid rgba(15, 36, 51, 0.2);
+  background: rgba(255, 255, 255, 0.97);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.geogrid-cell.selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 2px rgba(0, 95, 122, 0.18);
+}
+
+.geogrid-cell.solved {
+  background: #e8f6ee;
+  border-color: var(--success);
+}
+
+.geogrid-controls {
+  margin-top: 0.35rem;
+}
+
+.guess-input {
+  width: 100%;
+  border: 2px solid rgba(15, 36, 51, 0.3);
+  border-radius: 12px;
+  padding: 0.65rem 0.75rem;
+  font: inherit;
+  font-weight: 600;
+}
+
+.guess-input:focus {
+  outline: 2px solid rgba(0, 111, 136, 0.3);
+  border-color: var(--accent);
+}
+
+.feedback {
+  min-height: 1.4rem;
+  font-weight: 700;
+  margin: 0.95rem 0 0;
+}
+
+.feedback.correct {
+  color: var(--success);
+}
+
+.feedback.wrong {
+  color: var(--error);
+}
+
+.btn {
+  border: 0;
+  border-radius: 12px;
+  padding: 0.72rem 1rem;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--accent-strong);
+}
+
+.btn-secondary {
+  margin-top: 1rem;
+  background: #d9e7ed;
+  color: var(--ink);
+}
+
+.btn-ghost {
+  background: transparent;
+  border: 2px solid rgba(15, 36, 51, 0.25);
+  color: var(--ink);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
+.score {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    width: calc(100% - 1rem);
+    margin: 0.8rem auto;
+  }
+
+  .app-header,
+  .panel {
+    border-radius: 14px;
+    padding: 1rem;
+  }
+
+  .puzzle-grid,
+  .answers {
+    grid-template-columns: 1fr;
+  }
+
+  .guess-row {
+    grid-template-columns: 1fr;
+  }
+
+  .geogrid-grid {
+    min-width: 620px;
+  }
+
+  .answer-btn {
+    min-height: 54px;
+  }
+}

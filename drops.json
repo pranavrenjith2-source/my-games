@@ -1,0 +1,16 @@
+[
+  {
+    "date": "2026-09-21",
+    "file": "drops/2026-09-21-a-base64-url-hash-encoder-decoder.html",
+    "title": "A Base64 / URL / Hash Encoder-Decoder",
+    "kind": "utility",
+    "description": "a base64 / URL / hash encoder-decoder"
+  },
+  {
+    "date": "2026-09-21",
+    "file": "drops/2026-09-21-dropworks.html",
+    "title": "Dropworks",
+    "kind": "game",
+    "description": "a 2D physics sandbox where you build vehicles and machines"
+  }
+]

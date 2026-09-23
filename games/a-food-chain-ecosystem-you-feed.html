@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Feed the Food Chain</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{
+    margin:0;height:100%;overflow:hidden;background:#bfe29b;color:#2f3a25;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;
+  }
+  canvas{display:block;position:absolute;inset:0;touch-action:none;cursor:crosshair}
+  #ui{position:absolute;top:0;left:0;right:0;padding:14px 18px;pointer-events:none}
+  #title{font-size:23px;font-weight:800;letter-spacing:-.02em;text-shadow:0 1px 0 rgba(255,255,255,.4)}
+  #sub{font-size:13px;opacity:.72;margin-top:3px;max-width:520px;line-height:1.4;font-weight:500}
+  #stats{
+    position:absolute;top:14px;right:16px;display:flex;gap:13px;align-items:center;
+    background:rgba(255,255,255,.72);padding:8px 13px;border-radius:999px;font-size:13px;
+    font-weight:700;box-shadow:0 3px 14px rgba(40,60,20,.10);backdrop-filter:blur(4px);
+    pointer-events:none;
+  }
+  .stat{display:flex;align-items:center;white-space:nowrap}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:5px;flex:0 0 auto}
+  .d-grass{background:#57b84a}
+  .d-rabbit{background:#8c8579}
+  .d-fox{background:#e0803a}
+  #clock{opacity:.55;font-variant-numeric:tabular-nums}
+  #banner{
+    position:absolute;top:34%;left:0;right:0;text-align:center;pointer-events:none;
+    font-size:34px;font-weight:900;letter-spacing:-.03em;color:#3d3324;
+    text-shadow:0 2px 0 rgba(255,255,255,.55);opacity:0;
+  }
+  #banner.show{animation:pop 2.1s ease-out forwards}
+  @keyframes pop{
+    0%{opacity:0;transform:translateY(14px) scale(.9)}
+    14%{opacity:1;transform:translateY(0) scale(1)}
+    72%{opacity:1;transform:translateY(0) scale(1)}
+    100%{opacity:0;transform:translateY(-12px) scale(1)}
+  }
+  #overlay{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(46,60,32,.28);backdrop-filter:blur(3px);
+  }
+  #overlay.hidden{display:none}
+  #card{
+    background:#fffdf6;border-radius:20px;padding:26px 30px;text-align:center;
+    box-shadow:0 18px 50px rgba(30,45,15,.28);max-width:340px;margin:16px;
+    animation:rise .35s cubic-bezier(.2,1.2,.4,1);
+  }
+  @keyframes rise{from{opacity:0;transform:translateY(16px) scale(.96)}to{opacity:1;transform:none}}
+  #card h2{margin:0 0 4px;font-size:22px;letter-spacing:-.02em}
+  #card p{margin:6px 0 16px;font-size:14px;opacity:.72;line-height:1.45}
+  #card .big{font-size:30px;font-weight:900;color:#4b8b3a;display:block;margin:6px 0 2px}
+  button{
+    font:inherit;font-weight:700;font-size:15px;padding:11px 22px;border:0;border-radius:999px;
+    background:#4b8b3a;color:#fff;cursor:pointer;box-shadow:0 5px 0 #3a6d2c;
+    transition:transform .08s,box-shadow .08s;
+  }
+  button:active{transform:translateY(3px);box-shadow:0 2px 0 #3a6d2c}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="ui">
+  <div id="title">Feed the Food Chain</div>
+  <div id="sub">Click or drag the meadow to plant grass &mdash; rabbits eat it, foxes eat rabbits. Keep every link alive.</div>
+</div>
+
+<div id="stats">
+  <span class="stat"><i class="dot d-grass"></i><b id="nGrass">0</b>&nbsp;grass</span>
+  <span class="stat"><i class="dot d-rabbit"></i><b id="nRabbit">0</b>&nbsp;rabbits</span>
+  <span class="stat"><i class="dot d-fox"></i><b id="nFox">0</b>&nbsp;foxes</span>
+  <span id="clock">0s</span>
+</div>
+
+<div id="banner"></div>
+
+<div id="overlay" class="hidden">
+  <div id="card">
+    <h2>The meadow went quiet</h2>
+    <p>Every link in the chain starved. Try planting a little more, a little earlier.</p>
+    <span class="big" id="finalTime">0s</span>
+    <p style="margin-top:0">survived</p>
+    <button id="restart">Start a new meadow</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var canvas = document.getElementById('c');
+  var ctx = canvas.getContext('2d');
+  var elGrass = document.getElementById('nGrass');
+  var elRabbit = document.getElementById('nRabbit');
+  var elFox = document.getElementById('nFox');
+  var elClock = document.getElementById('clock');
+  var elBanner = document.getElementById('banner');
+  var elOverlay = document.getElementById('overlay');
+  var elFinal = document.getElementById('finalTime');
+  var elRestart = document.getElementById('restart');
+
+  var W = 0, H = 0, DPR = 1;
+
+  var T = {
+    grassGrow: 0.055,
+    grassEnergy: 9,
+    eatRate: 0.6,
+    rabbitStart: 6,
+    rabbitMetab: 0.6,
+    rabbitRepro: 14,
+    rabbitSpeed: 50,
+    rabbitVision: 240,
+    rabbitFlee: 120,
+    foxStart: 12,
+    foxMetab: 0.75,
+    foxRepro: 24,
+    foxSpeed: 80,
+    foxVision: 320,
+    maxGrass: 260,
+    maxRabbits: 220,
+    maxFoxes: 45
+  };
+
+  var grass = [], rabbits = [], foxes = [], particles = [], pulses = [], history = [], patches = [];
+  var elapsed = 0, running = true, collapseTimer = 0, foxesArrived = false;
+  var rabbitReturnTimer = 0, foxReturnTimer = 0;
+  var histTimer = 0, lastPlantSound = 0;
+  var planting = false, pointer = { x: 0, y: 0 };
+  var bgGrad = null;
+  var actx = null;
+
+  function rnd(a, b) { return a + Math.random() * (b - a); }
+  function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+
+  function newGrass(x, y, e) { return { x: x, y: y, e: e, sway: Math.random() * 6.28 }; }
+  function newRabbit(x, y, e) { return { x: x, y: y, vx: 0, vy: 0, e: e, angle: 0, age: 0 }; }
+  function newFox(x, y, e) { return { x: x, y: y, vx: 0, vy: 0, e: e, angle: 0, age: 0 }; }
+
+  function makePatches() {
+    patches = [];
+    var n = Math.round((W * H) / 22000);
+    for (var i = 0; i < n; i++) {
+      patches.push({
+        x: rnd(0, W), y: rnd(0, H), r: rnd(18, 80),
+        a: Math.random() < 0.5 ? rnd(0.03, 0.07) : rnd(0.02, 0.05),
+        light: Math.random() < 0.55
+      });
+    }
+  }
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+    bgGrad.addColorStop(0, '#e2f3c8');
+    bgGrad.addColorStop(1, '#b9de93');
+    makePatches();
+    clampAll(grass, 12);
+    clampAll(rabbits, 14);
+    clampAll(foxes, 16);
+  }
+
+  function clampAll(arr, pad) {
+    for (var i = 0; i < arr.length; i++) {
+      arr[i].x = clamp(arr[i].x, pad, Math.max(pad, W - pad));
+      arr[i].y = clamp(arr[i].y, pad, Math.max(pad, H - pad));
+    }
+  }
+
+  function reset() {
+    grass = []; rabbits = []; foxes = []; particles = []; pulses = []; history = [];
+    elapsed = 0; running = true; collapseTimer = 0; foxesArrived = false;
+    rabbitReturnTimer = 0; foxReturnTimer = 0;
+    histTimer = 0; planting = false;
+    for (var i = 0; i < 44; i++) {
+      grass.push(newGrass(rnd(40, Math.max(60, W - 40)), rnd(60, Math.max(80, H - 40)), rnd(0.25, 1)));
+    }
+    for (var j = 0; j < 3; j++) {
+      rabbits.push(newRabbit(W / 2 + rnd(-70, 70), H / 2 + rnd(-70, 70), T.rabbitStart));
+    }
+    elOverlay.classList.add('hidden');
+    updateHud();
+  }
+
+  function gameOver() {
+    running = false;
+    elFinal.textContent = Math.floor(elapsed) + 's';
+    elOverlay.classList.remove('hidden');
+    beep(220, 0.35, 'sine', 0.05);
+    setTimeout(function () { beep(165, 0.5, 'sine', 0.045); }, 160);
+  }
+
+  /* ---------- sound ---------- */
+  function ensureAudio() {
+    try {
+      if (!actx) {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) actx = new AC();
+      }
+      if (actx && actx.state === 'suspended') actx.resume();
+      return actx;
+    } catch (e) { actx = null; return null; }
+  }
+  // Unlock audio on the first user gesture (autoplay policy).
+  ["pointerdown", "keydown", "touchstart", "click"].forEach(function (ev) {
+    window.addEventListener(ev, function () { ensureAudio(); }, { passive: true });
+  });
+
+  function beep(freq, dur, type, vol) {
+    var a = ensureAudio(); if (!a) return;
+    var play = function () {
+      try {
+        var o = a.createOscillator();
+        var g = a.createGain();
+        o.type = type || 'sine';
+        o.frequency.value = freq;
+        var t = a.currentTime;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(vol || 0.05, t + 0.012);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        o.connect(g);
+        g.connect(a.destination);
+        o.start(t);
+        o.stop(t + dur + 0.02);
+      } catch (e) { /* audio is optional */ }
+    };
+    if (a.state === 'suspended' && a.resume) a.resume().then(play).catch(function () { }); else play();
+  }
+
+  /* ---------- input ---------- */
+  function pos(e) {
+    var r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  function plantAt(x, y) {
+    if (!running) return;
+    if (x < 6 || y < 6 || x > W - 6 || y > H - 6) return;
+    if (grass.length >= T.maxGrass) return;
+    for (var i = 0; i < grass.length; i++) {
+      var dx = grass[i].x - x, dy = grass[i].y - y;
+      if (dx * dx + dy * dy < 13 * 13) return;
+    }
+    grass.push(newGrass(x + rnd(-4, 4), y + rnd(-4, 4), 0.22));
+    pulses.push({ x: x, y: y, t: 0 });
+    for (var p = 0; p < 3; p++) {
+      particles.push({ x: x, y: y, vx: rnd(-30, 30), vy: rnd(-55, -15), life: 0.55, max: 0.55, c: '#6cc24a', r: 2.4 });
+    }
+    var now = performance.now();
+    if (now - lastPlantSound > 95) {
+      lastPlantSound = now;
+      beep(560 + Math.random() * 120, 0.09, 'triangle', 0.035);
+    }
+  }
+
+  canvas.addEventListener('pointerdown', function (e) {
+    if (!running) return;
+    ensureAudio();
+    planting = true;
+    var p = pos(e);
+    pointer = p;
+    plantAt(p.x, p.y);
+    if (canvas.setPointerCapture) { try { canvas.setPointerCapture(e.pointerId); } catch (err) {} }
+    e.preventDefault();
+  });
+
+  canvas.addEventListener('pointermove', function (e) {
+    var p = pos(e);
+    pointer = p;
+    if (planting) plantAt(p.x, p.y);
+  });
+
+  window.addEventListener('pointerup', function () { planting = false; });
+  window.addEventListener('pointercancel', function () { planting = false; });
+  window.addEventListener('blur', function () { planting = false; });
+  window.addEventListener('resize', resize);
+
+  elRestart.addEventListener('click', function () { ensureAudio(); reset(); });
+
+  /* ---------- simulation ---------- */
+  function update(dt) {
+    elapsed += dt;
+
+    var i;
+    for (i = 0; i < grass.length; i++) {
+      var g = grass[i];
+      if (g.e < 1) g.e = Math.min(1, g.e + T.grassGrow * dt);
+    }
+
+    updateRabbits(dt);
+    updateFoxes(dt);
+
+    for (i = grass.length - 1; i >= 0; i--) {
+      if (grass[i].e <= 0.02) grass.splice(i, 1);
+    }
+
+    for (i = particles.length - 1; i >= 0; i--) {
+      var pt = particles[i];
+      pt.life -= dt;
+      if (pt.life <= 0) { particles.splice(i, 1); continue; }
+      pt.x += pt.vx * dt; pt.y += pt.vy * dt;
+      pt.vy += 90 * dt;
+    }
+
+    for (i = pulses.length - 1; i >= 0; i--) {
+      pulses[i].t += dt;
+      if (pulses[i].t > 0.5) pulses.splice(i, 1);
+    }
+
+    if (!foxesArrived && rabbits.length >= 12) {
+      foxesArrived = true;
+      spawnFoxes(2);
+      banner('Foxes arrive!');
+      beep(330, 0.16, 'sawtooth', 0.035);
+      setTimeout(function () { beep(247, 0.24, 'sawtooth', 0.035); }, 130);
+    }
+
+    if (rabbits.length === 0) {
+      rabbitReturnTimer += dt;
+      if (rabbitReturnTimer > 4 && grass.length >= 20) {
+        rabbitReturnTimer = -1e9;
+        spawnRabbits(2);
+        banner('Rabbits wander back');
+      }
+    } else {
+      rabbitReturnTimer = 0;
+    }
+
+    if (foxesArrived && foxes.length === 0 && rabbits.length >= 14) {
+      foxReturnTimer += dt;
+      if (foxReturnTimer > 6) {
+        foxReturnTimer = -1e9;
+        spawnFoxes(1);
+        banner('A fox returns');
+      }
+    } else if (foxes.length > 0) {
+      foxReturnTimer = 0;
+    }
+
+    if (rabbits.length === 0 && foxes.length === 0) {
+      collapseTimer += dt;
+      if (collapseTimer > 7 && running) gameOver();
+    } else {
+      collapseTimer = 0;
+    }
+
+    histTimer += dt;
+    if (histTimer >= 0.5) {
+      histTimer -= 0.5;
+      history.push({ g: grass.length, r: rabbits.length, f: foxes.length });
+      if (history.length > 150) history.shift();
+    }
+
+    updateHud();
+  }
+
+  function wanderAngle() { return Math.random() * Math.PI * 2; }
+
+  function updateRabbits(dt) {
+    for (var i = rabbits.length - 1; i >= 0; i--) {
+      var r = rabbits[i];
+      r.age += dt;
+      r.e -= T.rabbitMetab * dt;
+
+      var ax = 0, ay = 0;
+      var threat = null, td = Infinity;
+      for (var f = 0; f < foxes.length; f++) {
+        var fo = foxes[f];
+        var dxf = fo.x - r.x, dyf = fo.y - r.y;
+        var df = Math.sqrt(dxf * dxf + dyf * dyf);
+        if (df < T.rabbitFlee && df < td) { td = df; threat = fo; }
+      }
+
+      if (threat) {
+        var rx = r.x - threat.x, ry = r.y - threat.y;
+        var rm = Math.sqrt(rx * rx + ry * ry) || 1;
+        var fast = T.rabbitSpeed * clamp(0.85 + r.e / 20, 0.85, 1.18);
+        ax = rx / rm * fast;
+        ay = ry / rm * fast;
+      } else {
+        var g = null, bestScore = Infinity;
+        var vis2 = T.rabbitVision * T.rabbitVision;
+        for (var j = 0; j < grass.length; j++) {
+          var gg = grass[j];
+          if (gg.e < 0.08) continue;
+          var dxg = gg.x - r.x, dyg = gg.y - r.y;
+          var dg = dxg * dxg + dyg * dyg;
+          if (dg > vis2) continue;
+          var score = Math.sqrt(dg) - gg.e * 90;
+          if (score < bestScore) { bestScore = score; g = gg; }
+        }
+        if (g) {
+          var dx2 = g.x - r.x, dy2 = g.y - r.y;
+          var m2 = Math.sqrt(dx2 * dx2 + dy2 * dy2) || 1;
+          var sp = T.rabbitSpeed * clamp(0.7 + r.e / 18, 0.7, 1.15);
+          if (m2 > 7) { ax = dx2 / m2 * sp; ay = dy2 / m2 * sp; }
+          if (m2 < 13) {
+            var bite = Math.min(g.e, T.eatRate * dt);
+            g.e -= bite;
+            r.e += bite * T.grassEnergy;
+          }
+        } else {
+          ax = r.vx + Math.cos(wanderAngle()) * 14;
+          ay = r.vy + Math.sin(wanderAngle()) * 14;
+        }
+      }
+
+      ax += rnd(-9, 9);
+      ay += rnd(-9, 9);
+      var k = Math.min(1, 6 * dt);
+      r.vx += (ax - r.vx) * k;
+      r.vy += (ay - r.vy) * k;
+      r.x += r.vx * dt;
+      r.y += r.vy * dt;
+      bounce(r, 9);
+
+      var spd2 = r.vx * r.vx + r.vy * r.vy;
+      if (spd2 > 4) r.angle = Math.atan2(r.vy, r.vx);
+
+      if (r.e >= T.rabbitRepro && rabbits.length < T.maxRabbits) {
+        r.e -= 6.5;
+        rabbits.push(newRabbit(r.x + rnd(-10, 10), r.y + rnd(-10, 10), 6));
+        puff(r.x, r.y, '#f2efe8', 4);
+      }
+
+      if (r.e <= 0 || r.age > 180) {
+        puff(r.x, r.y, '#c9c3b6', 5);
+        rabbits.splice(i, 1);
+      }
+    }
+  }
+
+  function updateFoxes(dt) {
+    for (var i = foxes.length - 1; i >= 0; i--) {
+      var f = foxes[i];
+      f.age += dt;
+      f.e -= T.foxMetab * dt;
+
+      var target = null, td = Infinity;
+      for (var j = 0; j < rabbits.length; j++) {
+        var rb = rabbits[j];
+        var dx = rb.x - f.x, dy = rb.y - f.y;
+        var d = dx * dx + dy * dy;
+        if (d < td && d < T.foxVision * T.foxVision) { td = d; target = rb; }
+      }
+
+      var speed = T.foxSpeed * clamp(0.55 + f.e / 20, 0.75, 1.15);
+      var ax = f.vx, ay = f.vy;
+
+      if (target) {
+        var dx2 = target.x - f.x, dy2 = target.y - f.y;
+        var m = Math.sqrt(dx2 * dx2 + dy2 * dy2) || 1;
+        ax = dx2 / m * speed;
+        ay = dy2 / m * speed;
+        if (m < 13) {
+          f.e += target.e * 0.6 + 5;
+          var idx = rabbits.indexOf(target);
+          if (idx >= 0) rabbits.splice(idx, 1);
+          puff(f.x, f.y, '#e0803a', 7);
+          beep(180, 0.07, 'square', 0.022);
+        }
+      }
+
+      ax += rnd(-7, 7);
+      ay += rnd(-7, 7);
+      var k = Math.min(1, 6 * dt);
+      f.vx += (ax - f.vx) * k;
+      f.vy += (ay - f.vy) * k;
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
+      bounce(f, 12);
+
+      var spd2 = f.vx * f.vx + f.vy * f.vy;
+      if (spd2 > 4) f.angle = Math.atan2(f.vy, f.vx);
+
+      if (f.e >= T.foxRepro && foxes.length < T.maxFoxes) {
+        f.e -= 8;
+        foxes.push(newFox(f.x + rnd(-12, 12), f.y + rnd(-12, 12), 8));
+        puff(f.x, f.y, '#e0803a', 4);
+      }
+
+      if (f.e <= 0 || f.age > 240) {
+        puff(f.x, f.y, '#c98a52', 5);
+        foxes.splice(i, 1);
+      }
+    }
+  }
+
+  function bounce(a, pad) {
+    if (a.x < pad) { a.x = pad; a.vx = Math.abs(a.vx) * 0.7; }
+    if (a.x > W - pad) { a.x = W - pad; a.vx = -Math.abs(a.vx) * 0.7; }
+    if (a.y < pad) { a.y = pad; a.vy = Math.abs(a.vy) * 0.7; }
+    if (a.y > H - pad) { a.y = H - pad; a.vy = -Math.abs(a.vy) * 0.7; }
+  }
+
+  function spawnFoxes(n) {
+    for (var i = 0; i < n; i++) {
+      var side = Math.floor(rnd(0, 4));
+      var x, y;
+      if (side === 0) { x = rnd(0, W); y = -20; }
+      else if (side === 1) { x = W + 20; y = rnd(0, H); }
+      else if (side === 2) { x = rnd(0, W); y = H + 20; }
+      else { x = -20; y = rnd(0, H); }
+      foxes.push(newFox(clamp(x, 20, Math.max(20, W - 20)), clamp(y, 20, Math.max(20, H - 20)), T.foxStart));
+    }
+  }
+
+  function spawnRabbits(n) {
+    for (var i = 0; i < n; i++) {
+      var side = Math.floor(rnd(0, 4));
+      var x, y;
+      if (side === 0) { x = rnd(0, W); y = 24; }
+      else if (side === 1) { x = W - 24; y = rnd(0, H); }
+      else if (side === 2) { x = rnd(0, W); y = H - 24; }
+      else { x = 24; y = rnd(0, H); }
+      rabbits.push(newRabbit(clamp(x, 16, Math.max(16, W - 16)), clamp(y, 16, Math.max(16, H - 16)), T.rabbitStart));
+    }
+  }
+
+  function puff(x, y, c, n) {
+    for (var i = 0; i < n; i++) {
+      particles.push({ x: x, y: y, vx: rnd(-55, 55), vy: rnd(-55, 55), life: rnd(0.3, 0.6), max: 0.6, c: c, r: rnd(1.5, 3.2) });
+    }
+  }
+
+  /* ---------- rendering ---------- */
+  function drawBackground() {
+    ctx.fillStyle = bgGrad || '#cbe6a4';
+    ctx.fillRect(0, 0, W, H);
+    for (var i = 0; i < patches.length; i++) {
+      var p = patches[i];
+      ctx.fillStyle = p.light ? 'rgba(255,255,255,' + p.a + ')' : 'rgba(90,140,60,' + p.a + ')';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, 6.2832);
+      ctx.fill();
+    }
+  }
+
+  function drawGrass() {
+    ctx.lineCap = 'round';
+    for (var i = 0; i < grass.length; i++) {
+      var g = grass[i];
+      var s = 2 + g.e * 8;
+      var bend = Math.sin(elapsed * 1.6 + g.sway) * g.e * 2.2;
+      var col = g.e > 0.55 ? '#4ea63f' : (g.e > 0.25 ? '#6fbe4a' : '#93cf6a');
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1.7;
+      ctx.beginPath();
+      ctx.moveTo(g.x, g.y + 3);
+      ctx.quadraticCurveTo(g.x + bend, g.y - s * 0.5, g.x + bend * 1.7, g.y - s);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(g.x, g.y + 3);
+      ctx.quadraticCurveTo(g.x - 3 + bend, g.y - s * 0.4, g.x - 4.5 + bend, g.y - s * 0.75);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(g.x, g.y + 3);
+      ctx.quadraticCurveTo(g.x + 3 + bend, g.y - s * 0.4, g.x + 4.5 + bend, g.y - s * 0.72);
+      ctx.stroke();
+    }
+  }
+
+  function ellipse(x, y, rx, ry) {
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, 0, 0, 6.2832);
+    ctx.fill();
+  }
+
+  function drawRabbit(r) {
+    ctx.save();
+    ctx.translate(r.x, r.y);
+    ctx.fillStyle = 'rgba(40,60,20,0.10)';
+    ellipse(0, 3, 8.5, 6);
+    ctx.rotate(r.angle);
+    var bob = Math.sin(elapsed * 9 + r.x * 0.05) * 0.6;
+    ctx.fillStyle = '#f7f4ee';
+    ellipse(0, 0, 8.5, 6.2 + bob * 0.2);
+    ctx.fillStyle = '#f7f4ee';
+    ellipse(-8, 0, 2.6, 2.2);
+    ellipse(6.5, -3.4, 2.6, 4.6);
+    ellipse(6.5, 3.4, 2.6, 4.6);
+    ctx.fillStyle = '#f0b8c4';
+    ellipse(7.2, -3.4, 1.1, 2.6);
+    ellipse(7.2, 3.4, 1.1, 2.6);
+    ctx.fillStyle = '#fff';
+    ellipse(8.2, -1.6, 2.6, 2.6);
+    ellipse(8.2, 1.6, 2.6, 2.6);
+    ctx.fillStyle = '#3a332b';
+    ellipse(8.9, -1.9, 1.1, 1.1);
+    ellipse(8.9, 1.9, 1.1, 1.1);
+    ctx.fillStyle = '#f0b8c4';
+    ellipse(10.2, 0, 1.1, 0.9);
+    ctx.restore();
+  }
+
+  function drawFox(f) {
+    ctx.save();
+    ctx.translate(f.x, f.y);
+    ctx.fillStyle = 'rgba(40,60,20,0.11)';
+    ellipse(0, 4, 11, 7);
+    ctx.rotate(f.angle);
+    var bob = Math.sin(elapsed * 8 + f.x * 0.05) * 0.7;
+    ctx.fillStyle = '#e0803a';
+    ellipse(0, 0, 10.5, 7.2 + bob * 0.2);
+    ctx.fillStyle = '#f6c39a';
+    ellipse(-4, 0, 5, 4.4);
+    ctx.fillStyle = '#e0803a';
+    ellipse(-12.5, 0, 4.4, 3.6);
+    ctx.fillStyle = '#fff8f0';
+    ellipse(-14, 0, 2.4, 2);
+    ctx.fillStyle = '#e0803a';
+    ellipse(7, -4.2, 3, 4.2);
+    ellipse(7, 4.2, 3, 4.2);
+    ctx.fillStyle = '#5a3a24';
+    ellipse(7.6, -4.6, 1.3, 2.1);
+    ellipse(7.6, 4.6, 1.3, 2.1);
+    ctx.fillStyle = '#fff8f0';
+    ellipse(9.6, 0, 4.6, 4);
+    ctx.fillStyle = '#e0803a';
+    ellipse(12.2, 0, 2.2, 2.2);
+    ctx.fillStyle = '#2f2820';
+    ellipse(10.6, -1.8, 1.2, 1.2);
+    ellipse(10.6, 1.8, 1.2, 1.2);
+    ctx.fillStyle = '#2f2820';
+    ellipse(13.2, 0, 1.1, 0.9);
+    ctx.restore();
+  }
+
+  function drawParticles() {
+    for (var i = 0; i < particles.length; i++) {
+      var p = particles[i];
+      ctx.globalAlpha = Math.max(0, p.life / p.max);
+      ctx.fillStyle = p.c;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, 6.2832);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawPulses() {
+    for (var i = 0; i < pulses.length; i++) {
+      var p = pulses[i];
+      var t = p.t / 0.5;
+      ctx.globalAlpha = (1 - t) * 0.5;
+      ctx.strokeStyle = '#7ecb57';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 4 + t * 20, 0, 6.2832);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawGraph() {
+    if (history.length < 2) return;
+    var gw = Math.min(230, W - 40), gh = 66;
+    var gx = W - gw - 16, gy = H - gh - 16;
+    var pad = 8;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,0.72)';
+    roundRect(gx, gy, gw, gh, 12);
+    ctx.fill();
+    ctx.restore();
+
+    var maxA = 1, maxG = 1;
+    for (var i = 0; i < history.length; i++) {
+      if (history[i].r > maxA) maxA = history[i].r;
+      if (history[i].f > maxA) maxA = history[i].f;
+      if (history[i].g > maxG) maxG = history[i].g;
+    }
+    maxA *= 1.15; maxG *= 1.15;
+
+    function series(key, max, color, width) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      for (var k = 0; k < history.length; k++) {
+        var x = gx + pad + (gw - pad * 2) * (k / (history.length - 1));
+        var y = gy + gh - pad - (gh - pad * 2) * clamp(history[k][key] / max, 0, 1);
+        if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    series('g', maxG, 'rgba(90,180,70,0.55)', 1.6);
+    series('r', maxA, '#8c8579', 2);
+    series('f', maxA, '#e0803a', 2);
+
+    ctx.font = '600 9px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+    ctx.fillStyle = 'rgba(60,80,40,0.5)';
+    ctx.textAlign = 'left';
+    ctx.fillText('population', gx + pad, gy + 12);
+  }
+
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function draw() {
+    drawBackground();
+    drawGrass();
+    drawPulses();
+
+    var i;
+    for (i = 0; i < rabbits.length; i++) drawRabbit(rabbits[i]);
+    for (i = 0; i < foxes.length; i++) drawFox(foxes[i]);
+
+    drawParticles();
+    drawGraph();
+
+    if (planting) {
+      ctx.strokeStyle = 'rgba(90,180,70,0.35)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(pointer.x, pointer.y, 11, 0, 6.2832);
+      ctx.stroke();
+    }
+  }
+
+  function updateHud() {
+    elGrass.textContent = grass.length;
+    elRabbit.textContent = rabbits.length;
+    elFox.textContent = foxes.length;
+    elClock.textContent = Math.floor(elapsed) + 's';
+  }
+
+  function banner(text) {
+    elBanner.textContent = text;
+    elBanner.classList.remove('show');
+    void elBanner.offsetWidth;
+    elBanner.classList.add('show');
+  }
+
+  var lastTs = 0;
+  function frame(ts) {
+    if (!lastTs) lastTs = ts;
+    var dt = (ts - lastTs) / 1000;
+    lastTs = ts;
+    if (dt > 0.05) dt = 0.05;
+    if (dt < 0) dt = 0;
+    if (running) update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  resize();
+  reset();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

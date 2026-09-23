@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bill Wurtz Sentence Machine</title>
+<style>
+  html, body { margin: 0; min-height: 100%; background: radial-gradient(circle at 50% 0%, #0f1a0a 0%, #05060d 60%); color: #dfe4f2; font-family: 'Courier New', monospace; }
+  header { text-align: center; padding: 26px 16px 8px; }
+  h1 { margin: 0; color: #8fe34d; letter-spacing: 4px; text-shadow: 0 0 18px rgba(143,227,77,0.45); font-size: 28px; }
+  header p { color: #6b7390; font-size: 13px; margin: 8px 0 0; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 16px 20px 60px; }
+  .bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  #sentence { flex: 1; min-width: 260px; font-family: inherit; font-size: 15px; color: #eaffd9; background: #0a1207; border: 1px solid #2f5a1f; border-radius: 6px; padding: 12px 14px; outline: none; }
+  #sentence:focus { border-color: #8fe34d; }
+  .bar button { font-family: inherit; font-size: 13px; cursor: pointer; border-radius: 6px; padding: 12px 18px; }
+  #say { background: #8fe34d; color: #05060d; border: none; }
+  #say:hover { background: #aaff6a; }
+  #stop { background: transparent; color: #aaff6a; border: 1px solid #2f5a1f; }
+  #stop:hover { border-color: #8fe34d; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; font-size: 12px; color: #8a92ad; }
+  .row input[type=range] { width: 120px; }
+  .examples { margin-top: 12px; font-size: 12px; color: #6b7390; }
+  .examples span { color: #aaff6a; cursor: pointer; border-bottom: 1px dotted #3a6a2a; margin-right: 12px; }
+  .examples span:hover { color: #fff; }
+  .msg { font-size: 12px; color: #ffd42a; margin-top: 10px; min-height: 16px; }
+  h2 { font-size: 13px; letter-spacing: 2px; color: #aaff6a; border-bottom: 1px solid #1e3313; padding-bottom: 8px; margin-top: 26px; }
+  #chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .chip { border-radius: 6px; padding: 8px 11px; font-size: 12px; cursor: pointer; border: 1px solid #2f5a1f; background: #0b1408; color: #d7ffc0; transition: .12s; }
+  .chip small { display: block; color: #6f7f5f; font-size: 10px; margin-top: 3px; }
+  .chip.miss { border-color: #5a1f1f; background: #140808; color: #ff8a8a; cursor: default; }
+  .chip.miss small { color: #7f5f5f; }
+  .chip.syl { border-style: dashed; }
+  .chip.syl small::before { content: "♪ "; }
+  .chip.cur { border-color: #8fe34d; background: #1c3310; box-shadow: 0 0 14px rgba(143,227,77,.4); }
+  .chip.done { opacity: .45; }
+  .note { font-size: 12px; color: #6b7390; margin-top: 22px; line-height: 1.7; }
+  a.back { color: #aaff6a; text-decoration: none; }
+  .eb { font-family: inherit; font-size: 12px; cursor: pointer; border-radius: 5px; padding: 6px 10px; background: transparent; color: #aaff6a; border: 1px solid #2f5a1f; }
+  .eb:hover { border-color: #8fe34d; }
+</style>
+</head>
+<body>
+<header>
+  <h1>BILL WURTZ SENTENCE MACHINE</h1>
+  <p>Type a sentence &mdash; it gets stitched together out of clips from billwurtz.com. <a class="back" href="index.html">back</a></p>
+</header>
+<div class="wrap">
+  <div class="bar">
+    <input id="sentence" placeholder="type a sentence, e.g.  i love you and the world is made of cheese" autocomplete="off" spellcheck="false" />
+    <button id="say">&#9654; SAY IT</button>
+    <button id="stop" disabled>&#9632; STOP</button>
+    <button id="tone" title="plays a short beep so you can check your audio output">&#128266; TEST</button>
+  </div>
+  <div class="row">
+    <span>gap</span><input id="gap" type="range" min="0" max="800" step="50" value="150" /><span id="gapv">150ms</span>
+    <span>·</span>
+    <label><input id="onlyShort" type="checkbox" checked /> short clips only (so it doesn't play whole songs)</label>
+    <span>·</span>
+    <label><input id="useSyl" type="checkbox" checked /> break unmatched words into syllables</label>
+    <span>·</span>
+    <span>vol</span><input id="vol" type="range" min="0" max="150" value="100" />
+  </div>
+  <div class="examples">
+    try:
+    <span data-s="i love you">i love you</span>
+    <span data-s="no yes maybe">no yes maybe</span>
+    <span data-s="go home and eat bread">go home and eat bread</span>
+    <span data-s="music is cool">music is cool</span>
+    <span data-s="hello it's 2015 and i got to go crazy">hello it's 2015 and i got to go crazy</span>
+  </div>
+  <div class="msg" id="msg">loading clip library&hellip;</div>
+  <div class="msg" id="diag" style="color:#6b7390">build 6 &middot; AI word timing</div>
+
+  <h2>THE SENTENCE</h2>
+  <div id="chips"></div>
+
+  <div id="editor" style="display:none; margin-top:18px; border:1px solid #2f5a1f; border-radius:8px; padding:12px; background:#0a1207">
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:8px">
+      <b id="editorTitle" style="color:#aaff6a"></b>
+      <button id="edPlay" class="eb">&#9654; PLAY SLICE</button>
+      <button id="edReset" class="eb">&#8634; AUTO</button>
+      <button id="edClose" class="eb">&#10005; CLOSE</button>
+    </div>
+    <canvas id="edCanvas" width="960" height="120" style="width:100%; height:120px; display:block; cursor:ew-resize; background:#08100a; border-radius:6px"></canvas>
+    <div class="msg" id="editorMsg" style="color:#6b7390">drag the yellow box to move the slice, drag its edges to resize. it's remembered for this word.</div>
+  </div>
+
+  <div class="note">
+    How it works: it finds clips whose title matches each word (or whole phrase) you type. Each clip is decoded,
+    its leading/trailing silence is trimmed, and the <b>slice containing your word/syllable is cut out</b> and puzzled
+    together with the rest. If a word has no clip it's split into <b>syllables</b> (dashed chips, marked &#9834;) and each
+    syllable is cut from whichever clip contains it &mdash; so <b>love</b> &rarr; <b>lo</b>+<b>ve</b>, <b>music</b> from
+    "music is cool" is cut to just the "music" half. Force your own syllables with hyphens: <b>lo-ve</b>,
+    <b>beau-ti-ful</b>. Clips are fetched and decoded in memory only; nothing is saved or re-hosted.
+    All songs &copy; bill wurtz.
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+  var BASE = 'https://billwurtz.com/';
+  var MAXLEN = 5;
+
+  var SONGS = [], exact = new Map(), wordMap = new Map(), sylMap = new Map();
+  var wordIndex = new Map(), sylIndex = new Map(), phraseIndex = new Map(), songByFile = new Map();
+  function push(m, k, v){ if(!m.has(k)) m.set(k, []); m.get(k).push(v); }
+  function sortIdx(m){ m.forEach(function(a){ a.sort(function(x,y){ return (x.e-x.s)-(y.e-y.s); }); }); }
+
+  function norm(s){
+    return String(s).toLowerCase()
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[^a-z0-9' ]+/g, ' ')
+      .replace(/\s+/g, ' ').trim();
+  }
+
+  var VOWELS = 'aeiouy';
+  function isV(c){ return VOWELS.indexOf(c) >= 0; }
+  function syllabify(word){
+    word = String(word).toLowerCase().replace(/[^a-z]/g, '');
+    if(word.length <= 3) return word ? [word] : [];
+    var groups = [], i = 0;
+    while(i < word.length){
+      if(isV(word[i])){ var j = i; while(j < word.length && isV(word[j])) j++; groups.push([i, j]); i = j; }
+      else i++;
+    }
+    if(groups.length <= 1) return [word];
+    var digraphs = ['ch','sh','th','ph','wh','ck','ng','qu','gh','kn','wr'];
+    var cuts = [];
+    for(var g = 0; g < groups.length - 1; g++){
+      var end = groups[g][1], start = groups[g+1][0], cons = word.slice(end, start), cut;
+      if(cons.length <= 1) cut = end;
+      else cut = digraphs.indexOf(cons.slice(0, 2)) >= 0 ? end : end + 1;
+      cuts.push(cut);
+    }
+    var parts = [], prev = 0;
+    cuts.forEach(function(c){ parts.push(word.slice(prev, c)); prev = c; });
+    parts.push(word.slice(prev));
+    return parts.filter(Boolean);
+  }
+
+  Promise.all([
+    fetch('billwurtz-songs.json').then(function(r){ return r.json(); }),
+    fetch('billwurtz-words.json').then(function(r){ return r.json(); }).catch(function(){ return []; })
+  ]).then(function(res){
+    var list = res[0], timed = res[1] || [];
+    SONGS = list;
+    list.forEach(function(s){
+      var t = norm(s.title); if(!t) return;
+      if(!exact.has(t) || exact.get(t).dur > s.dur) exact.set(t, s);
+    });
+    list.filter(function(s){ return s.dur <= 20; }).forEach(function(s){
+      var t = norm(s.title);
+      var words = {}; t.split(' ').forEach(function(w){ if(w) words[w]=1; });
+      Object.keys(words).forEach(function(w){ push(wordMap, w, s); });
+      var syls = {};
+      t.split(' ').forEach(function(w){ syllabify(w).forEach(function(sy){ if(sy) syls[sy]=1; }); });
+      Object.keys(syls).forEach(function(sy){ push(sylMap, sy, s); });
+    });
+    wordMap.forEach(function(a){ a.sort(function(x,y){ return x.dur-y.dur; }); });
+    sylMap.forEach(function(a){ a.sort(function(x,y){ return x.dur-y.dur; }); });
+
+    timed.forEach(function(e){
+      songByFile.set(e.file, e);
+      (e.words||[]).forEach(function(w){
+        push(wordIndex, w.w, { song: e, s: w.s, e: w.e });
+        var syls = syllabify(w.w);
+        syls.forEach(function(sy, ix){
+          var a = w.s + (w.e-w.s)*(ix/syls.length), b = w.s + (w.e-w.s)*((ix+1)/syls.length);
+          push(sylIndex, sy, { song: e, s: a, e: b });
+        });
+      });
+      var ws = e.words || [];
+      for(var i=0;i<ws.length;i++){
+        var ph = [];
+        for(var j=i;j<ws.length && j<i+4;j++){
+          ph.push(ws[j].w);
+          var key = ph.join(' ');
+          if(!phraseIndex.has(key)) phraseIndex.set(key, { song: e, s: ws[i].s, e: ws[j].e });
+        }
+      }
+    });
+    sortIdx(wordIndex); sortIdx(sylIndex);
+    $('msg').textContent = 'loaded ' + list.length + ' clips · ' + wordIndex.size + ' sung words · ' + phraseIndex.size + ' phrases · ' + sylIndex.size + ' syllables. type a sentence.';
+  }).catch(function(e){ $('msg').textContent = 'could not load clip list: ' + e.message; });
+
+  function usable(c, shortOnly){
+    if(!c) return false;
+    return shortOnly ? c.dur <= 20 : true;
+  }
+  function pickWord(w, shortOnly){
+    var c1 = exact.get(w), c2 = (wordMap.get(w)||[])[0];
+    if(usable(c1, shortOnly)) return c1;
+    if(usable(c2, shortOnly)) return c2;
+    return null;
+  }
+  function pickSyl(sy){
+    return (sylMap.get(sy)||[])[0] || (wordMap.get(sy)||[])[0] || null;
+  }
+
+  function tokenize(text){
+    var toks = [];
+    String(text).trim().split(/\s+/).forEach(function(raw){
+      if(raw.indexOf('-') >= 0){
+        raw.split('-').map(norm).filter(Boolean).forEach(function(p){ toks.push({ text: p, forced: true }); });
+      } else {
+        var n = norm(raw); if(n) toks.push({ text: n, forced: false });
+      }
+    });
+    return toks;
+  }
+
+  function planFor(text, shortOnly, useSyl){
+    var toks = tokenize(text), plan = [], i = 0;
+    while(i < toks.length){
+      if(!toks[i].forced){
+        var done = false;
+        for(var len = Math.min(4, toks.length - i); len >= 2; len--){
+          var slice = toks.slice(i, i+len);
+          if(slice.some(function(t){ return t.forced; })) continue;
+          var ph = slice.map(function(t){ return t.text; }).join(' ');
+          var hit = phraseIndex.get(ph);
+          if(hit){ plan.push({ text: ph, kind: 'phrase', clip: hit.song, s: hit.s, e: hit.e }); i += len; done = true; break; }
+        }
+        if(done) continue;
+      }
+      var w = toks[i].text;
+      var wh = (wordIndex.get(w)||[])[0];
+      if(wh){ plan.push({ text: w, kind: 'word', clip: wh.song, s: wh.s, e: wh.e }); i++; continue; }
+      if(useSyl){
+        var syls = syllabify(w), picks = [], any = false;
+        syls.forEach(function(sy){ var h = (sylIndex.get(sy)||[])[0]; if(h) any = true; picks.push({ sy: sy, h: h }); });
+        if(syls.length > 1 && any){
+          picks.forEach(function(p){ plan.push({ text: p.sy, kind: 'syllable', clip: p.h ? p.h.song : null, s: p.h ? p.h.s : null, e: p.h ? p.h.e : null }); });
+          i++; continue;
+        }
+        if(syls.length === 1 && picks[0] && picks[0].h){
+          plan.push({ text: w, kind: 'syllable', clip: picks[0].h.song, s: picks[0].h.s, e: picks[0].h.e }); i++; continue;
+        }
+      }
+      var tclip = toks[i].forced ? pickSyl(w) : pickWord(w, shortOnly);
+      if(tclip){ plan.push({ text: w, kind: 'word', clip: tclip, s: null, e: null }); i++; continue; }
+      plan.push({ text: w, clip: null, s: null, e: null, kind: 'word' });
+      i++;
+    }
+    return plan;
+  }
+
+  function render(plan){
+    var box = $('chips'); box.innerHTML = '';
+    plan.forEach(function(p, idx){
+      p._i = idx;
+      var el = document.createElement('div');
+      el.className = 'chip' + (p.clip ? '' : ' miss') + (p.kind === 'syllable' ? ' syl' : '');
+      var sub = p.clip
+        ? escapeHtml(p.clip.title) + (p.s != null ? ' · ' + p.s.toFixed(1) + '–' + p.e.toFixed(1) + 's' : ' · ' + fmt(p.clip.dur))
+        : 'no clip';
+      el.innerHTML = escapeHtml(p.text) + '<small>' + sub + '</small>';
+      if(p.clip) el.addEventListener('click', function(){ openEditor(p, el); });
+      box.appendChild(el);
+    });
+  }
+  function escapeHtml(s){ return String(s).replace(/[&<>"]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
+  function fmt(s){ var m = Math.floor(s/60), x = s%60; return m + ':' + (x<10?'0':'') + x; }
+
+  // ---------- audio engine: fetch + decode + slice + puzzle ----------
+  var actx = null, master = null;
+  function engine(){
+    if(!actx){
+      actx = new (window.AudioContext || window.webkitAudioContext)();
+      master = actx.createGain();
+      master.gain.value = Number($('vol').value)/100;
+      master.connect(actx.destination);
+    }
+    if(actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function ensureRunning(){
+    var c = engine();
+    if(c.state === 'suspended') return c.resume().then(function(){ return c; }, function(){ return c; });
+    return Promise.resolve(c);
+  }
+  function diag(t){ $('diag').textContent = t; }
+  function decode(ab){
+    var c = engine();
+    return new Promise(function(res, rej){
+      var pr = c.decodeAudioData(ab, res, rej);
+      if(pr && pr.then) pr.then(res, rej);
+    });
+  }
+  var bufCache = new Map();
+  function getBuffer(file){
+    if(bufCache.has(file)) return bufCache.get(file);
+    var url = BASE + file;
+    var p = fetch('/proxy?url=' + encodeURIComponent(url))
+      .then(function(r){ if(!r.ok) throw new Error('proxy ' + r.status); return r.arrayBuffer(); })
+      .catch(function(){ return fetch(url).then(function(r){ if(!r.ok) throw new Error('http ' + r.status); return r.arrayBuffer(); }); })
+      .then(decode);
+    bufCache.set(file, p);
+    return p;
+  }
+
+  function titleSyls(title){
+    var out = [];
+    norm(title).split(' ').forEach(function(w){ syllabify(w).forEach(function(s){ out.push(s); }); });
+    return out;
+  }
+  function spanFor(clip, text){
+    var ts = titleSyls(clip.title), ms = titleSyls(text), n = ts.length || 1;
+    if(!ms.length) return { i: 0, len: n, n: n };
+    for(var i = 0; i + ms.length <= ts.length; i++){
+      var ok = true;
+      for(var j = 0; j < ms.length; j++) if(ts[i+j] !== ms[j]){ ok = false; break; }
+      if(ok) return { i: i, len: ms.length, n: n };
+    }
+    var k = ts.indexOf(ms[0]);
+    return { i: (k >= 0 ? k : 0), len: 1, n: n };
+  }
+  function trimRange(buf){
+    var d = buf.getChannelData(0), sr = buf.sampleRate;
+    var hop = Math.max(1, Math.floor(sr*0.01)), win = Math.max(1, Math.floor(sr*0.03));
+    var frames = Math.floor((d.length - win)/hop) + 1;
+    if(frames < 2) return { s: 0, e: buf.duration };
+    var env = new Float32Array(frames), peak = 0, f, i, off, acc, cnt, v;
+    for(f = 0; f < frames; f++){
+      off = f*hop; acc = 0; cnt = 0;
+      for(i = 0; i < win; i += 4){ acc += d[off+i]*d[off+i]; cnt++; }
+      v = Math.sqrt(acc/cnt); env[f] = v; if(v > peak) peak = v;
+    }
+    if(peak < 1e-5) return { s: 0, e: buf.duration };
+    var thr = peak*0.12, first = 0, last = frames - 1;
+    while(first < frames && env[first] < thr) first++;
+    while(last > first && env[last] < thr) last--;
+    return { s: first*hop/sr, e: Math.min(buf.duration, (last*hop + win)/sr) };
+  }
+
+  var overrides = {};
+  function keyOf(item){ return item.clip.file + '|' + item.text; }
+  function computeSlice(buf, item){
+    var k = keyOf(item);
+    if(overrides[k]){
+      var o = overrides[k];
+      return { a: Math.max(0, o.a), b: Math.min(buf.duration, Math.max(o.a + 0.05, o.b)) };
+    }
+    if(item.s != null && item.e != null){
+      var a0 = Math.max(0, Math.min(buf.duration - 0.05, item.s));
+      var b0 = Math.min(buf.duration, Math.max(a0 + 0.05, item.e));
+      return { a: a0, b: b0 };
+    }
+    var span = spanFor(item.clip, item.text);
+    var tr = trimRange(buf);
+    if(tr.e <= tr.s) tr = { s: 0, e: buf.duration };
+    var a = tr.s + (tr.e - tr.s) * (span.i / span.n);
+    var b = tr.s + (tr.e - tr.s) * ((span.i + span.len) / span.n);
+    a = Math.max(0, Math.min(buf.duration - 0.05, a));
+    var dur = Math.max(0.06, Math.min(buf.duration - a, b - a));
+    return { a: a, b: a + dur };
+  }
+
+  var scheduled = [], timers = [], endTimer = null, curChip = null, fallbackEl = null;
+
+  function stopAll(silent){
+    scheduled.forEach(function(s){ try{ s.stop(); }catch(e){} });
+    scheduled = [];
+    timers.forEach(clearTimeout); timers = [];
+    if(endTimer){ clearTimeout(endTimer); endTimer = null; }
+    if(fallbackEl){ try{ fallbackEl.pause(); }catch(e){} fallbackEl = null; }
+    if(curChip){ curChip.classList.remove('cur'); curChip = null; }
+    $('stop').disabled = true;
+    if(!silent) $('msg').textContent = 'stopped.';
+  }
+
+  function fallbackAudio(items){
+    $('msg').textContent = '(fallback) could not decode — playing whole clips via <audio>…';
+    $('stop').disabled = false;
+    var i = 0;
+    (function step(){
+      if(i >= items.length){ $('stop').disabled = true; $('msg').textContent = 'done.'; fallbackEl = null; return; }
+      var el = new Audio(BASE + items[i].clip.file);
+      fallbackEl = el;
+      var nxt = function(){ i++; setTimeout(step, Number($('gap').value)); };
+      el.onended = nxt; el.onerror = nxt;
+      var pr = el.play();
+      if(pr && pr.catch) pr.catch(nxt);
+    })();
+  }
+
+  function playItems(items){
+    if(!items.length) return;
+    engine(); // MUST run inside the click gesture or Safari keeps the context suspended
+    $('say').disabled = true;
+    $('msg').textContent = 'loading ' + items.length + ' clip' + (items.length>1?'s':'') + '…';
+    Promise.all(items.map(function(p){
+      return getBuffer(p.clip.file).then(function(b){ return { p: p, b: b }; }).catch(function(e){ return { p: p, b: null, err: e }; });
+    })).then(function(res){
+      var ok = res.filter(function(r){ return r.b; });
+      var bad = res.filter(function(r){ return !r.b; });
+      diag('loaded ' + ok.length + '/' + res.length + ' clips' + (bad[0] && bad[0].err ? ' · first error: ' + bad[0].err.message : ''));
+      if(!ok.length){ $('say').disabled = false; fallbackAudio(items); return; }
+      return ensureRunning().then(function(c){
+        try {
+          var chips = $('chips').children;
+          var t = c.currentTime + 0.15, gap = Number($('gap').value)/1000, total = 0;
+          res.forEach(function(r){
+            if(!r.b) return;
+            var sl = computeSlice(r.b, r.p);
+            var a = sl.a, dur = Math.max(0.06, sl.b - sl.a);
+            var src = c.createBufferSource(); src.buffer = r.b;
+            var g = c.createGain();
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(1, t + 0.006);
+            g.gain.setValueAtTime(1, t + Math.max(0.007, dur - 0.012));
+            g.gain.linearRampToValueAtTime(0, t + dur);
+            src.connect(g); g.connect(master);
+            src.start(t, a, dur);
+            scheduled.push(src);
+            var el = chips[r.p._i] || null, startT = t;
+            timers.push(setTimeout(function(){
+              if(curChip) curChip.classList.remove('cur');
+              curChip = el; if(el) el.classList.add('cur');
+            }, Math.max(0, (startT - c.currentTime)*1000)));
+            t += dur + gap;
+            total++;
+          });
+          endTimer = setTimeout(function(){
+            if(curChip){ curChip.classList.remove('cur'); curChip = null; }
+            $('stop').disabled = true; $('msg').textContent = 'done.';
+          }, Math.max(0, (t - c.currentTime)*1000));
+          $('stop').disabled = false; $('say').disabled = false;
+          diag('ctx.state=' + c.state + ' · sampleRate=' + c.sampleRate + ' · scheduled ' + total + ' pieces');
+          $('msg').textContent = 'puzzling ' + total + ' piece' + (total>1?'s':'') + ' together…';
+        } catch(err){ $('say').disabled = false; $('msg').textContent = 'error while scheduling: ' + err.message; }
+      });
+    }).catch(function(err){ $('say').disabled = false; $('msg').textContent = 'error: ' + err.message; });
+  }
+
+  function say(){
+    var text = $('sentence').value.trim();
+    if(!text){ $('msg').textContent = 'type something first.'; return; }
+    if(!SONGS.length){ $('msg').textContent = 'still loading clip list…'; return; }
+    stopAll(true);
+    var plan = planFor(text, $('onlyShort').checked, $('useSyl').checked);
+    render(plan);
+    var items = plan.filter(function(p){ return p.clip; });
+    var missing = plan.filter(function(p){ return !p.clip; }).length;
+    if(!items.length){ $('msg').textContent = 'none of those words have clips — try simpler words.'; return; }
+    if(missing) $('msg').textContent = missing + ' skipped. ';
+    playItems(items);
+  }
+
+  // ---------- waveform slice editor ----------
+  var editorItem = null, editorBuf = null, editorChip = null, edDrag = null;
+
+  function openEditor(item, chipEl){
+    stopAll(true);
+    editorItem = item; editorChip = chipEl;
+    $('editor').style.display = 'block';
+    $('editorTitle').textContent = '"' + item.text + '"  from  ' + item.clip.title;
+    $('editorMsg').textContent = 'loading waveform…';
+    getBuffer(item.clip.file).then(function(b){
+      editorBuf = b; drawEditor();
+      $('editorMsg').textContent = 'drag the yellow box to move the slice, drag its edges to resize. it is remembered for this word.';
+      playSlice();
+    }).catch(function(e){ $('editorMsg').textContent = 'could not load: ' + e.message; });
+  }
+
+  function drawEditor(){
+    var cv = $('edCanvas'), g = cv.getContext('2d'), W = cv.width, H = cv.height;
+    g.clearRect(0, 0, W, H); g.fillStyle = '#08100a'; g.fillRect(0, 0, W, H);
+    if(!editorBuf) return;
+    var d = editorBuf.getChannelData(0), n = d.length, per = n / W, x, s0, s1, mn, mx, i, v;
+    g.strokeStyle = '#4f9c2f'; g.beginPath();
+    for(x = 0; x < W; x++){
+      s0 = Math.floor(x*per); s1 = Math.min(n, Math.floor((x+1)*per)); mn = 1; mx = -1;
+      for(i = s0; i < s1; i++){ v = d[i]; if(v < mn) mn = v; if(v > mx) mx = v; }
+      if(s1 <= s0){ mn = 0; mx = 0; }
+      g.moveTo(x + 0.5, H/2 - mx*H/2*0.92);
+      g.lineTo(x + 0.5, H/2 - mn*H/2*0.92);
+    }
+    g.stroke();
+    var sl = computeSlice(editorBuf, editorItem);
+    var xa = sl.a/editorBuf.duration*W, xb = sl.b/editorBuf.duration*W;
+    g.fillStyle = 'rgba(143,227,77,0.16)'; g.fillRect(xa, 0, xb - xa, H);
+    g.strokeStyle = '#ffd42a'; g.lineWidth = 2; g.strokeRect(xa + 1, 1, Math.max(1, xb - xa - 2), H - 2);
+    g.fillStyle = '#ffd42a'; g.fillRect(xa - 2, 0, 4, H); g.fillRect(xb - 2, 0, 4, H);
+  }
+
+  function playSlice(){
+    if(!editorBuf || !editorItem) return;
+    engine();
+    var c = actx, sl = computeSlice(editorBuf, editorItem), dur = Math.max(0.05, sl.b - sl.a);
+    var src = c.createBufferSource(); src.buffer = editorBuf;
+    var g = c.createGain();
+    g.gain.setValueAtTime(0, c.currentTime);
+    g.gain.linearRampToValueAtTime(1, c.currentTime + 0.006);
+    g.gain.setValueAtTime(1, c.currentTime + Math.max(0.007, dur - 0.012));
+    g.gain.linearRampToValueAtTime(0, c.currentTime + dur);
+    src.connect(g); g.connect(master);
+    src.start(c.currentTime + 0.02, sl.a, dur);
+    scheduled.push(src);
+  }
+
+  function edX(e){
+    var cv = $('edCanvas'), r = cv.getBoundingClientRect();
+    return Math.max(0, Math.min(cv.width, (e.clientX - r.left) / r.width * cv.width));
+  }
+  $('edCanvas').addEventListener('pointerdown', function(e){
+    if(!editorBuf) return;
+    var x = edX(e), W = this.width, sl = computeSlice(editorBuf, editorItem);
+    var xa = sl.a/editorBuf.duration*W, xb = sl.b/editorBuf.duration*W;
+    var mode = Math.abs(x - xa) < 8 ? 'l' : (Math.abs(x - xb) < 8 ? 'r' : ((x > xa && x < xb) ? 'm' : 'n'));
+    edDrag = { mode: mode, x: x, a: sl.a, b: sl.b };
+    try{ this.setPointerCapture(e.pointerId); }catch(err){}
+    e.preventDefault();
+  });
+  $('edCanvas').addEventListener('pointermove', function(e){
+    if(!edDrag || !editorBuf) return;
+    var x = edX(e), W = this.width, dur = editorBuf.duration;
+    var dt = (x - edDrag.x)/W*dur, a = edDrag.a, b = edDrag.b, len;
+    if(edDrag.mode === 'm'){ len = b - a; a += dt; b += dt; if(a < 0){ b -= a; a = 0; } if(b > dur){ a -= b - dur; b = dur; } }
+    else if(edDrag.mode === 'l'){ a = Math.min(b - 0.05, Math.max(0, a + dt)); }
+    else if(edDrag.mode === 'r'){ b = Math.max(a + 0.05, Math.min(dur, b + dt)); }
+    else { a = Math.min(edDrag.x, x)/W*dur; b = Math.max(edDrag.x, x)/W*dur; }
+    overrides[keyOf(editorItem)] = { a: a, b: b };
+    drawEditor();
+  });
+  $('edCanvas').addEventListener('pointerup', function(e){
+    if(!edDrag) return;
+    edDrag = null;
+    try{ this.releasePointerCapture(e.pointerId); }catch(err){}
+    playSlice();
+  });
+  $('edPlay').addEventListener('click', function(){ stopAll(true); playSlice(); });
+  $('edReset').addEventListener('click', function(){ if(editorItem){ delete overrides[keyOf(editorItem)]; drawEditor(); playSlice(); } });
+  $('edClose').addEventListener('click', function(){ $('editor').style.display = 'none'; editorItem = null; editorBuf = null; });
+
+  $('say').addEventListener('click', say);
+  $('stop').addEventListener('click', function(){ stopAll(false); });
+  function beepDataUri(){
+    var sr = 44100, n = Math.floor(sr*0.6), buf = new ArrayBuffer(44 + n*2), v = new DataView(buf), i;
+    function ws(o,s){ for(i=0;i<s.length;i++) v.setUint8(o+i, s.charCodeAt(i)); }
+    ws(0,'RIFF'); v.setUint32(4, 36+n*2, true); ws(8,'WAVE'); ws(12,'fmt ');
+    v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+    v.setUint32(24,sr,true); v.setUint32(28,sr*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true);
+    ws(36,'data'); v.setUint32(40,n*2,true);
+    for(i=0;i<n;i++){ var s = Math.sin(2*Math.PI*440*i/sr)*0.4; v.setInt16(44+i*2, s<0?s*0x8000:s*0x7FFF, true); }
+    var bytes = new Uint8Array(buf), bin = '';
+    for(i=0;i<bytes.length;i++) bin += String.fromCharCode(bytes[i]);
+    return 'data:audio/wav;base64,' + btoa(bin);
+  }
+
+  $('tone').addEventListener('click', function(){
+    stopAll(true);
+    var c = engine(), lines = [];
+    // path 1: Web Audio
+    try {
+      var o = c.createOscillator(), g = c.createGain();
+      o.type = 'sine'; o.frequency.value = 440; g.gain.value = 0.3;
+      o.connect(g); g.connect(master);
+      var t0 = c.currentTime + 0.05; o.start(t0); o.stop(t0 + 0.6);
+      lines.push('webaudio=OK');
+    } catch(e){ lines.push('webaudio=ERR(' + e.message + ')'); }
+    // path 2: plain <audio> element (different output path)
+    try {
+      var el = document.createElement('audio');
+      el.src = beepDataUri(); el.volume = 0.6;
+      var pr = el.play();
+      if(pr && pr.catch) pr.catch(function(e){ diag(lines.join(' · ') + ' · htmlaudio=BLOCKED(' + e.message + ')'); });
+      lines.push('htmlaudio=OK');
+    } catch(e){ lines.push('htmlaudio=ERR(' + e.message + ')'); }
+    lines.unshift('ctx.state=' + c.state, 'rate=' + c.sampleRate);
+    diag(lines.join(' · '));
+    $('msg').textContent = 'if you heard nothing from BOTH tests, it is your browser/system audio (check tab mute + macOS output), not the page.';
+  });
+  $('gap').addEventListener('input', function(){ $('gapv').textContent = $('gap').value + 'ms'; });
+  $('vol').addEventListener('input', function(){ if(master) master.gain.value = Number($('vol').value)/100; });
+  $('sentence').addEventListener('keydown', function(e){ if(e.key === 'Enter') say(); });
+  Array.prototype.forEach.call(document.querySelectorAll('.examples span'), function(s){
+    s.addEventListener('click', function(){ $('sentence').value = s.dataset.s; say(); });
+  });
+})();
+</script>
+</body>
+</html>

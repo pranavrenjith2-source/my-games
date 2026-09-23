@@ -1,0 +1,1 @@
+a base64 / URL / hash encoder-decoder

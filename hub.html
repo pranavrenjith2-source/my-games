@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Games</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; min-height: 100%;
+    background: radial-gradient(circle at 50% 0%, #101528 0%, #05060d 60%);
+    color: #dfe4f2;
+    font-family: 'Courier New', monospace;
+  }
+  header {
+    text-align: center;
+    padding: 56px 20px 24px;
+  }
+  h1 {
+    margin: 0;
+    font-size: 44px;
+    letter-spacing: 6px;
+    color: #2ecc40;
+    text-shadow: 0 0 18px rgba(46, 204, 64, 0.45);
+  }
+  header p {
+    margin: 12px 0 0;
+    color: #6b7390;
+    font-size: 14px;
+    letter-spacing: 1px;
+  }
+  main {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 22px;
+  }
+  .card {
+    display: flex;
+    flex-direction: column;
+    background: #0b0f1f;
+    border: 2px solid #2a2f45;
+    border-radius: 8px;
+    overflow: hidden;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .card:hover {
+    transform: translateY(-4px);
+    border-color: #2ecc40;
+    box-shadow: 0 10px 30px rgba(46, 204, 64, 0.18);
+  }
+  .thumb {
+    position: relative;
+    height: 150px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: linear-gradient(180deg, #0b0f1f 0%, #070912 100%);
+    border-bottom: 2px solid #1a2030;
+    overflow: hidden;
+  }
+  .thumb::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0 2px, transparent 2px 4px);
+    pointer-events: none;
+  }
+  .thumb svg {
+    width: 104px;
+    height: 104px;
+    margin-bottom: 14px;
+    filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.45));
+  }
+  .slime {
+    position: relative;
+    width: 84px;
+    height: 60px;
+    margin-bottom: 22px;
+    background: #2ecc40;
+    border-radius: 50% 50% 14px 14px / 60% 60% 14px 14px;
+    box-shadow: inset 0 -10px 0 #1d9c2c, inset 0 8px 0 #4de355, 0 0 22px rgba(46, 204, 64, 0.5);
+  }
+  .slime::before, .slime::after {
+    content: "";
+    position: absolute;
+    top: 22px;
+    width: 14px;
+    height: 16px;
+    background: #05060d;
+    border-radius: 3px;
+  }
+  .slime::before { left: 18px; }
+  .slime::after { right: 18px; }
+  .robot {
+    position: relative;
+    width: 74px;
+    height: 74px;
+    margin-bottom: 22px;
+    background: #1a2330;
+    border-radius: 10px;
+    box-shadow: inset 0 -8px 0 #101820, 0 0 22px rgba(77, 208, 255, 0.45);
+  }
+  .robot::before {
+    content: "";
+    position: absolute;
+    left: 14px;
+    top: 22px;
+    width: 46px;
+    height: 10px;
+    background: #ff3a2b;
+    border-radius: 2px;
+    box-shadow: 0 0 12px rgba(255, 58, 43, 0.8);
+  }
+  .robot::after {
+    content: "";
+    position: absolute;
+    left: 20px;
+    top: 44px;
+    width: 34px;
+    height: 20px;
+    background: #4dd0ff;
+    border-radius: 3px;
+  }
+  .shieldicon {
+    position: relative;
+    width: 70px;
+    height: 78px;
+    margin-bottom: 22px;
+    background: #0f2417;
+    border: 2px solid #2ecc40;
+    border-radius: 8px 8px 40px 40px;
+    box-shadow: 0 0 22px rgba(46, 204, 64, 0.4);
+  }
+  .shieldicon::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 18px;
+    width: 24px;
+    height: 24px;
+    transform: translateX(-50%) rotate(45deg);
+    border-right: 6px solid #4de355;
+    border-bottom: 6px solid #4de355;
+  }
+  .yt {
+    position: relative;
+    width: 88px;
+    height: 62px;
+    margin-bottom: 22px;
+    background: #ff3a2b;
+    border-radius: 14px;
+    box-shadow: 0 0 22px rgba(255, 58, 43, 0.45);
+  }
+  .yt::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 0;
+    height: 0;
+    border-left: 20px solid #fff;
+    border-top: 12px solid transparent;
+    border-bottom: 12px solid transparent;
+  }
+  .winicon {
+    position: relative;
+    width: 82px;
+    height: 58px;
+    margin-bottom: 22px;
+    background: #0f2417;
+    border: 2px solid #2ecc40;
+    border-radius: 6px;
+    box-shadow: 0 0 22px rgba(46, 204, 64, 0.35);
+  }
+  .winicon::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 12px;
+    background: #2ecc40;
+    border-radius: 3px 3px 0 0;
+  }
+  .winicon::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 60%;
+    transform: translate(-50%, -50%);
+    width: 0;
+    height: 0;
+    border-left: 14px solid #4de355;
+    border-top: 9px solid transparent;
+    border-bottom: 9px solid transparent;
+  }
+  .card-body {
+    padding: 16px 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+  }
+  .card-body h2 {
+    margin: 0;
+    font-size: 18px;
+    letter-spacing: 1px;
+    color: #4de355;
+  }
+  .card-body p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #9aa0b0;
+    flex: 1;
+  }
+  .play {
+    align-self: flex-start;
+    margin-top: 6px;
+    padding: 8px 18px;
+    font-family: inherit;
+    font-size: 13px;
+    letter-spacing: 1px;
+    color: #05060d;
+    background: #2ecc40;
+    border-radius: 4px;
+  }
+  .card:hover .play { background: #4de355; }
+  footer {
+    text-align: center;
+    padding: 0 20px 50px;
+    color: #4a5068;
+    font-size: 12px;
+    letter-spacing: 1px;
+  }
+  .bio {
+    max-width: 1000px;
+    margin: 40px auto 0;
+    padding: 0 20px;
+  }
+  .bio h2 {
+    font-size: 24px;
+    letter-spacing: 4px;
+    color: #4de355;
+    border-bottom: 2px solid #1a2030;
+    padding-bottom: 10px;
+  }
+  .bio-card {
+    display: flex;
+    gap: 26px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 20px;
+    padding: 24px;
+    background: #0b0f1f;
+    border: 2px solid #2a2f45;
+    border-radius: 8px;
+  }
+  .avatar {
+    flex: 0 0 auto;
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #4de355 0%, #2ecc40 45%, #1d9c2c 100%);
+    box-shadow: 0 0 24px rgba(46, 204, 64, 0.45);
+    position: relative;
+  }
+  .avatar::before, .avatar::after {
+    content: "";
+    position: absolute;
+    top: 38px;
+    width: 14px;
+    height: 18px;
+    background: #05060d;
+    border-radius: 3px;
+  }
+  .avatar::before { left: 24px; }
+  .avatar::after { right: 24px; }
+  .bio-text { flex: 1 1 320px; }
+  .bio-text p { margin: 0 0 12px; color: #c3c9da; font-size: 14px; line-height: 1.7; }
+  .facts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .facts li {
+    font-size: 12px;
+    color: #9aa0b0;
+    background: #0f1526;
+    border: 1px solid #2a2f45;
+    border-radius: 999px;
+    padding: 5px 12px;
+  }
+  .links { margin-top: 16px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .links a {
+    color: #2ecc40;
+    text-decoration: none;
+    font-size: 13px;
+    border-bottom: 1px dashed rgba(46, 204, 64, 0.4);
+  }
+  .links a:hover { color: #4de355; }
+  .terminal {
+    max-width: 1000px;
+    margin: 48px auto 0;
+    padding: 0 20px;
+  }
+  .terminal h2 {
+    font-size: 24px;
+    letter-spacing: 4px;
+    color: #4de355;
+    border-bottom: 2px solid #1a2030;
+    padding-bottom: 10px;
+  }
+  .term-sub { color: #6b7390; font-size: 13px; margin: 12px 0 18px; }
+  .term-window {
+    background: #05080f;
+    border: 2px solid #1f5f3a;
+    border-radius: 8px;
+    box-shadow: 0 0 26px rgba(46, 204, 64, 0.12);
+    overflow: hidden;
+  }
+  .term-bar {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 14px;
+    background: #0a1410;
+    border-bottom: 1px solid #123322;
+  }
+  .term-dot { width: 11px; height: 11px; border-radius: 50%; }
+  .term-title { margin-left: 10px; color: #4a7a5a; font-size: 12px; letter-spacing: 1px; }
+  .term-mode {
+    margin-left: auto;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: #2ecc40;
+    border: 1px solid #1f5f3a;
+    border-radius: 4px;
+    padding: 2px 8px;
+  }
+  .term-body { padding: 18px; }
+  .term-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+  .term-row label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: #6b7390;
+  }
+  #req-game, #req-name, #req-text {
+    font-family: inherit;
+    font-size: 13px;
+    color: #c8f0d2;
+    background: #08120c;
+    border: 1px solid #1f5f3a;
+    border-radius: 4px;
+    padding: 8px 10px;
+    outline: none;
+  }
+  #req-game { min-width: 210px; }
+  #req-name { min-width: 160px; }
+  #req-text { width: 100%; resize: vertical; }
+  #req-game:focus, #req-name:focus, #req-text:focus { border-color: #2ecc40; }
+  .term-actions { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+  .term-actions button {
+    font-family: inherit;
+    font-size: 12px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 9px 16px;
+  }
+  #req-form button[type="submit"] {
+    background: #2ecc40; color: #05060d; border: none;
+  }
+  #req-form button[type="submit"]:hover { background: #4de355; }
+  #req-export {
+    background: transparent; color: #4de355; border: 1px solid #1f5f3a;
+  }
+  #req-export:hover { border-color: #2ecc40; }
+  #req-msg { font-size: 12px; color: #4de355; }
+  .term-list-head {
+    display: flex;
+    justify-content: space-between;
+    margin: 22px 0 10px;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: #4a7a5a;
+    border-bottom: 1px dashed #123322;
+    padding-bottom: 8px;
+  }
+  .term-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .req {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    background: #08120c;
+    border: 1px solid #123322;
+    border-radius: 6px;
+    padding: 12px 14px;
+  }
+  .req.done { opacity: 0.6; }
+  .vote {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    background: #0a1a10;
+    border: 1px solid #1f5f3a;
+    border-radius: 4px;
+    padding: 6px 10px;
+    cursor: pointer;
+    color: #4de355;
+    font-family: inherit;
+    font-size: 11px;
+  }
+  .vote:hover:not(:disabled) { border-color: #2ecc40; background: #0f2417; }
+  .vote:disabled { cursor: default; opacity: 0.55; }
+  .vote b { font-size: 15px; }
+  .req-main { flex: 1; }
+  .req-text { color: #d7e6dd; font-size: 14px; line-height: 1.5; margin: 0 0 6px; }
+  .req-meta { font-size: 11px; color: #4a7a5a; letter-spacing: 0.5px; }
+  .badge {
+    display: inline-block;
+    margin-left: 8px;
+    font-size: 10px;
+    letter-spacing: 1px;
+    padding: 2px 7px;
+    border-radius: 3px;
+  }
+  .badge.open { color: #ffd42a; border: 1px solid #6b5a10; }
+  .badge.done { color: #4de355; border: 1px solid #1f5f3a; }
+  .term-empty { color: #4a7a5a; font-size: 13px; padding: 8px 0; }
+  .devmon {
+    max-width: 1000px;
+    margin: 48px auto 0;
+    padding: 0 20px;
+  }
+  .devmon h2 {
+    font-size: 24px;
+    letter-spacing: 4px;
+    color: #ff9a2b;
+    border-bottom: 2px solid #3a2410;
+    padding-bottom: 10px;
+  }
+  .badge-lock {
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: #ff5f6d;
+    border: 1px solid #6b1f24;
+    border-radius: 3px;
+    padding: 2px 8px;
+    vertical-align: middle;
+  }
+  .badge-lock.open { color: #4de355; border-color: #1f5f3a; }
+  .dev-gate { display: flex; gap: 10px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
+  #dev-pass {
+    font-family: inherit; font-size: 13px; color: #ffd9b0;
+    background: #120c05; border: 1px solid #6b4a10; border-radius: 4px; padding: 9px 12px; outline: none; min-width: 220px;
+  }
+  #dev-pass:focus { border-color: #ff9a2b; }
+  .dev-gate button, .dev-actions button {
+    font-family: inherit; font-size: 12px; letter-spacing: 1px; cursor: pointer;
+    border-radius: 4px; padding: 9px 16px; border: 1px solid #6b4a10; background: #1a1206; color: #ff9a2b;
+  }
+  .dev-gate button:hover, .dev-actions button:hover { border-color: #ff9a2b; }
+  #dev-err { font-size: 12px; color: #ff5f6d; }
+  .dev-actions { display: flex; gap: 12px; align-items: center; margin: 18px 0 6px; flex-wrap: wrap; }
+  #dev-source { font-size: 12px; color: #6b7390; }
+  .dev-game {
+    background: #0b0f1f; border: 2px solid #2a2f45; border-radius: 8px; padding: 18px 20px; margin-top: 16px;
+  }
+  .dev-game h3 { margin: 0 0 4px; font-size: 16px; color: #ffd42a; letter-spacing: 1px; }
+  .dev-status { font-size: 11px; color: #4de355; border: 1px solid #1f5f3a; border-radius: 3px; padding: 2px 7px; margin-left: 8px; vertical-align: middle; }
+  .dev-meta { font-size: 12px; color: #6b7390; margin-bottom: 10px; }
+  .dev-hist { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .dev-hist li {
+    font-size: 13px; color: #cfe3d6; line-height: 1.5;
+    background: #08120c; border-left: 3px solid #2ecc40; padding: 7px 10px; border-radius: 0 4px 4px 0;
+  }
+  .dev-game details summary { cursor: pointer; color: #4dd0ff; font-size: 13px; }
+  .dev-game pre {
+    margin: 10px 0 0; max-height: 260px; overflow: auto;
+    background: #05080f; border: 1px solid #1f5f3a; border-radius: 4px; padding: 12px;
+    font-size: 12px; color: #9aa0b0; white-space: pre-wrap; word-break: break-word;
+  }
+#viewer { position: fixed; inset: 0; display: none; flex-direction: column; background: #05060d; z-index: 9998; }
+  #viewer.open { display: flex; }
+  #vbar { display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: #0b0f1f; border-bottom: 2px solid #2a2f45; flex: 0 0 auto; }
+  #vtitle { color: #9aa0b0; font-size: 13px; letter-spacing: 1px; }
+  #vopen { margin-left: auto; color: #6b7390; font-size: 12px; text-decoration: none; }
+  #vopen:hover { color: #2ecc40; }
+  #frame { flex: 1 1 auto; width: 100%; border: none; background: #05060d; }
+  #homeBtn { position: fixed; top: 12px; left: 12px; z-index: 10000; font-family: inherit; font-size: 12px; letter-spacing: 1px; cursor: pointer; background: #2ecc40; color: #05060d; border: none; border-radius: 6px; padding: 9px 14px; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+  #homeBtn:hover { background: #4de355; }
+  .badge-new { display: inline-block; background: #ffd42a; color: #05060d; font-size: 10px; letter-spacing: 1px; padding: 2px 6px; border-radius: 4px; margin-right: 6px; }
+  .badge-ok { display: inline-block; background: #1f7a3a; color: #eaffea; font-size: 11px; letter-spacing: 1px; padding: 2px 8px; border-radius: 10px; }
+  .badge-bad { display: inline-block; background: #7a1f1f; color: #ffecec; font-size: 11px; letter-spacing: 1px; padding: 2px 8px; border-radius: 10px; }
+  #bugs-list li .now { color: #ff9a9a; font-size: 11px; max-width: 46%; text-align: right; }
+  #daily-feature .card { border-color: #ffd42a; box-shadow: 0 0 26px rgba(255,212,42,.18); }
+  #daily-feature .card:hover { border-color: #ffe680; }
+  #daily-past h2 { margin-top: 26px; }
+</style>
+</head>
+<body>
+<script>
+(function(){
+  var host = location.hostname, proto = location.protocol;
+  var isFile = proto === "file:";
+  var isLocal = /^(127\.0\.0\.1|localhost)$/.test(host);
+
+  // --- opened as a plain file: talk to the local server for live data + games ---
+  if(isFile){
+    var BASE = "http://127.0.0.1:8787";
+    window.__HUB_BASE__ = BASE;
+    var _f = window.fetch ? window.fetch.bind(window) : null;
+    if(_f){
+      window.fetch = function(input, init){
+        var u = (typeof input === "string") ? input : (input && input.url) || "";
+        if(u && !/^([a-z][a-z0-9+.-]*:|\/\/)/i.test(u)) u = BASE + "/" + u.replace(/^\/+/, "");
+        return _f(u, init);
+      };
+    }
+    document.addEventListener("click", function(e){
+      var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+      if(!a) return;
+      var h = a.getAttribute("href") || "";
+      if(!h || /^([a-z][a-z0-9+.-]*:|\/\/|#)/i.test(h)) return;
+      a.setAttribute("href", BASE + "/" + h.replace(/^\/+/, ""));
+    }, true);
+    return;
+  }
+
+  // --- hosted on a static host (GitHub Pages): no server APIs ---
+  if(!isLocal){
+    var _f2 = window.fetch ? window.fetch.bind(window) : null;
+    if(_f2){
+      window.fetch = function(input, init){
+        var u = (typeof input === "string") ? input : (input && input.url) || "";
+        if(/\/api\/games(\?|$)/.test(u)) u = "games-index.json";
+        return _f2(u, init);
+      };
+    }
+    function hideServerOnly(){
+      try {
+        Array.prototype.forEach.call(document.querySelectorAll("section.devmon"), function(s){ s.style.display = "none"; });
+        var rf = document.getElementById("req-form");
+        if(rf && rf.closest) { var s2 = rf.closest("section"); if(s2) s2.style.display = "none"; }
+      } catch(e){}
+    }
+    if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", hideServerOnly);
+    else hideServerOnly();
+  }
+})();
+</script>
+<button id="homeBtn" title="go home">&#8962; HOME</button>
+<div id="viewer">
+  <div id="vbar">
+    <span id="vtitle"></span>
+    <a id="vopen" href="#" target="_blank" rel="noopener">open in new tab &#8599;</a>
+  </div>
+  <iframe id="frame" allow="autoplay; microphone; fullscreen; clipboard-read; clipboard-write"></iframe>
+</div>
+<header>
+  <h1>MY GAMES</h1>
+  <p>A little collection of things I built. &mdash; <a href="hub.html" style="color:#2ecc40">single-file version &#8599;</a></p>
+</header>
+
+<section class="terminal" id="daily-section" style="display:none">
+  <h2>DAILY DROP</h2>
+  <div id="daily-feature"></div>
+  <div id="daily-past"></div>
+</section>
+
+<section class="terminal" id="bugs-section" style="display:none">
+  <h2>SITE HEALTH <span id="bugs-badge"></span></h2>
+  <div class="meta" id="bugs-summary"></div>
+  <ul id="bugs-list" class="term-list"></ul>
+</section>
+
+<main>
+  <div class="grid" id="games-grid">
+<a class="card" href="gloop-escape.html">
+      <div class="thumb"><svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="lgGloop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4de355"/><stop offset="1" stop-color="#1d9c2c"/></linearGradient></defs><path d="M48 12C29 12 17 33 17 54c0 19 14 30 31 30s31-11 31-30C79 33 67 12 48 12Z" fill="url(#lgGloop)"/><ellipse cx="36" cy="52" rx="7" ry="9" fill="#05060d"/><ellipse cx="60" cy="52" rx="7" ry="9" fill="#05060d"/><circle cx="38" cy="49" r="2.4" fill="#fff"/><circle cx="62" cy="49" r="2.4" fill="#fff"/><ellipse cx="38" cy="28" rx="8" ry="4" fill="rgba(255,255,255,0.45)"/></svg></div>
+      <div class="card-body">
+        <h2>Gloop's Great Escape</h2>
+        <p>Help Gloop the slime escape the enemy horde. Collect coins, dodge hazards, and battle bosses across a pile of pixel worlds.</p>
+        <span class="play">PLAY</span>
+      </div>
+    </a>
+    <a class="card" href="bot-arena.html">
+      <div class="thumb"><svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="lgBot" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a3444"/><stop offset="1" stop-color="#141b26"/></linearGradient></defs><rect x="11" y="43" width="9" height="22" rx="4" fill="#2a3444"/><rect x="76" y="43" width="9" height="22" rx="4" fill="#2a3444"/><rect x="20" y="24" width="56" height="50" rx="11" fill="url(#lgBot)" stroke="#4dd0ff" stroke-width="2"/><rect x="30" y="39" width="36" height="11" rx="3" fill="#ff3a2b"/><rect x="30" y="39" width="12" height="11" rx="3" fill="#ff7a6a"/><circle cx="36" cy="62" r="4" fill="#4dd0ff"/><circle cx="48" cy="62" r="4" fill="#4dd0ff"/><circle cx="60" cy="62" r="4" fill="#4dd0ff"/><rect x="44" y="12" width="8" height="12" fill="#4dd0ff"/><circle cx="48" cy="11" r="5" fill="#4dd0ff"/></svg></div>
+      <div class="card-body">
+        <h2>Bot Arena</h2>
+        <p>Fighting bots with a real ML layer: each bot has a neural network policy trained by reinforcement + neuroevolution, and they hack their own code, morph, form alliances, and die permanently.</p>
+        <span class="play">PLAY</span>
+      </div>
+    </a>
+  </div>
+</main>
+
+<section class="terminal">
+  <h2>UTILITIES</h2>
+  <div class="grid">
+    <a class="card" href="browser.html">
+      <div class="thumb"><svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="lgBr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4dd0ff"/><stop offset="1" stop-color="#1f6fa8"/></linearGradient></defs><circle cx="46" cy="46" r="32" fill="url(#lgBr)"/><ellipse cx="46" cy="46" rx="13" ry="32" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2"/><line x1="14" y1="46" x2="78" y2="46" stroke="rgba(255,255,255,0.5)" stroke-width="2"/><line x1="20" y1="30" x2="72" y2="30" stroke="rgba(255,255,255,0.32)" stroke-width="2"/><line x1="20" y1="62" x2="72" y2="62" stroke="rgba(255,255,255,0.32)" stroke-width="2"/><path d="M66 58l18 6v14c0 10-8 16-18 19-10-3-18-9-18-19V64Z" fill="#2ecc40" stroke="#0a2a12" stroke-width="2"/><path d="M60 76l5 5 11-12" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="card-body">
+        <h2>Browser</h2>
+        <p>A tabbed browser that loads sites in an embedded frame, with an optional local ad-block proxy. Sites that refuse embedding open in a real browser tab.</p>
+        <span class="play">OPEN</span>
+      </div>
+    </a>
+    <a class="card" href="youtube.html">
+      <div class="thumb"><svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="10" y="26" width="76" height="48" rx="15" fill="#ff3a2b"/><rect x="10" y="26" width="76" height="16" rx="15" fill="#ff6a5a"/><path d="M40 38l22 11-22 11Z" fill="#fff"/></svg></div>
+      <div class="card-body">
+        <h2>YouTube Player</h2>
+        <p>Watch YouTube videos and playlists right here with the official embed. Paste a link or ID, build a queue, and keep a recent list. Works from the file, no server needed.</p>
+        <span class="play">WATCH</span>
+      </div>
+    </a>
+    <a class="card" href="youtubers.html">
+      <div class="thumb"><svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="8" y="22" width="80" height="46" rx="15" fill="#ff3a2b"/><path d="M36 33l20 10-20 10Z" fill="#fff"/><circle cx="30" cy="78" r="7" fill="#ff6a5a"/><circle cx="48" cy="78" r="7" fill="#ff3a2b"/><circle cx="66" cy="78" r="7" fill="#ff6a5a"/></svg></div>
+      <div class="card-body">
+        <h2>YouTubers</h2>
+        <p>Pick a YouTuber, then pick a video. Add channels by @handle or URL and browse their latest uploads. Needs the local server and a network that allows YouTube.</p>
+        <span class="play">OPEN</span>
+      </div>
+    </a>
+    <a class="card" href="billwurtz.html">
+      <div class="thumb"><svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="6" y="6" width="84" height="84" rx="20" fill="#0d1a08" stroke="#8fe34d" stroke-width="2"/><path d="M24 26h48a8 8 0 0 1 8 8v26a8 8 0 0 1-8 8H46l-14 12V68h-8a8 8 0 0 1-8-8V34a8 8 0 0 1 8-8z" fill="#8fe34d" fill-opacity="0.18" stroke="#8fe34d" stroke-width="3" stroke-linejoin="round"/><circle cx="40" cy="52" r="6" fill="#8fe34d"/><rect x="44" y="30" width="4" height="22" fill="#8fe34d"/><path d="M44 30q14 2 16 10" fill="none" stroke="#8fe34d" stroke-width="4" stroke-linecap="round"/></svg></div>
+      <div class="card-body">
+        <h2>Bill Wurtz Sentence Machine</h2>
+        <p>Type a sentence and hear it stitched together from clips of bill wurtz songs whose titles match your words.</p>
+        <span class="play">OPEN</span>
+      </div>
+    </a>
+    <a class="card" href="billwurtz-portal.html">
+      <div class="thumb"><svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="6" y="6" width="84" height="84" rx="20" fill="#0b1030" stroke="#7cc4ff" stroke-width="2"/><circle cx="48" cy="48" r="24" fill="none" stroke="#7cc4ff" stroke-width="3"/><ellipse cx="48" cy="48" rx="10" ry="24" fill="none" stroke="#7cc4ff" stroke-width="2" opacity="0.7"/><path d="M24 48h48" stroke="#7cc4ff" stroke-width="2" opacity="0.7"/><circle cx="48" cy="40" r="5" fill="#ffd42a"/><rect x="51" y="24" width="3" height="18" fill="#ffd42a"/><path d="M51 24q11 2 13 8" fill="none" stroke="#ffd42a" stroke-width="3" stroke-linecap="round"/></svg></div>
+      <div class="card-body">
+        <h2>Bill Wurtz Portal</h2>
+        <p>A local launcher for billwurtz.com &mdash; every section plus his whole song list in one searchable, playable page. Works as a plain file, no server needed.</p>
+        <span class="play">OPEN</span>
+      </div>
+    </a>
+  </div>
+</section>
+
+<section class="terminal" id="experiments-section" style="display:none">
+  <h2>EXPERIMENTS AND MINIGAMES</h2>
+  <div class="grid" id="experiments-grid"></div>
+</section>
+
+<section class="terminal" id="uploads-section" style="display:none">
+  <h2>UPLOADED GAMES</h2>
+  <p class="term-sub">Games uploaded by the dev.</p>
+  <div class="grid" id="uploads-grid"></div>
+</section>
+
+<section class="terminal">
+  <h2>REQUEST TERMINAL</h2>
+  <p class="term-sub">Suggest what to add to the games. The most upvoted requests get built.</p>
+  <div class="term-window">
+    <div class="term-bar">
+      <span class="term-dot" style="background:#ff5f56"></span>
+      <span class="term-dot" style="background:#ffbd2e"></span>
+      <span class="term-dot" style="background:#27c93f"></span>
+      <span class="term-title">gloop://requests</span>
+      <span id="term-mode" class="term-mode">local</span>
+    </div>
+    <div class="term-body">
+      <form id="req-form">
+        <div class="term-row">
+          <label>GAME
+            <select id="req-game">
+              <option value="Gloop's Great Escape">Gloop's Great Escape</option>
+              <option value="Bot Arena">Bot Arena</option>
+              <option value="Other / new game">Other / new game</option>
+            </select>
+          </label>
+          <label>NAME (optional)
+            <input id="req-name" maxlength="24" placeholder="anon" />
+          </label>
+        </div>
+        <textarea id="req-text" maxlength="240" rows="3" placeholder="> describe what to add..." required></textarea>
+        <div class="term-actions">
+          <button type="submit">SUBMIT REQUEST</button>
+          <button type="button" id="req-export">EXPORT JSON</button>
+          <span id="req-msg"></span>
+        </div>
+      </form>
+      <div class="term-list-head">
+        <span>OPEN REQUESTS</span><span id="req-count"></span>
+      </div>
+      <ul id="req-list" class="term-list"></ul>
+    </div>
+  </div>
+</section>
+
+<section class="bio">
+  <h2>ABOUT ME</h2>
+  <div class="bio-card">
+    <div class="avatar"></div>
+    <div class="bio-text">
+      <p>Hey, I'm Pranav. I like building small games, tools, and experiments — usually right in the browser with plain HTML, CSS, and JavaScript. This page is my little shelf of finished projects.</p>
+      <p>Gloop's Great Escape started as a simple slime platformer and grew into a full game with bosses, power-ups, and hundreds of procedurally generated levels.</p>
+      <ul class="facts">
+        <li>Game dev</li>
+        <li>JavaScript</li>
+        <li>Pixel art</li>
+        <li>Side projects</li>
+      </ul>
+      <div class="links">
+        <a href="mailto:you@example.com">Email</a>
+        <a href="https://github.com/" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="devmon">
+  <h2>DEV MONITOR <span id="dev-lock-badge" class="badge-lock">LOCKED</span></h2>
+  <p class="term-sub">Every game's update history and what each update actually did. Password required.</p>
+  <div class="dev-gate" id="dev-gate">
+    <input id="dev-pass" type="password" placeholder="dev password" autocomplete="off" />
+    <button id="dev-unlock">UNLOCK</button>
+    <span id="dev-err"></span>
+  </div>
+  <div id="dev-panel" style="display:none">
+    <div class="dev-actions">
+      <button id="dev-refresh">REFRESH</button>
+      <button id="dev-lock">LOCK</button>
+      <span id="dev-source"></span>
+    </div>
+    <div id="dev-games"></div>
+    <h3 style="color:#ff9a2b;font-size:14px;letter-spacing:2px;margin:24px 0 8px;">UPLOAD A GAME</h3>
+    <p class="term-sub" style="margin:0 0 10px;">Pick a self-contained <b>.html</b> game file. It's saved on your local server and added to the grid above.</p>
+    <div class="dev-actions">
+      <input id="gameName" type="text" placeholder="game name (optional)" style="font-family:inherit;font-size:13px;color:#c8f0d2;background:#08120c;border:1px solid #1f5f3a;border-radius:4px;padding:9px 12px;outline:none;min-width:200px" />
+      <input id="gameFile" type="file" accept=".html,text/html" style="color:#cfe3d6;font-family:inherit;font-size:12px" />
+      <button id="uploadGame">UPLOAD GAME</button>
+      <span id="uploadMsg" style="color:#4de355"></span>
+    </div>
+    <div id="dev-uploads"></div>
+  </div>
+</section>
+
+<footer>More games coming soon.</footer>
+
+<script>
+(function () {
+  "use strict";
+  var API = "/api/requests";
+  var LS_KEY = "mg_requests";
+  var VOTE_KEY = "mg_voted";
+  var server = false;
+  var requests = [];
+
+  function $(id) { return document.getElementById(id); }
+  function loadLocal() { try { return JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch (e) { return []; } }
+  function saveLocal(a) { localStorage.setItem(LS_KEY, JSON.stringify(a)); }
+  function voted() { try { return new Set(JSON.parse(localStorage.getItem(VOTE_KEY) || "[]")); } catch (e) { return new Set(); } }
+  function saveVoted(s) { localStorage.setItem(VOTE_KEY, JSON.stringify(Array.from(s))); }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function newId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  function setMode(mode) {
+    $("term-mode").textContent = mode === "server" ? "server" : "local (this browser only)";
+  }
+
+  function sorted() {
+    return requests.slice().sort(function (a, b) {
+      var av = a.votes || 0, bv = b.votes || 0;
+      if (av !== bv) return bv - av;
+      return (b.ts || 0) - (a.ts || 0);
+    });
+  }
+
+  function render() {
+    var list = $("req-list");
+    var open = requests.filter(function (r) { return r.status !== "done"; });
+    $("req-count").textContent = requests.length + " total \u00B7 " + open.length + " open";
+    if (!requests.length) {
+      list.innerHTML = '<li class="term-empty">&gt; no requests yet. be the first.</li>';
+      return;
+    }
+    var votedIds = voted();
+    list.innerHTML = sorted().map(function (r) {
+      var isDone = r.status === "done";
+      var hasVoted = votedIds.has(r.id);
+      var when = r.ts ? new Date(r.ts).toLocaleDateString() : "";
+      return '<li class="req' + (isDone ? " done" : "") + '">' +
+        '<button class="vote" data-id="' + esc(r.id) + '"' + (hasVoted || isDone ? " disabled" : "") + ' title="Upvote">' +
+          '\u25B2<b>' + (r.votes || 0) + '</b>' +
+        '</button>' +
+        '<div class="req-main">' +
+          '<p class="req-text">' + esc(r.text) + '</p>' +
+          '<div class="req-meta">' + esc(r.game || "Gloop's Great Escape") +
+            ' \u00B7 by ' + esc(r.name || "anon") +
+            (when ? " \u00B7 " + when : "") +
+            '<span class="badge ' + (isDone ? "done" : "open") + '">' + (isDone ? "IMPLEMENTED" : "OPEN") + '</span>' +
+          '</div>' +
+        '</div>' +
+      '</li>';
+    }).join("");
+    Array.prototype.forEach.call(list.querySelectorAll(".vote"), function (btn) {
+      btn.addEventListener("click", function () { vote(btn.getAttribute("data-id")); });
+    });
+  }
+
+  function flash(msg) {
+    $("req-msg").textContent = msg;
+    setTimeout(function () { $("req-msg").textContent = ""; }, 2500);
+  }
+
+  function submit(e) {
+    e.preventDefault();
+    var text = $("req-text").value.trim();
+    if (!text) return;
+    var entry = {
+      id: newId(),
+      game: $("req-game").value,
+      name: $("req-name").value.trim().slice(0, 24) || "anon",
+      text: text.slice(0, 240),
+      votes: 0,
+      status: "open",
+      ts: Date.now()
+    };
+    if (server) {
+      fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(entry) })
+        .then(function (r) { if (!r.ok) throw new Error("bad response"); return r.json(); })
+        .then(function (saved) { requests.push(saved || entry); render(); flash("request logged."); })
+        .catch(function () { fallbackSave(entry); });
+    } else {
+      fallbackSave(entry);
+    }
+    $("req-text").value = "";
+  }
+
+  function fallbackSave(entry) {
+    requests.push(entry);
+    saveLocal(requests);
+    render();
+    flash("request logged (saved locally).");
+  }
+
+  function vote(id) {
+    var votedIds = voted();
+    if (votedIds.has(id)) return;
+    votedIds.add(id);
+    saveVoted(votedIds);
+    var local = requests.filter(function (r) { return r.id === id; })[0];
+    if (local) local.votes = (local.votes || 0) + 1;
+    render();
+    if (server) {
+      fetch(API + "/vote", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: id }) })
+        .catch(function () {});
+    } else {
+      saveLocal(requests);
+    }
+  }
+
+  function exportJson() {
+    var blob = new Blob([JSON.stringify(requests, null, 2)], { type: "application/json" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "requests.json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  }
+
+  $("req-form").addEventListener("submit", submit);
+  $("req-export").addEventListener("click", exportJson);
+
+  // Try the local server first; fall back to this browser's storage.
+  fetch(API)
+    .then(function (r) { if (!r.ok) throw new Error("no server"); return r.json(); })
+    .then(function (data) { server = true; requests = Array.isArray(data) ? data : []; setMode("server"); render(); })
+    .catch(function () {
+      server = false; requests = loadLocal(); setMode("local");
+      // Merge any locally submitted requests into a first render.
+      render();
+    });
+})();
+</script>
+
+<script>
+(function () {
+  "use strict";
+  // Light gate only — this is obfuscation, not real security (the site is static).
+  var DEV_HASH = "6b3779dd"; // FNV-1a of the dev password
+  var KEY = "dev_unlocked";
+
+  function $(id) { return document.getElementById(id); }
+  function fnv(s) { var h = 2166136261 >>> 0; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return ("0000000" + h.toString(16)).slice(-8); }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+
+  // Offline snapshot (used when the local server isn't running).
+  var FALLBACK = {
+    offline: true,
+    games: [
+      { id: "gloop", name: "Gloop's Great Escape", installed: true, backups: 0, lastLogFile: "", lastLog: "",
+        history: [
+          "2026-09-18 | (baseline) | removed saw-blade hazard tiles",
+          "2026-09-18 | The Copper Update | added COPPER Conduit power-up tile (id 35) with zapping electric aura, pickup sfx/popup, animated art, HUD bar"
+        ] },
+      { id: "bot-arena", name: "Bot Arena", installed: true, backups: 0, lastLogFile: "", lastLog: "",
+        history: [
+          "2026-09-18 | (baseline) | Bot Arena created: evolving bots, sandboxed AI brains/spells, morph forms, WARDEN, OVERCLOCK",
+          "2026-09-18 | Homing Spell Primitive | bots can code spell.homing(...) for steering projectiles + SEEKER SWARM seed"
+        ] }
+    ]
+  };
+
+  function setLocked(locked) {
+    $("dev-gate").style.display = locked ? "flex" : "none";
+    $("dev-panel").style.display = locked ? "none" : "block";
+    var badge = $("dev-lock-badge");
+    badge.textContent = locked ? "LOCKED" : "UNLOCKED";
+    badge.className = "badge-lock" + (locked ? "" : " open");
+  }
+
+  function renderGames(data) {
+    var host = $("dev-games");
+    host.innerHTML = "";
+    (data.games || []).forEach(function (g) {
+      var el = document.createElement("div");
+      el.className = "dev-game";
+      var hist = (g.history || []).slice().reverse().map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("");
+      el.innerHTML =
+        "<h3>" + esc(g.name) + " <span class=\"dev-status\">" + (g.installed && g.scheduled ? "UPDATER ACTIVE" : (g.installed ? "installed, not scheduled" : "no updater")) + "</span></h3>" +
+        "<div class=\"dev-meta\">backups: " + (g.backups || 0) + " &middot; latest log: " + esc(g.lastLogFile || "none") + "</div>" +
+        "<ul class=\"dev-hist\">" + (hist || "<li>no updates yet</li>") + "</ul>" +
+        "<details><summary>latest update log (what it did)</summary><pre>" + esc(g.lastLog || "(no log yet)") + "</pre></details>";
+      host.appendChild(el);
+    });
+  }
+
+  function loadUpdates() {
+    fetch("/api/updates").then(function (r) { if (!r.ok) throw new Error("bad response"); return r.json(); })
+      .then(function (d) { $("dev-source").textContent = "live (local server)"; renderGames(d); })
+      .catch(function () { $("dev-source").textContent = "offline snapshot \u2014 run: node my-games-server.js for live data"; renderGames(FALLBACK); });
+  }
+
+  function unlock() {
+    if (fnv($("dev-pass").value) === DEV_HASH) {
+      sessionStorage.setItem(KEY, "1");
+      $("dev-err").textContent = "";
+      $("dev-pass").value = "";
+      setLocked(false);
+      loadUpdates();
+      loadGames();
+    } else {
+      $("dev-err").textContent = "wrong password";
+    }
+  }
+
+  $("dev-unlock").addEventListener("click", unlock);
+  $("dev-pass").addEventListener("keydown", function (e) { if (e.key === "Enter") unlock(); });
+  $("dev-refresh").addEventListener("click", function () { loadUpdates(); loadGames(); });
+  $("dev-lock").addEventListener("click", function () { sessionStorage.removeItem(KEY); setLocked(true); });
+
+  /* ---------- dev game uploads ---------- */
+  /* Unique, deterministic logo per game, generated from its name. */
+  function hashStr(s) { var h = 2166136261 >>> 0; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; }
+  function rng(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; var t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function gameLogo(name) {
+    name = String(name || "game");
+    var seed = hashStr(name), r = rng(seed);
+    var h = Math.floor(r() * 360), h2 = (h + 60 + Math.floor(r() * 180)) % 360;
+    var C = { body: "hsl(" + h2 + ",80%,58%)", bodyD: "hsl(" + h2 + ",80%,40%)", bodyL: "hsl(" + h2 + ",92%,74%)", acc: "hsl(" + ((h2 + 180) % 360) + ",85%,62%)", ink: "#0b0f18", white: "#fff" };
+    var id = "lg" + seed.toString(36);
+    var inner = emblemFor(name.toLowerCase(), C);
+    var bgA = "hsl(" + h + ",60%,20%)", bgB = "hsl(" + h + ",60%,9%)";
+    return '<svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="' + id + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + bgA + '"/><stop offset="1" stop-color="' + bgB + '"/></linearGradient></defs><rect x="6" y="6" width="84" height="84" rx="20" fill="url(#' + id + ')" stroke="' + C.acc + '" stroke-width="2"/>' + inner + "</svg>";
+  }
+  // Pick an emblem that matches the game's subject (keyword based).
+  function emblemFor(key, c) {
+    var E = [
+      [/button|press/, function (c) { return '<rect x="18" y="32" width="60" height="32" rx="16" fill="' + c.body + '"/><rect x="18" y="32" width="60" height="13" rx="6" fill="' + c.bodyL + '"/><text x="48" y="54" font-family="system-ui,sans-serif" font-size="13" font-weight="800" fill="' + c.ink + '" text-anchor="middle">PRESS</text>'; }],
+      [/math|number|calc|count|equation|digit|algebra|arithmetic/, function (c) { return '<text x="48" y="64" font-family="Georgia,serif" font-size="46" fill="' + c.body + '" text-anchor="middle">\u03C0</text><text x="16" y="28" font-family="system-ui" font-size="15" fill="' + c.acc + '">+</text><text x="72" y="28" font-family="system-ui" font-size="15" fill="' + c.acc + '">\u00D7</text><text x="16" y="86" font-family="system-ui" font-size="15" fill="' + c.acc + '">=</text><text x="72" y="86" font-family="system-ui" font-size="15" fill="' + c.acc + '">\u221A</text>'; }],
+      [/rocket|launch|astronaut/, function (c) { return '<path d="M48 12c11 9 15 23 15 35l-6 13H39l-6-13c0-12 4-26 15-35Z" fill="' + c.body + '"/><circle cx="48" cy="40" r="6" fill="' + c.ink + '"/><path d="M39 60l-11 15 13-4Z" fill="' + c.bodyD + '"/><path d="M57 60l11 15-13-4Z" fill="' + c.bodyD + '"/><path d="M43 72h10l-5 15Z" fill="' + c.acc + '"/>'; }],
+      [/star|constellation|zodiac|horoscope|astro/, function (c) { return '<path d="M48 10l9 24 25 2-19 16 6 25-21-13-21 13 6-25-19-16 25-2Z" fill="' + c.body + '"/><circle cx="48" cy="48" r="5" fill="' + c.acc + '"/>'; }],
+      [/bubble|foam|pop/, function (c) { return '<circle cx="36" cy="56" r="19" fill="' + c.body + '"/><circle cx="61" cy="40" r="13" fill="' + c.bodyL + '"/><circle cx="66" cy="64" r="9" fill="' + c.acc + '"/><circle cx="30" cy="50" r="4" fill="' + c.white + '" opacity="0.7"/>'; }],
+      [/cookie|clicker|bakery|biscuit/, function (c) { return '<circle cx="48" cy="50" r="26" fill="' + c.body + '"/><circle cx="38" cy="42" r="4" fill="' + c.ink + '"/><circle cx="57" cy="45" r="4" fill="' + c.ink + '"/><circle cx="44" cy="60" r="4" fill="' + c.ink + '"/><circle cx="61" cy="60" r="3" fill="' + c.ink + '"/><circle cx="52" cy="33" r="3" fill="' + c.ink + '"/>'; }],
+      [/run|runner|race|dash|sprint|jump/, function (c) { return '<circle cx="54" cy="24" r="8" fill="' + c.body + '"/><path d="M54 33l-11 14 13 9-5 19" stroke="' + c.body + '" stroke-width="8" fill="none" stroke-linecap="round"/><path d="M43 48l-17 5" stroke="' + c.body + '" stroke-width="8" stroke-linecap="round"/><path d="M56 56l17 11" stroke="' + c.body + '" stroke-width="8" stroke-linecap="round"/><path d="M20 34h12M15 45h10" stroke="' + c.acc + '" stroke-width="3" stroke-linecap="round"/>'; }],
+      [/ghost|spooky|haunt|shadow/, function (c) { return '<path d="M28 48a20 20 0 0 1 40 0v30l-7-6-6 6-7-6-7 6-6-6-7 6Z" fill="' + c.body + '"/><circle cx="41" cy="46" r="5" fill="' + c.ink + '"/><circle cx="55" cy="46" r="5" fill="' + c.ink + '"/>'; }],
+      [/robot|bot|machine|\bai\b|android/, function (c) { return '<rect x="14" y="42" width="8" height="18" rx="3" fill="' + c.bodyD + '"/><rect x="74" y="42" width="8" height="18" rx="3" fill="' + c.bodyD + '"/><rect x="22" y="28" width="52" height="44" rx="10" fill="' + c.body + '"/><rect x="30" y="42" width="36" height="12" rx="4" fill="' + c.ink + '"/><rect x="32" y="44" width="12" height="8" rx="2" fill="' + c.acc + '"/><rect x="44" y="12" width="6" height="14" fill="' + c.bodyD + '"/><circle cx="47" cy="11" r="5" fill="' + c.acc + '"/>'; }],
+      [/planet|orbit|galaxy|world|space/, function (c) { return '<circle cx="48" cy="48" r="26" fill="' + c.body + '"/><ellipse cx="48" cy="48" rx="40" ry="12" fill="none" stroke="' + c.acc + '" stroke-width="4" transform="rotate(-18 48 48)"/><circle cx="40" cy="40" r="5" fill="' + c.bodyD + '"/><circle cx="56" cy="54" r="4" fill="' + c.bodyD + '"/>'; }],
+      [/heart|love/, function (c) { return '<path d="M48 78C20 58 20 34 34 28c8-3 12 2 14 6 2-4 6-9 14-6 14 6 14 30-14 50Z" fill="' + c.body + '"/>'; }],
+      [/gem|diamond|crystal|jewel|treasure/, function (c) { return '<path d="M48 16 L74 40 L48 82 L22 40 Z" fill="' + c.body + '"/><path d="M48 16 L60 40 L48 82 L36 40 Z" fill="' + c.bodyL + '" opacity="0.55"/><path d="M22 40 H74" stroke="' + c.bodyD + '" stroke-width="2"/>'; }],
+      [/clock|time|hour|timer|watch/, function (c) { return '<circle cx="48" cy="48" r="28" fill="' + c.body + '"/><circle cx="48" cy="48" r="22" fill="' + c.bodyL + '" opacity="0.4"/><path d="M48 30v20l14 8" stroke="' + c.ink + '" stroke-width="5" fill="none" stroke-linecap="round"/>'; }],
+      [/ball|bounce|physics|gravity|sandbox/, function (c) { return '<circle cx="48" cy="48" r="26" fill="' + c.body + '"/><circle cx="40" cy="40" r="7" fill="' + c.bodyL + '" opacity="0.7"/><ellipse cx="48" cy="80" rx="20" ry="4" fill="' + c.ink + '" opacity="0.3"/>'; }],
+      [/snow|ice|winter|flake|cold/, function (c) { var s = ""; for (var i = 0; i < 6; i++) s += '<rect x="46" y="12" width="4" height="34" rx="2" fill="' + c.body + '" transform="rotate(' + (i * 60) + ' 48 48)"/>'; return s + '<circle cx="48" cy="48" r="6" fill="' + c.acc + '"/>'; }],
+      [/fire|flame|burn|lava|volcano/, function (c) { return '<path d="M48 12c8 16 22 20 22 38 0 16-10 26-22 26S26 66 26 50c0-10 6-16 10-22 2 6 6 8 6 8 0-8 2-16 6-24Z" fill="' + c.body + '"/><path d="M48 40c4 8 10 10 10 18 0 8-5 12-10 12s-10-4-10-12c0-6 6-10 10-18Z" fill="' + c.acc + '"/>'; }],
+      [/stock|money|market|trade|dollar|invest|econom|rich|spend|cash/, function (c) { return '<rect x="22" y="52" width="10" height="22" rx="2" fill="' + c.bodyD + '"/><rect x="38" y="40" width="10" height="34" rx="2" fill="' + c.body + '"/><rect x="54" y="28" width="10" height="46" rx="2" fill="' + c.bodyL + '"/><path d="M20 46l16-12 14 6 22-20" stroke="' + c.acc + '" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M66 18h10v10" fill="none" stroke="' + c.acc + '" stroke-width="3"/>'; }],
+      [/password|key|lock|secret|crypt/, function (c) { return '<circle cx="34" cy="48" r="14" fill="none" stroke="' + c.body + '" stroke-width="7"/><rect x="46" y="44" width="32" height="8" rx="3" fill="' + c.body + '"/><rect x="66" y="52" width="6" height="10" fill="' + c.body + '"/><rect x="54" y="52" width="6" height="8" fill="' + c.body + '"/>'; }],
+      [/snake|worm|serpent/, function (c) { return '<path d="M24 60c0-12 16-12 24-12s24 0 24-12-16-12-24-12-24 0-24-8" stroke="' + c.body + '" stroke-width="10" fill="none" stroke-linecap="round"/><circle cx="28" cy="16" r="4" fill="' + c.acc + '"/>'; }],
+      [/tower|defen[cs]e|castle|block|stack|tetris/, function (c) { return '<rect x="36" y="30" width="24" height="44" rx="4" fill="' + c.body + '"/><rect x="30" y="20" width="36" height="12" rx="3" fill="' + c.bodyD + '"/><rect x="26" y="74" width="44" height="8" rx="3" fill="' + c.bodyD + '"/><rect x="42" y="40" width="12" height="14" rx="2" fill="' + c.acc + '"/>'; }],
+      [/music|rhythm|beat|sound|note|melody|song/, function (c) { return '<circle cx="36" cy="66" r="9" fill="' + c.body + '"/><circle cx="62" cy="58" r="9" fill="' + c.body + '"/><rect x="43" y="24" width="5" height="44" fill="' + c.body + '"/><rect x="69" y="16" width="5" height="44" fill="' + c.body + '"/><rect x="43" y="24" width="31" height="8" fill="' + c.body + '"/>'; }],
+      [/plant|grow|tree|garden|flower|nature/, function (c) { return '<path d="M48 84V42" stroke="' + c.bodyD + '" stroke-width="6" stroke-linecap="round"/><path d="M48 48c-18 0-24-10-24-22 13 0 24 8 24 22Z" fill="' + c.body + '"/><path d="M48 42c18 0 24-10 24-22-13 0-24 8-24 22Z" fill="' + c.bodyL + '"/>'; }],
+      [/city|build|town|skyline|urban/, function (c) { return '<rect x="16" y="46" width="16" height="32" rx="2" fill="' + c.bodyD + '"/><rect x="38" y="26" width="20" height="52" rx="2" fill="' + c.body + '"/><rect x="64" y="52" width="16" height="26" rx="2" fill="' + c.bodyL + '"/><rect x="43" y="32" width="4" height="4" fill="' + c.ink + '"/><rect x="51" y="32" width="4" height="4" fill="' + c.ink + '"/><rect x="43" y="42" width="4" height="4" fill="' + c.ink + '"/>'; }],
+      [/petri|bacteria|cell|microbe|ecosystem|food.?chain/, function (c) { return '<circle cx="36" cy="46" r="13" fill="' + c.body + '"/><circle cx="60" cy="56" r="10" fill="' + c.bodyL + '"/><circle cx="58" cy="34" r="7" fill="' + c.acc + '"/><circle cx="32" cy="42" r="3" fill="' + c.ink + '" opacity="0.4"/>'; }],
+      [/balloon|inflate/, function (c) { return '<ellipse cx="48" cy="40" rx="20" ry="24" fill="' + c.body + '"/><path d="M48 64l-5 8h10Z" fill="' + c.bodyD + '"/><path d="M48 72c6 6-6 8 0 14" stroke="' + c.acc + '" stroke-width="2" fill="none"/>'; }],
+      [/pizza|food|eat|hungry|cook/, function (c) { return '<path d="M48 16L80 76H16Z" fill="' + c.body + '"/><path d="M48 16L64 46H32Z" fill="' + c.bodyL + '" opacity="0.5"/><circle cx="44" cy="54" r="4" fill="' + c.acc + '"/><circle cx="56" cy="62" r="4" fill="' + c.acc + '"/><circle cx="40" cy="68" r="3" fill="' + c.acc + '"/>'; }],
+      [/paint|pixel|art|draw|color/, function (c) { return '<path d="M48 16a32 32 0 1 0 0 64c6 0 8-5 5-9-3-4 0-9 6-9h7a14 14 0 0 0 14-14c0-18-16-32-32-32Z" fill="' + c.body + '"/><circle cx="34" cy="40" r="5" fill="' + c.acc + '"/><circle cx="48" cy="32" r="5" fill="' + c.bodyL + '"/><circle cx="62" cy="40" r="5" fill="' + c.acc + '"/>'; }],
+      [/maze|labyrinth|puzzle/, function (c) { return '<rect x="16" y="16" width="64" height="64" rx="6" fill="none" stroke="' + c.body + '" stroke-width="6"/><path d="M28 16v30h20V34h18M28 70h28V58" stroke="' + c.bodyL + '" stroke-width="6" fill="none"/><circle cx="72" cy="72" r="5" fill="' + c.acc + '"/>'; }],
+      [/slider|size|compare|scale|measure/, function (c) { return '<rect x="14" y="46" width="68" height="6" rx="3" fill="' + c.bodyD + '"/><circle cx="40" cy="49" r="10" fill="' + c.body + '"/><circle cx="40" cy="49" r="4" fill="' + c.bodyL + '"/>'; }],
+      [/word|language|letter|alphabet|type|font|invent/, function (c) { return '<text x="48" y="64" font-family="Georgia,serif" font-size="46" font-weight="700" fill="' + c.body + '" text-anchor="middle">Aa</text>'; }],
+      [/sword|knight|fight|battle|arena|combat|warrior/, function (c) { return '<path d="M48 12l6 8v40H42V20Z" fill="' + c.bodyL + '"/><rect x="30" y="58" width="36" height="8" rx="3" fill="' + c.bodyD + '"/><rect x="44" y="66" width="8" height="18" rx="3" fill="' + c.body + '"/>'; }],
+      [/shield|guard|protect|defend/, function (c) { return '<path d="M48 14l28 8v20c0 18-12 30-28 36-16-6-28-18-28-36V22Z" fill="' + c.body + '"/><path d="M36 48l9 9 18-20" fill="none" stroke="' + c.acc + '" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>'; }]
+    ];
+    for (var i = 0; i < E.length; i++) if (E[i][0].test(key)) return E[i][1](c);
+    // fallback: initial badge
+    var ch = (key.match(/[a-z0-9]/) || ["?"])[0].toUpperCase();
+    return '<text x="48" y="66" font-family="system-ui,sans-serif" font-size="50" font-weight="900" fill="' + c.body + '" text-anchor="middle">' + ch + '</text>';
+  }
+  function gameCard(g, isForge) {
+    var title = esc(g.title || g.name.replace(/\.html?$/i, ""));
+    var desc = g.description ? esc(g.description) : (Math.round(g.size / 1024) + " KB &middot; uploaded " + new Date(g.mtime).toLocaleDateString());
+    var a = document.createElement("a");
+    a.className = "card dyn-card"; a.href = g.url; a.target = "_blank";
+    // Experiments/minigames show title only; uploads keep their info line.
+    var body = '<div class="card-body"><h2>' + title + '</h2>' + (isForge ? '' : '<p>' + desc + '</p>') + '<span class="play">PLAY</span></div>';
+    a.innerHTML = '<div class="thumb">' + gameLogo(title) + '</div>' + body;
+    return a;
+  }
+  function renderGameGrid(games) {
+    var expGrid = document.getElementById("experiments-grid");
+    var expSec = document.getElementById("experiments-section");
+    var upGrid = document.getElementById("uploads-grid");
+    var upSec = document.getElementById("uploads-section");
+    var list = document.getElementById("dev-uploads");
+    Array.prototype.forEach.call(document.querySelectorAll(".dyn-card"), function (el) { el.parentNode.removeChild(el); });
+    list.innerHTML = ""; upGrid.innerHTML = ""; expGrid.innerHTML = "";
+    var forge = [], uploads = [];
+    games.forEach(function (g) { (g.source === "forge" ? forge : uploads).push(g); });
+    if (forge.length) { expSec.style.display = "block"; forge.forEach(function (g) { expGrid.appendChild(gameCard(g, true)); }); }
+    else expSec.style.display = "none";
+    if (uploads.length) { upSec.style.display = "block"; uploads.forEach(function (g) { upGrid.appendChild(gameCard(g, false)); }); }
+    else upSec.style.display = "none";
+    games.forEach(function (g) {
+      var row = document.createElement("div");
+      row.className = "dev-meta";
+      row.innerHTML = (g.source === "forge" ? "[forge] " : "[upload] ") + esc(g.name) + ' &nbsp; <a href="#" data-ren="' + esc(g.name) + '" style="color:#4dd0ff">rename</a> &nbsp; <a href="#" data-del="' + esc(g.name) + '" style="color:#ff5f6d">delete</a>';
+      list.appendChild(row);
+    });
+    Array.prototype.forEach.call(list.querySelectorAll("[data-del]"), function (el) {
+      el.addEventListener("click", function (e) { e.preventDefault(); delGame(el.getAttribute("data-del")); });
+    });
+    Array.prototype.forEach.call(list.querySelectorAll("[data-ren]"), function (el) {
+      el.addEventListener("click", function (e) { e.preventDefault(); renameGame(el.getAttribute("data-ren")); });
+    });
+  }
+  function loadGames() {
+    fetch("/api/games").then(function (r) { return r.json(); }).then(function (d) { renderGameGrid(d.games || []); })
+      .catch(function () { document.getElementById("dev-uploads").innerHTML = '<div class="term-sub" style="margin:0">run the local server to upload and list games</div>'; });
+  }
+  function uploadGame() {
+    var f = document.getElementById("gameFile").files[0];
+    var m = document.getElementById("uploadMsg");
+    if (!f) { m.textContent = "pick a file first"; return; }
+    var nm = (document.getElementById("gameName").value || "").trim();
+    m.textContent = "uploading\u2026";
+    f.text().then(function (txt) {
+      return fetch("/api/games", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: nm || f.name, html: txt }) });
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d.ok) { m.textContent = "uploaded: " + d.name; document.getElementById("gameFile").value = ""; document.getElementById("gameName").value = ""; loadGames(); }
+      else m.textContent = "error: " + (d.error || "upload failed");
+    }).catch(function () { m.textContent = "upload failed (is the local server running?)"; });
+  }
+  function renameGame(name) {
+    var to = prompt("New name for \"" + name + "\":", name.replace(/\.html?$/i, ""));
+    if (!to) return;
+    fetch("/api/games", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ from: name, to: to }) })
+      .then(function (r) { return r.json(); }).then(function (d) { if (d.ok) loadGames(); else alert("rename failed"); });
+  }
+  function delGame(name) {
+    if (!confirm("Delete " + name + "?")) return;
+    fetch("/api/games?name=" + encodeURIComponent(name), { method: "DELETE" }).then(loadGames);
+  }
+  $("uploadGame").addEventListener("click", uploadGame);
+
+  // ---- daily drop ----
+  (function loadDaily(){
+    var sec = $("daily-section"), feat = $("daily-feature"), past = $("daily-past");
+    if(!sec) return;
+    fetch("drops.json", { cache: "no-store" }).then(function(r){ return r.json(); }).then(function(list){
+      if(!list || !list.length) return;
+      var top = list[0], kind = top.kind === "utility" ? "UTILITY" : "GAME";
+      feat.innerHTML = "";
+      var a = document.createElement("a");
+      a.className = "card";
+      a.href = top.file;
+      a.innerHTML = '<div class="thumb">' + gameLogo(top.title) + '</div>' +
+        '<div class="card-body"><h2>' + esc(top.title) + '</h2>' +
+        '<p><span class="badge-new">NEW ' + kind + '</span>' + esc(top.description) + '</p>' +
+        '<span class="play">OPEN</span></div>';
+      feat.appendChild(a);
+      if(list.length > 1){
+        past.innerHTML = '<h2>PAST DROPS</h2><div class="grid">' + list.slice(1, 13).map(function(d){
+          return '<a class="card" href="' + d.file + '"><div class="thumb">' + gameLogo(d.title) + '</div>' +
+            '<div class="card-body"><h2>' + esc(d.title) + '</h2><p>' + esc(d.date) + ' \u00b7 ' +
+            (d.kind === "utility" ? "utility" : "game") + '</p><span class="play">OPEN</span></div></a>';
+        }).join("") + '</div>';
+      }
+      sec.style.display = "";
+    }).catch(function(){});
+  })();
+
+  // ---- site health (bug report) ----
+  (function loadBugs(){
+    var sec = $("bugs-section"), sum = $("bugs-summary"), list = $("bugs-list"), badge = $("bugs-badge");
+    if(!sec) return;
+    fetch("bugs.json", { cache: "no-store" }).then(function(r){ return r.json(); }).then(function(arr){
+      if(!arr || !arr.length) return;
+      var bad = arr.filter(function(r){ return !r.ok; });
+      var healthy = arr.length - bad.length;
+      badge.textContent = bad.length ? bad.length + " ISSUE" + (bad.length > 1 ? "S" : "") : "ALL GOOD";
+      badge.className = bad.length ? "badge-bad" : "badge-ok";
+      sum.textContent = healthy + " / " + arr.length + " pages pass the automated bug sweep.";
+      list.innerHTML = bad.map(function(r){
+        var msg = r.errors.slice(0, 1).join("").slice(0, 120);
+        return '<li><span class="id">' + esc(r.file) + '</span><span class="now">' + esc(msg) + '</span></li>';
+      }).join("");
+      sec.style.display = "";
+    }).catch(function(){});
+  })();
+
+  if (sessionStorage.getItem(KEY) === "1") { setLocked(false); loadUpdates(); } else { setLocked(true); }
+  // The games lists are public — load them whether or not the dev monitor is unlocked.
+  loadGames();
+})();
+</script>
+<script>
+(function(){
+  var viewer = document.getElementById('viewer'), frame = document.getElementById('frame'),
+      vtitle = document.getElementById('vtitle'), vopen = document.getElementById('vopen'),
+      homeBtn = document.getElementById('homeBtn');
+  if(!viewer) return;
+
+  function titleOf(src){
+    var a = document.querySelector('a.card[href="' + src + '"]');
+    var h = a && a.querySelector('h2');
+    return h ? h.textContent : src.replace(/\.html$/i, '').replace(/[-_]/g, ' ');
+  }
+  function openView(src, updateHash){
+    if(!src) return;
+    frame.src = src;
+    vtitle.textContent = titleOf(src);
+    vopen.href = src;
+    viewer.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    if(updateHash !== false && location.hash !== '#view=' + src) location.hash = 'view=' + src;
+  }
+  function closeView(updateHash){
+    viewer.classList.remove('open');
+    frame.src = 'about:blank';
+    document.body.style.overflow = '';
+    if(updateHash !== false && location.hash) history.pushState('', document.title, location.pathname + location.search);
+  }
+  function fromHash(){
+    var h = location.hash.replace(/^#/, '');
+    if(h.indexOf('view=') === 0) openView(decodeURIComponent(h.slice(5)), false);
+    else closeView(false);
+  }
+
+  document.addEventListener('click', function(e){
+    var t = e.target, a = (t && t.closest) ? t.closest('a.card') : null;
+    if(!a) return;
+    var href = a.getAttribute('href') || '';
+    if(!/\.html?($|[?#])/i.test(href)) return;
+    if(/^[a-z]+:/i.test(href)) return;
+    e.preventDefault();
+    openView(href, true);
+  });
+  homeBtn.addEventListener('click', function(){ closeView(true); });
+  window.addEventListener('hashchange', fromHash);
+  if(location.hash) fromHash();
+})();
+</script>
+</body>
+</html>

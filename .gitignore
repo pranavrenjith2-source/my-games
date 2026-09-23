@@ -1,0 +1,22 @@
+node_modules/
+.whisper/
+# dev uploads stay local (not published)
+games/gn-math.html
+.game-forge/logs/
+.game-forge/backups/
+.game-forge/.genlock/
+.game-forge/.checklock/
+.game-forge/.updatelock/
+.game-forge/.dailylock/
+.game-forge/.sitechecklock/
+.game-forge/.sitefixlock/
+.game-forge/.hourly-prompt.txt
+.game-forge/.daily-prompt.txt
+.game-forge/.update-prompt.txt
+.game-forge/.sitefix-prompt.txt
+.game-forge/.reaudit.json
+*.log
+.DS_Store
+opencode.db
+opencode.db-shm
+opencode.db-wal

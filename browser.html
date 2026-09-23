@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Browser</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #04050a; color: #cfe3d6; font-family: 'Courier New', monospace; overflow: hidden; }
+  #app { display: flex; flex-direction: column; height: 100%; }
+  #tabs { display: flex; align-items: center; gap: 6px; padding: 6px 8px 0; background: #0a1410; border-bottom: 1px solid #123322; overflow-x: auto; }
+  .tab {
+    display: flex; align-items: center; gap: 8px; max-width: 220px; white-space: nowrap;
+    background: #0f2417; color: #7aa0b0; border: 1px solid #1f5f3a; border-bottom: none;
+    border-radius: 6px 6px 0 0; padding: 7px 10px; font-size: 12px; cursor: pointer;
+  }
+  .tab.active { background: #08120c; color: #4de355; border-color: #2ecc40; }
+  .tab .x { color: #ff5f6d; }
+  .tab .t { overflow: hidden; text-overflow: ellipsis; }
+  #newtab { background: none; color: #4dd0ff; border: 1px solid #1f5f3a; border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 14px; padding: 4px 9px; }
+  #bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #0a1410; border-bottom: 2px solid #1f5f3a; }
+  #bar button {
+    font-family: inherit; font-size: 12px; cursor: pointer; background: #0f2417; color: #4de355;
+    border: 1px solid #1f5f3a; border-radius: 4px; padding: 8px 11px;
+  }
+  #bar button:disabled { opacity: 0.4; cursor: default; }
+  #bar button:hover:not(:disabled) { border-color: #2ecc40; }
+  #addr {
+    flex: 1; font-family: inherit; font-size: 13px; color: #c8f0d2; background: #08120c;
+    border: 1px solid #1f5f3a; border-radius: 4px; padding: 9px 12px; outline: none;
+  }
+  #addr:focus { border-color: #2ecc40; }
+  #proxytoggle { font-size: 11px; color: #6b7390; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+  #content { flex: 1; position: relative; background: #fff; }
+  iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; background: #fff; display: none; }
+  iframe.active { display: block; }
+  #start {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 20%, #0a1420, #04050a 70%); gap: 16px; text-align: center; padding: 24px; overflow: auto;
+  }
+  #start h1 { margin: 0; color: #2ecc40; letter-spacing: 5px; text-shadow: 0 0 18px rgba(46,204,64,0.4); }
+  #search { display: flex; gap: 8px; width: min(640px, 90%); }
+  #search input {
+    flex: 1; font-family: inherit; font-size: 15px; color: #c8f0d2; background: #08120c;
+    border: 1px solid #2ecc40; border-radius: 24px; padding: 13px 18px; outline: none;
+  }
+  #search button { font-family: inherit; font-size: 13px; cursor: pointer; background: #2ecc40; color: #05060d; border: none; border-radius: 24px; padding: 0 22px; }
+  #start .links { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #start .links button {
+    font-family: inherit; font-size: 12px; cursor: pointer; background: #0f1526; color: #4dd0ff;
+    border: 1px solid #2a2f45; border-radius: 999px; padding: 8px 15px;
+  }
+  #start .links button:hover { border-color: #4dd0ff; }
+  #start .note { color: #6b7390; font-size: 12px; max-width: 640px; line-height: 1.6; }
+  #blocked { position: absolute; right: 10px; bottom: 10px; z-index: 5; background: rgba(5,8,15,0.85); border: 1px solid #1f5f3a; border-radius: 6px; padding: 6px 10px; font-size: 11px; color: #4de355; display: none; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="tabs"></div>
+  <div id="bar">
+    <button id="back" title="Back">&#8592;</button>
+    <button id="fwd" title="Forward">&#8594;</button>
+    <button id="reload" title="Reload">&#8635;</button>
+    <button id="home" title="Home">&#8962;</button>
+    <input id="addr" placeholder="search or type a URL" autocomplete="off" spellcheck="false" />
+    <button id="go">GO</button>
+    <button id="newtab2" title="Open in a real browser tab">&#8599;</button>
+    <label id="proxytoggle" title="Route through the local ad-block proxy (needs the local server)">
+      <input type="checkbox" id="useproxy" /> ad-block proxy
+    </label>
+  </div>
+  <div id="content">
+    <div id="start">
+      <h1>BROWSER</h1>
+      <div id="search">
+        <input id="q" placeholder="search the web or enter a URL" autocomplete="off" spellcheck="false" />
+        <button id="qgo">SEARCH</button>
+      </div>
+      <div class="links">
+        <button data-url="https://en.wikipedia.org/">Wikipedia</button>
+        <button data-url="https://example.com/">Example</button>
+        <button data-url="https://news.ycombinator.com/">Hacker News</button>
+        <button data-url="https://developer.mozilla.org/">MDN</button>
+        <button data-url="https://www.openstreetmap.org/">OpenStreetMap</button>
+      </div>
+      <p class="note">
+        Sites load directly in an embedded frame. Many big sites (Google, YouTube, Facebook, banks) refuse to be embedded and will stay blank &mdash; use the &#8599; button to open those in a real browser tab.<br />
+        The <b>ad-block proxy</b> toggle routes through your local server, which blocks ad/tracker requests and strips the embedding block &mdash; but only works while that server is running.
+      </p>
+    </div>
+    <div id="blocked">shield: <b id="blk">0</b> blocked</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  function $(id) { return document.getElementById(id); }
+  var content = $("content"), startPage = $("start"), tabsEl = $("tabs");
+  var tabs = [], active = -1, seq = 0;
+
+  function isUrl(s) { return /^https?:\/\//i.test(s) || (/^[^\s]+\.[^\s]{2,}/.test(s) && s.indexOf(" ") < 0); }
+  function toUrl(s) {
+    s = s.trim(); if (!s) return null;
+    if (/^https?:\/\//i.test(s)) return s;
+    if (isUrl(s)) return "https://" + s;
+    return "https://duckduckgo.com/?q=" + encodeURIComponent(s);
+  }
+  function hostOf(u) { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return u; } }
+  function frameSrc(u) { return $("useproxy").checked ? ("/proxy?url=" + encodeURIComponent(u)) : u; }
+
+  function makeTab() {
+    var t = { id: ++seq, url: "", title: "New Tab", hist: [], hi: -1, frame: document.createElement("iframe") };
+    t.frame.addEventListener("load", function () { $("reload").disabled = false; });
+    content.appendChild(t.frame);
+    tabs.push(t);
+    return t;
+  }
+  // Direct sites run normally; proxied content is isolated (no same-origin access).
+  function applySandbox(t) {
+    if ($("useproxy").checked) t.frame.setAttribute("sandbox", "allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox");
+    else t.frame.removeAttribute("sandbox");
+  }
+
+  function renderTabs() {
+    tabsEl.innerHTML = "";
+    tabs.forEach(function (t, i) {
+      var el = document.createElement("div");
+      el.className = "tab" + (i === active ? " active" : "");
+      el.innerHTML = '<span class="t">' + (t.title || "New Tab") + '</span><span class="x">\u00D7</span>';
+      el.addEventListener("click", function (e) {
+        if (e.target.className === "x") closeTab(i); else switchTab(i);
+      });
+      tabsEl.appendChild(el);
+    });
+    var nt = document.createElement("button");
+    nt.id = "newtab"; nt.textContent = "+"; nt.title = "New tab";
+    nt.addEventListener("click", function () { newTab(true); });
+    tabsEl.appendChild(nt);
+  }
+
+  function switchTab(i) {
+    if (i < 0 || i >= tabs.length) return;
+    active = i;
+    tabs.forEach(function (t, k) { t.frame.className = k === i ? "active" : ""; });
+    startPage.style.display = tabs[i].url ? "none" : "flex";
+    $("addr").value = tabs[i].url || "";
+    renderTabs();
+    updateNav();
+  }
+
+  function newTab(navigateHome) {
+    var t = makeTab();
+    switchTab(tabs.length - 1);
+    if (navigateHome) { $("addr").value = ""; $("q").focus(); }
+  }
+
+  function closeTab(i) {
+    if (tabs.length === 1) { tabs[0].url = ""; tabs[0].frame.removeAttribute("src"); tabs[0].title = "New Tab"; switchTab(0); return; }
+    tabs[i].frame.remove();
+    tabs.splice(i, 1);
+    switchTab(Math.max(0, Math.min(active, tabs.length - 1)));
+  }
+
+  function navigate(input) {
+    var u = toUrl(input);
+    if (!u) return;
+    var t = tabs[active];
+    t.url = u;
+    t.title = hostOf(u);
+    t.hist = t.hist.slice(0, t.hi + 1);
+    t.hist.push(u); t.hi = t.hist.length - 1;
+    startPage.style.display = "none";
+    applySandbox(t); t.frame.src = frameSrc(u);
+    $("addr").value = u;
+    renderTabs();
+    updateNav();
+  }
+
+  function updateNav() {
+    var t = tabs[active];
+    $("back").disabled = !t || t.hi <= 0;
+    $("fwd").disabled = !t || t.hi >= t.hist.length - 1;
+  }
+
+  function goBack() { var t = tabs[active]; if (t && t.hi > 0) { t.hi--; t.url = t.hist[t.hi]; t.title = hostOf(t.url); applySandbox(t); t.frame.src = frameSrc(t.url); $("addr").value = t.url; renderTabs(); updateNav(); } }
+  function goFwd() { var t = tabs[active]; if (t && t.hi < t.hist.length - 1) { t.hi++; t.url = t.hist[t.hi]; t.title = hostOf(t.url); applySandbox(t); t.frame.src = frameSrc(t.url); $("addr").value = t.url; renderTabs(); updateNav(); } }
+
+  $("go").addEventListener("click", function () { navigate($("addr").value); });
+  $("addr").addEventListener("keydown", function (e) { if (e.key === "Enter") navigate($("addr").value); });
+  $("qgo").addEventListener("click", function () { navigate($("q").value); });
+  $("q").addEventListener("keydown", function (e) { if (e.key === "Enter") navigate($("q").value); });
+  $("back").addEventListener("click", goBack);
+  $("fwd").addEventListener("click", goFwd);
+  $("reload").addEventListener("click", function () { var t = tabs[active]; if (t && t.url) applySandbox(t); t.frame.src = frameSrc(t.url); });
+  $("home").addEventListener("click", function () { var t = tabs[active]; t.url = ""; t.title = "New Tab"; t.frame.removeAttribute("src"); startPage.style.display = "flex"; $("addr").value = ""; renderTabs(); updateNav(); });
+  $("newtab2").addEventListener("click", function () { var t = tabs[active]; if (t && t.url) window.open(t.url, "_blank", "noopener"); });
+  $("useproxy").addEventListener("change", function () { var t = tabs[active]; if (t && t.url) applySandbox(t); t.frame.src = frameSrc(t.url); });
+  Array.prototype.forEach.call(document.querySelectorAll("#start .links button"), function (b) {
+    b.addEventListener("click", function () { navigate(b.getAttribute("data-url")); });
+  });
+  window.addEventListener("keydown", function (e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === "t") { e.preventDefault(); newTab(true); }
+    if ((e.metaKey || e.ctrlKey) && e.key === "w") { e.preventDefault(); closeTab(active); }
+  });
+
+  // Optional: show blocked count when the proxy is on.
+  function pollBlocked() {
+    if (!$("useproxy").checked) { $("blocked").style.display = "none"; return; }
+    fetch("/api/blockstats").then(function (r) { return r.json(); }).then(function (d) {
+      $("blk").textContent = d.blocked; $("blocked").style.display = "block";
+    }).catch(function () { $("blocked").style.display = "none"; });
+  }
+  setInterval(pollBlocked, 2000);
+
+  newTab(false);
+})();
+</script>
+</body>
+</html>

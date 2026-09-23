@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Petri — a dish where bacteria evolve on their own</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{
+    margin:0;height:100%;overflow:hidden;background:#060b0a;color:#e9fff7;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;
+  }
+  #c{position:fixed;inset:0;display:block;touch-action:none;cursor:crosshair}
+  .ui{position:fixed;inset:0;pointer-events:none}
+  .ui a,.ui button{pointer-events:auto}
+
+  header{position:absolute;top:16px;left:20px;max-width:min(48vw,460px)}
+  h1{margin:0;font-size:25px;font-weight:800;letter-spacing:-.025em}
+  h1 b{color:#4be0a8;font-weight:800}
+  .sub{margin:5px 0 0;font-size:13px;color:#8fb3a8;line-height:1.45}
+  .how{margin:9px 0 0;font-size:12.5px;color:#c8e6dc;opacity:.82;line-height:1.5}
+  .how b{color:#fff;font-weight:700}
+  .how .pill{display:inline-block;padding:1px 7px;border-radius:999px;background:rgba(120,255,200,.12);
+    border:1px solid rgba(120,255,200,.22);font-size:11.5px;font-weight:700;color:#8ff0c8}
+
+  .panel{
+    position:absolute;top:16px;right:18px;width:250px;
+    background:rgba(9,20,17,.66);border:1px solid rgba(150,255,215,.14);
+    border-radius:16px;padding:13px 14px 11px;backdrop-filter:blur(9px);
+    -webkit-backdrop-filter:blur(9px);box-shadow:0 12px 34px rgba(0,0,0,.35);
+  }
+  .row{display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px;
+    color:#93b8ac;padding:2.5px 0}
+  .row b{color:#eafff7;font-weight:700;font-variant-numeric:tabular-nums}
+  .bar{height:6px;border-radius:999px;background:rgba(255,255,255,.09);margin:7px 0 9px;overflow:hidden}
+  .bar i{display:block;height:100%;width:0%;border-radius:999px;
+    background:linear-gradient(90deg,#4be0a8,#c07bff);transition:width .18s ease}
+  #graph{display:block;width:222px;height:62px;border-radius:9px;background:rgba(255,255,255,.035)}
+  .legend{display:flex;gap:12px;margin-top:6px;font-size:10.5px;color:#8fb3a8;letter-spacing:.02em}
+  .legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px}
+  .legend .l-pop i{background:#4be0a8}
+  .legend .l-res i{background:#c07bff}
+
+  .toolbar{
+    position:absolute;left:50%;bottom:20px;transform:translateX(-50%);
+    display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-width:94vw;
+  }
+  .toolbar button{
+    font:inherit;font-size:13px;font-weight:700;color:#d8f5ea;cursor:pointer;
+    padding:9px 14px;border-radius:999px;border:1px solid rgba(150,255,215,.16);
+    background:rgba(9,20,17,.72);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);
+    transition:transform .08s ease,background .15s ease,border-color .15s ease,color .15s ease;
+    display:flex;align-items:center;gap:7px;white-space:nowrap;
+  }
+  .toolbar button:hover{background:rgba(20,44,37,.85);transform:translateY(-1px)}
+  .toolbar button:active{transform:translateY(0)}
+  .toolbar button.on{color:#06120e;background:#4be0a8;border-color:#4be0a8;
+    box-shadow:0 0 22px rgba(75,224,168,.35)}
+  .toolbar button.on.ab{background:#c07bff;border-color:#c07bff;color:#150823;
+    box-shadow:0 0 22px rgba(192,123,255,.38)}
+  kbd{font:inherit;font-size:10.5px;font-weight:700;opacity:.6;padding:1px 5px;border-radius:5px;
+    background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.10)}
+  .toolbar button.on kbd{opacity:.75;background:rgba(0,0,0,.16);border-color:rgba(0,0,0,.12)}
+
+  .note{position:absolute;left:20px;bottom:22px;font-size:11.5px;color:#7fa89c;opacity:.85;line-height:1.5}
+  .note b{color:#bff0dd}
+
+  @media (max-width:760px){
+    header{max-width:56vw}
+    h1{font-size:20px}
+    .how{display:none}
+    .panel{width:190px;top:12px;right:12px;padding:10px 11px 9px}
+    #graph{width:168px;height:50px}
+    .row{font-size:11.5px}
+    .note{display:none}
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="ui">
+  <header>
+    <h1>Petri <b>·</b> bacteria that evolve on their own</h1>
+    <p class="sub">A dish of hungry microbes. They eat, divide, mutate — and the dish decides who survives.</p>
+    <p class="how">
+      <span class="pill">Drag</span> to drop nutrients.
+      <span class="pill">2</span> for antibiotics, then paint the dish and watch resistance spread.
+      <span class="pill">1</span> to feed again. <span class="pill">Space</span> pauses.
+    </p>
+  </header>
+
+  <div class="panel">
+    <div class="row"><span>Population</span><b id="s-pop">0</b></div>
+    <div class="row"><span>Generation</span><b id="s-gen">1</b></div>
+    <div class="row"><span>Avg speed</span><b id="s-speed">0</b></div>
+    <div class="row"><span>Avg size</span><b id="s-size">0</b></div>
+    <div class="row"><span>Resistance</span><b id="s-res">0%</b></div>
+    <div class="bar"><i id="s-bar"></i></div>
+    <canvas id="graph"></canvas>
+    <div class="legend"><span class="l-pop"><i></i>population</span><span class="l-res"><i></i>resistance</span></div>
+  </div>
+
+  <div class="toolbar">
+    <button data-tool="feed" class="on">Feed <kbd>1</kbd></button>
+    <button data-tool="ab">Antibiotic <kbd>2</kbd></button>
+    <button id="btn-pause">Pause <kbd>space</kbd></button>
+    <button id="btn-reset">Reset <kbd>r</kbd></button>
+    <button id="btn-mute">Sound: on</button>
+  </div>
+
+  <div class="note">
+    <b>Green</b> = vulnerable · <b>Purple</b> = resistant.<br>
+    Antibiotics are expensive to resist, so resistance fades when the threat is gone.
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var TAU = Math.PI * 2;
+  function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+  function rand(a, b) { return a + Math.random() * (b - a); }
+  function gauss() {
+    var u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v);
+  }
+
+  /* ---------- DOM ---------- */
+  var canvas = document.getElementById('c');
+  var ctx = canvas.getContext('2d');
+  var field = document.createElement('canvas');
+  var fctx = field.getContext('2d');
+  var graph = document.getElementById('graph');
+  var gctx = graph.getContext('2d');
+  var elPop = document.getElementById('s-pop');
+  var elGen = document.getElementById('s-gen');
+  var elSpeed = document.getElementById('s-speed');
+  var elSize = document.getElementById('s-size');
+  var elRes = document.getElementById('s-res');
+  var elBar = document.getElementById('s-bar');
+  var btnPause = document.getElementById('btn-pause');
+  var btnReset = document.getElementById('btn-reset');
+  var btnMute = document.getElementById('btn-mute');
+  var toolButtons = Array.prototype.slice.call(document.querySelectorAll('[data-tool]'));
+
+  /* ---------- config ---------- */
+var CFG = {
+    maxPop: 900,
+    splitEnergy: 8,
+    eatRate: 1.8,
+    gainPerUnit: 1,
+    regen: 0.035,
+    abDecay: 0.13,
+    abDamage: 11.0,
+    resCost: 0.95,
+    baseCost: 0.35,
+    sizeCost: 0.020,
+    speedCost: 0.0009
+  };
+  var GRID = 84;
+  var FEED_R = 34;
+  var AB_R = 40;
+  var HIST_MAX = 240;
+
+  /* ---------- state ---------- */
+  var W = 0, H = 0, DPR = 1, cx = 0, cy = 0, dishR = 200;
+  var cellSize = 1, gridX0 = 0, gridY0 = 0;
+  var nGrid = null, aGrid = null, aTmp = null;
+  var fieldImg = null, px = null;
+  var bacteria = [], particles = [];
+  var maxGen = 1, elapsed = 0, running = true;
+  var tool = 'feed';
+  var brush = { x: 0, y: 0, inside: false, down: false };
+  var history = [], sampleT = 0, hudT = 0, spawnT = 0, diffT = 0;
+  var lastStats = { pop: 0, gen: 1, speed: 0, size: 0, res: 0 };
+
+  /* ---------- audio (lazy, fully guarded) ---------- */
+  var actx = null, master = null, muted = false, lastPopSnd = -9, lastAbSnd = -9;
+  function initAudio() {
+    if (actx) return;
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      actx = new AC();
+      master = actx.createGain();
+      master.gain.value = 0.6;
+      master.connect(actx.destination);
+    } catch (err) { actx = null; }
+  }
+  function resumeAudio() {
+    if (actx && actx.state === 'suspended') {
+      try { var p = actx.resume(); if (p && p.catch) p.catch(function () {}); } catch (err) {}
+    }
+  }
+  function onGesture() { initAudio(); resumeAudio(); }
+  function blip(freq, dur, vol, type) {
+    if (!actx || muted) return;
+    if (actx.state !== 'running') return;
+    try {
+      var t = actx.currentTime;
+      var o = actx.createOscillator(), g = actx.createGain();
+      o.type = type || 'sine';
+      o.frequency.setValueAtTime(freq, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(master);
+      o.start(t); o.stop(t + dur + 0.03);
+    } catch (err) {}
+  }
+
+  /* ---------- sizing ---------- */
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.max(1, Math.floor(W * DPR));
+    canvas.height = Math.max(1, Math.floor(H * DPR));
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    cx = W / 2; cy = H / 2;
+    dishR = Math.max(120, Math.min(W, H) * 0.5 - Math.min(W, H) * 0.075);
+    cellSize = (dishR * 2) / GRID;
+    gridX0 = cx - dishR;
+    gridY0 = cy - dishR;
+
+    var gw = W < 760 ? 168 : 222;
+    var gh = W < 760 ? 50 : 62;
+    graph.width = Math.floor(gw * DPR);
+    graph.height = Math.floor(gh * DPR);
+    graph.style.width = gw + 'px';
+    graph.style.height = gh + 'px';
+    gctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    graph._w = gw; graph._h = gh;
+  }
+
+  /* ---------- grid helpers ---------- */
+  function gidx(x, y) {
+    var gx = Math.floor((x - gridX0) / cellSize);
+    var gy = Math.floor((y - gridY0) / cellSize);
+    if (!(gx >= 0 && gx < GRID && gy >= 0 && gy < GRID)) return -1;
+    return gy * GRID + gx;
+  }
+  function nutrientAt(x, y) {
+    var i = gidx(x, y);
+    return i < 0 ? 0 : nGrid[i];
+  }
+  function randomPoint() {
+    var a = rand(0, TAU), r = Math.sqrt(Math.random()) * dishR * 0.86;
+    return { x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r };
+  }
+
+  /* ---------- creatures ---------- */
+  function randomGenes() {
+    return { size: rand(2.0, 4.2), speed: rand(12, 28), appetite: rand(0.7, 1.3), res: 0 };
+  }
+  function mutate(g) {
+    return {
+      size: clamp(g.size + gauss() * 0.32, 1.8, 7),
+      speed: clamp(g.speed + gauss() * 4.5, 3, 80),
+      appetite: clamp(g.appetite + gauss() * 0.13, 0.35, 2.6),
+      res: clamp(g.res + gauss() * 0.15, 0, 1)
+    };
+  }
+  function newBacterium(x, y, genes, gen) {
+    return {
+      x: x, y: y, h: rand(0, TAU),
+      genes: genes, gen: gen || 0,
+      energy: CFG.splitEnergy * 0.45,
+      wob: rand(0, TAU),
+      dead: false
+    };
+  }
+  function costOf(g) {
+    return CFG.baseCost + CFG.sizeCost * g.size * g.size +
+      CFG.speedCost * g.speed * g.speed + CFG.resCost * g.res;
+  }
+  function hueOf(res) { return 150 + Math.sqrt(res) * 165; }
+
+  function spawnParticles(x, y, kind, res) {
+    if (particles.length > 420) return;
+    var hue = hueOf(res);
+    if (kind === 'birth') {
+      particles.push({ x: x, y: y, r: 1.5, life: 1, max: 0.45, hue: hue, ring: true });
+    } else {
+      for (var i = 0; i < 4; i++) {
+        var a = rand(0, TAU), s = rand(6, 22);
+        particles.push({ x: x, y: y, vx: Math.cos(a) * s, vy: Math.sin(a) * s,
+          r: rand(0.6, 1.7), life: 1, max: rand(0.35, 0.7), hue: hue, ring: false });
+      }
+    }
+  }
+
+  /* ---------- world ---------- */
+  function reset() {
+    nGrid = new Float32Array(GRID * GRID);
+    aGrid = new Float32Array(GRID * GRID);
+    aTmp = new Float32Array(GRID * GRID);
+    for (var i = 0; i < nGrid.length; i++) nGrid[i] = 0.6;
+    field.width = GRID; field.height = GRID;
+    fieldImg = fctx.createImageData(GRID, GRID);
+    px = fieldImg.data;
+
+    bacteria = []; particles = []; history = [];
+    maxGen = 1; elapsed = 0; spawnT = 0; sampleT = 0; hudT = 0; diffT = 0;
+    for (var k = 0; k < 24; k++) {
+      var p = randomPoint();
+      bacteria.push(newBacterium(p.x, p.y, randomGenes(), 1));
+    }
+    sample();
+    drawGraph();
+    updateHUD();
+  }
+
+  function die(b) {
+    var i = gidx(b.x, b.y);
+    if (i >= 0) nGrid[i] = Math.min(1, nGrid[i] + 0.22);
+    spawnParticles(b.x, b.y, 'death', b.genes.res);
+  }
+
+  function diffuse() {
+    aTmp.set(aGrid);
+    var k = 0.28;
+    for (var y = 1; y < GRID - 1; y++) {
+      var row = y * GRID;
+      for (var x = 1; x < GRID - 1; x++) {
+        var i = row + x;
+        var a = aGrid[i];
+        var avg = (aGrid[i - 1] + aGrid[i + 1] + aGrid[i - GRID] + aGrid[i + GRID]) * 0.25;
+        aTmp[i] = a + (avg - a) * k;
+      }
+    }
+    aGrid.set(aTmp);
+  }
+
+  function paint(x, y, kind, dt, burst) {
+    var R = kind === 'ab' ? AB_R : FEED_R;
+    var gx0 = Math.max(0, Math.floor((x - R - gridX0) / cellSize));
+    var gx1 = Math.min(GRID - 1, Math.ceil((x + R - gridX0) / cellSize));
+    var gy0 = Math.max(0, Math.floor((y - R - gridY0) / cellSize));
+    var gy1 = Math.min(GRID - 1, Math.ceil((y + R - gridY0) / cellSize));
+    for (var gy = gy0; gy <= gy1; gy++) {
+      var wy = gridY0 + (gy + 0.5) * cellSize;
+      for (var gx = gx0; gx <= gx1; gx++) {
+        var wx = gridX0 + (gx + 0.5) * cellSize;
+        var dx = wx - x, dy = wy - y;
+        var d = Math.sqrt(dx * dx + dy * dy);
+        if (d > R) continue;
+        var f = 1 - d / R;
+        var i = gy * GRID + gx;
+        if (kind === 'feed') {
+          nGrid[i] = Math.min(1, nGrid[i] + (burst ? 1.0 : 3.0 * dt) * f);
+        } else {
+          aGrid[i] = Math.min(1, aGrid[i] + (burst ? 0.9 : 3.2 * dt) * f);
+        }
+      }
+    }
+  }
+
+  function update(dt) {
+    elapsed += dt;
+
+    /* nutrient regrowth + antibiotic decay */
+    var rg = CFG.regen * dt;
+    var af = Math.exp(-CFG.abDecay * dt);
+    var N = nGrid.length;
+    for (var i = 0; i < N; i++) {
+      var n = nGrid[i];
+      if (n < 1) nGrid[i] = n + rg * (1 - n);
+      var a = aGrid[i];
+      if (a > 0.0005) aGrid[i] = a * af; else if (a > 0) aGrid[i] = 0;
+    }
+    diffT += dt;
+    if (diffT > 0.07) { diffT = 0; diffuse(); }
+
+    /* brush */
+    if (brush.down && brush.inside) {
+      paint(brush.x, brush.y, tool, dt, false);
+      if (tool === 'ab' && elapsed - lastAbSnd > 0.13) {
+        lastAbSnd = elapsed;
+        blip(rand(90, 140), 0.17, 0.028, 'sawtooth');
+      }
+    }
+
+    /* bacteria */
+    var born = [];
+    var cap = CFG.maxPop;
+    for (var k = 0; k < bacteria.length; k++) {
+      var b = bacteria[k];
+      var g = b.genes;
+
+      /* chemotaxis */
+      var look = g.size + 7;
+      var ca = Math.cos(b.h), sa = Math.sin(b.h);
+      var lx = Math.cos(b.h - 0.55) * look, ly = Math.sin(b.h - 0.55) * look;
+      var rx = Math.cos(b.h + 0.55) * look, ry = Math.sin(b.h + 0.55) * look;
+      var nL = nutrientAt(b.x + lx, b.y + ly);
+      var nC = nutrientAt(b.x + ca * look, b.y + sa * look);
+      var nR = nutrientAt(b.x + rx, b.y + ry);
+      var turn = (nR - nL) * 7 + (Math.random() - 0.5) * 2.4;
+      if (nC > nL && nC > nR) turn *= 0.25;
+      b.h += clamp(turn, -4.5, 4.5) * dt;
+
+      /* move */
+      b.x += Math.cos(b.h) * g.speed * dt;
+      b.y += Math.sin(b.h) * g.speed * dt;
+
+      /* stay in the dish */
+      var ddx = b.x - cx, ddy = b.y - cy;
+      var dist = Math.sqrt(ddx * ddx + ddy * ddy);
+      var lim = dishR - g.size - 1;
+      if (dist > lim) {
+        var nx = ddx / (dist || 1), ny = ddy / (dist || 1);
+        b.x = cx + nx * lim;
+        b.y = cy + ny * lim;
+        b.h = Math.atan2(-ny, -nx) + (Math.random() - 0.5) * 0.9;
+      }
+
+      /* eat — bigger bodies graze a wider patch */
+      if (b.energy < CFG.splitEnergy) {
+        var need = g.appetite * CFG.eatRate * dt;
+        var reach = g.size + cellSize * 0.5;
+        var reach2 = reach * reach;
+        var cgx = Math.floor((b.x - gridX0) / cellSize);
+        var cgy = Math.floor((b.y - gridY0) / cellSize);
+        var got = 0;
+        for (var yy = cgy - 1; yy <= cgy + 1 && got < need; yy++) {
+          if (yy < 0 || yy >= GRID) continue;
+          for (var xx = cgx - 1; xx <= cgx + 1 && got < need; xx++) {
+            if (xx < 0 || xx >= GRID) continue;
+            var wx = gridX0 + (xx + 0.5) * cellSize;
+            var wy = gridY0 + (yy + 0.5) * cellSize;
+            var ex = wx - b.x, ey = wy - b.y;
+            if (ex * ex + ey * ey > reach2) continue;
+            var ci = yy * GRID + xx;
+            var food = nGrid[ci];
+            if (food <= 0) continue;
+            var taken = food < need - got ? food : need - got;
+            nGrid[ci] = food - taken;
+            got += taken;
+          }
+        }
+        if (got > 0) b.energy += got * CFG.gainPerUnit;
+      }
+
+      /* antibiotic damage */
+      var ai = gidx(b.x, b.y);
+      if (ai >= 0) {
+        var dose = aGrid[ai];
+        if (dose > 0.001) {
+          var sus = 1 - g.res;
+          b.energy -= dose * sus * sus * CFG.abDamage * dt;
+        }
+      }
+
+      /* upkeep */
+      b.energy -= costOf(g) * dt;
+      b.wob += dt * 6;
+
+      if (b.energy <= 0) { b.dead = true; die(b); continue; }
+
+      /* divide */
+      if (b.energy >= CFG.splitEnergy && bacteria.length + born.length < cap) {
+        var half = b.energy * 0.5;
+        b.energy = half;
+        var child = newBacterium(b.x + rand(-3, 3), b.y + rand(-3, 3), mutate(g), b.gen + 1);
+        child.energy = half;
+        child.h = b.h + rand(-1, 1);
+        born.push(child);
+        if (b.gen + 1 > maxGen) maxGen = b.gen + 1;
+        spawnParticles(b.x, b.y, 'birth', g.res);
+        if (elapsed - lastPopSnd > 0.075) {
+          lastPopSnd = elapsed;
+          blip(rand(420, 760), 0.07, 0.022, 'sine');
+        }
+      }
+    }
+
+    if (born.length) {
+      for (var q = 0; q < born.length; q++) bacteria.push(born[q]);
+    }
+    var w = 0;
+    for (var z = 0; z < bacteria.length; z++) {
+      if (!bacteria[z].dead) bacteria[w++] = bacteria[z];
+    }
+    bacteria.length = w;
+
+    /* spontaneous generation keeps the dish alive */
+    spawnT += dt;
+    if (bacteria.length < 6 && spawnT > 1.3) {
+      spawnT = 0;
+      var p = randomPoint();
+      bacteria.push(newBacterium(p.x, p.y, randomGenes(), 1));
+      spawnParticles(p.x, p.y, 'birth', 0);
+    }
+
+    /* particles */
+    var pw = 0;
+    for (var j = 0; j < particles.length; j++) {
+      var pt = particles[j];
+      pt.life -= dt / pt.max;
+      if (pt.life <= 0) continue;
+      if (pt.ring) pt.r += dt * 26;
+      else { pt.x += pt.vx * dt; pt.y += pt.vy * dt; pt.vx *= 0.94; pt.vy *= 0.94; }
+      particles[pw++] = pt;
+    }
+    particles.length = pw;
+  }
+
+  /* ---------- rendering ---------- */
+  function renderField() {
+    var N = GRID * GRID;
+    for (var i = 0; i < N; i++) {
+      var n = nGrid[i], a = aGrid[i];
+      var R = 14 + n * 50 + a * 130;
+      var G = 22 + n * 170 - a * 22;
+      var B = 20 + n * 100 + a * 150;
+      if (R > 255) R = 255;
+      if (G > 255) G = 255; else if (G < 0) G = 0;
+      if (B > 255) B = 255;
+      var o = i * 4;
+      px[o] = R; px[o + 1] = G; px[o + 2] = B; px[o + 3] = 255;
+    }
+    fctx.putImageData(fieldImg, 0, 0);
+  }
+
+  function drawBacteria() {
+    var many = bacteria.length > 460;
+    for (var i = 0; i < bacteria.length; i++) {
+      var b = bacteria[i];
+      var g = b.genes;
+      var hue = hueOf(g.res);
+      var r = g.size * (1 + Math.sin(b.wob) * 0.06);
+      if (!many) {
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, r * 1.9, 0, TAU);
+        ctx.fillStyle = 'hsla(' + hue.toFixed(0) + ',80%,60%,0.10)';
+        ctx.fill();
+      }
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, r, 0, TAU);
+      ctx.fillStyle = 'hsla(' + hue.toFixed(0) + ',72%,58%,0.93)';
+      ctx.fill();
+      ctx.lineWidth = Math.max(0.6, r * 0.22);
+      ctx.strokeStyle = 'hsla(' + hue.toFixed(0) + ',80%,36%,0.9)';
+      ctx.stroke();
+      if (!many) {
+        ctx.beginPath();
+        ctx.arc(b.x - r * 0.30, b.y - r * 0.30, r * 0.30, 0, TAU);
+        ctx.fillStyle = 'hsla(' + hue.toFixed(0) + ',90%,86%,0.7)';
+        ctx.fill();
+      }
+    }
+  }
+
+  function drawParticles() {
+    for (var i = 0; i < particles.length; i++) {
+      var p = particles[i];
+      var a = Math.max(0, p.life);
+      if (p.ring) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, TAU);
+        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = 'hsla(' + p.hue.toFixed(0) + ',85%,70%,' + (a * 0.55).toFixed(3) + ')';
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, TAU);
+        ctx.fillStyle = 'hsla(' + p.hue.toFixed(0) + ',70%,64%,' + (a * 0.6).toFixed(3) + ')';
+        ctx.fill();
+      }
+    }
+  }
+
+  function drawBrush() {
+    if (!brush.inside) return;
+    var R = tool === 'ab' ? AB_R : FEED_R;
+    var ab = tool === 'ab';
+    ctx.beginPath();
+    ctx.arc(brush.x, brush.y, R, 0, TAU);
+    ctx.fillStyle = ab ? 'rgba(190,120,255,0.08)' : 'rgba(90,255,180,0.07)';
+    ctx.fill();
+    ctx.save();
+    ctx.setLineDash([5, 6]);
+    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = ab ? 'rgba(205,145,255,0.85)' : 'rgba(115,255,195,0.85)';
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    var g = ctx.createRadialGradient(cx, cy, dishR * 0.4, cx, cy, dishR * 1.7);
+    g.addColorStop(0, 'rgba(60,200,150,0.09)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(cx, cy, dishR * 1.7, 0, TAU);
+    ctx.fill();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, dishR, 0, TAU);
+    ctx.clip();
+    ctx.fillStyle = '#08110f';
+    ctx.fillRect(cx - dishR, cy - dishR, dishR * 2, dishR * 2);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(field, gridX0, gridY0, dishR * 2, dishR * 2);
+    var vg = ctx.createRadialGradient(cx, cy, dishR * 0.15, cx, cy, dishR);
+    vg.addColorStop(0, 'rgba(255,255,255,0.045)');
+    vg.addColorStop(0.72, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,0,0,0.45)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(cx - dishR, cy - dishR, dishR * 2, dishR * 2);
+    ctx.restore();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, dishR + 3, 0, TAU);
+    ctx.lineWidth = 7;
+    ctx.strokeStyle = 'rgba(150,255,215,0.06)';
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, dishR, 0, TAU);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(190,255,230,0.30)';
+    ctx.stroke();
+
+    drawBacteria();
+    drawParticles();
+    drawBrush();
+  }
+
+  /* ---------- stats + graph ---------- */
+  function sample() {
+    var n = bacteria.length;
+    var sS = 0, sP = 0, sR = 0;
+    for (var i = 0; i < n; i++) {
+      sS += bacteria[i].genes.size;
+      sP += bacteria[i].genes.speed;
+      sR += bacteria[i].genes.res;
+    }
+    var d = n || 1;
+    var rec = { pop: n, res: sR / d, size: sS / d, speed: sP / d };
+    history.push(rec);
+    if (history.length > HIST_MAX) history.shift();
+    lastStats = { pop: n, gen: maxGen, speed: rec.speed, size: rec.size, res: rec.res };
+  }
+
+  function updateHUD() {
+    elPop.textContent = lastStats.pop;
+    elGen.textContent = lastStats.gen;
+    elSpeed.textContent = lastStats.speed.toFixed(1);
+    elSize.textContent = lastStats.size.toFixed(2);
+    var rp = Math.round(lastStats.res * 100);
+    elRes.textContent = rp + '%';
+    elBar.style.width = rp + '%';
+  }
+
+  function drawGraph() {
+    var w = graph._w || 222, h = graph._h || 62;
+    gctx.clearRect(0, 0, w, h);
+    gctx.strokeStyle = 'rgba(160,255,220,0.08)';
+    gctx.lineWidth = 1;
+    for (var i = 1; i < 4; i++) {
+      var y = Math.round(h * i / 4) + 0.5;
+      gctx.beginPath();
+      gctx.moveTo(0, y);
+      gctx.lineTo(w, y);
+      gctx.stroke();
+    }
+    if (history.length < 2) return;
+
+    var mp = 40;
+    for (var k = 0; k < history.length; k++) if (history[k].pop > mp) mp = history[k].pop;
+
+    var n = history.length;
+    var step = w / (HIST_MAX - 1);
+    var x0 = w - (n - 1) * step;
+
+    gctx.beginPath();
+    for (var a = 0; a < n; a++) {
+      var xa = x0 + a * step;
+      var ya = h - (history[a].pop / mp) * h * 0.9 - 2;
+      if (a === 0) gctx.moveTo(xa, ya); else gctx.lineTo(xa, ya);
+    }
+    gctx.strokeStyle = '#4be0a8';
+    gctx.lineWidth = 1.6;
+    gctx.stroke();
+
+    gctx.beginPath();
+    for (var b = 0; b < n; b++) {
+      var xb = x0 + b * step;
+      var yb = h - history[b].res * h * 0.9 - 2;
+      if (b === 0) gctx.moveTo(xb, yb); else gctx.lineTo(xb, yb);
+    }
+    gctx.strokeStyle = '#c07bff';
+    gctx.lineWidth = 1.6;
+    gctx.stroke();
+  }
+
+  /* ---------- input ---------- */
+  function pointerPos(e) {
+    var r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+  function insideDish(x, y) {
+    var dx = x - cx, dy = y - cy;
+    return dx * dx + dy * dy < dishR * dishR;
+  }
+
+  canvas.addEventListener('pointermove', function (e) {
+    var p = pointerPos(e);
+    brush.x = p.x; brush.y = p.y;
+    brush.inside = insideDish(p.x, p.y);
+  });
+  canvas.addEventListener('pointerdown', function (e) {
+    onGesture();
+    if (canvas.setPointerCapture) { try { canvas.setPointerCapture(e.pointerId); } catch (err) {} }
+    var p = pointerPos(e);
+    brush.x = p.x; brush.y = p.y;
+    brush.inside = insideDish(p.x, p.y);
+    brush.down = true;
+    if (brush.inside) {
+      paint(p.x, p.y, tool, 0.016, true);
+      if (tool === 'ab') blip(rand(90, 140), 0.2, 0.035, 'sawtooth');
+    }
+    e.preventDefault();
+  });
+  window.addEventListener('pointerup', function () { brush.down = false; });
+  window.addEventListener('pointercancel', function () { brush.down = false; });
+  window.addEventListener('blur', function () { brush.down = false; });
+
+  function setTool(t) {
+    tool = (t === 'ab') ? 'ab' : 'feed';
+    for (var i = 0; i < toolButtons.length; i++) {
+      var el = toolButtons[i];
+      var on = el.getAttribute('data-tool') === tool;
+      el.className = on ? (tool === 'ab' ? 'on ab' : 'on') : '';
+    }
+  }
+  for (var ti = 0; ti < toolButtons.length; ti++) {
+    (function (el) {
+      el.addEventListener('click', function () { onGesture(); setTool(el.getAttribute('data-tool')); });
+    })(toolButtons[ti]);
+  }
+
+  function togglePause() {
+    running = !running;
+    btnPause.innerHTML = (running ? 'Pause' : 'Play') + ' <kbd>space</kbd>';
+  }
+  btnPause.addEventListener('click', function () { onGesture(); togglePause(); });
+  btnReset.addEventListener('click', function () { onGesture(); reset(); });
+  btnMute.addEventListener('click', function () {
+    onGesture();
+    muted = !muted;
+    if (master) master.gain.value = muted ? 0 : 0.6;
+    btnMute.textContent = 'Sound: ' + (muted ? 'off' : 'on');
+  });
+
+  window.addEventListener('keydown', function (e) {
+    onGesture();
+    var k = e.key;
+    if (k === '1') { setTool('feed'); }
+    else if (k === '2') { setTool('ab'); }
+    else if (k === ' ' || k === 'Spacebar') { e.preventDefault(); togglePause(); }
+    else if (k === 'r' || k === 'R') { reset(); }
+    else if (k === 'm' || k === 'M') { muted = !muted; if (master) master.gain.value = muted ? 0 : 0.6;
+      btnMute.textContent = 'Sound: ' + (muted ? 'off' : 'on'); }
+  });
+
+  window.addEventListener('resize', function () {
+    resize();
+    renderField();
+    drawGraph();
+  });
+
+  /* ---------- loop ---------- */
+  var last = 0;
+  function frame(now) {
+    requestAnimationFrame(frame);
+    if (!last) last = now;
+    var dt = (now - last) / 1000;
+    last = now;
+    if (dt > 0.05) dt = 0.05;
+    if (dt < 0) dt = 0;
+
+    if (running) {
+      update(dt);
+      sampleT += dt;
+      if (sampleT >= 0.25) { sampleT = 0; sample(); drawGraph(); }
+      hudT += dt;
+      if (hudT >= 0.15) { hudT = 0; updateHUD(); }
+    }
+
+    renderField();
+    draw();
+  }
+
+  /* ---------- boot ---------- */
+  resize();
+  reset();
+  setTool('feed');
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Pixel Painter — draw with 8 colors</title>
+<style>
+  :root{
+    --ink:#2b2b33;
+    --muted:#75757f;
+    --card:#ffffff;
+    --bg:#fdf6e9;
+    --line:#e8e2d4;
+    --accent:#ff6b6b;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; min-height:100%; }
+  body{
+    font-family: ui-rounded, "Nunito", "Trebuchet MS", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background:
+      radial-gradient(120% 90% at 50% -10%, #fffdf7 0%, var(--bg) 55%, #f6ecd9 100%);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    -webkit-tap-highlight-color:transparent;
+    display:flex; align-items:center; justify-content:center;
+    padding:22px 16px 30px;
+    -webkit-user-select:none; user-select:none;
+  }
+  .wrap{ width:min(960px, 100%); }
+
+  header{ text-align:center; margin:0 0 16px; }
+  h1{
+    margin:0; font-size:clamp(30px, 6vw, 48px); line-height:1; letter-spacing:-.02em;
+    font-weight:900;
+  }
+  h1 em{ font-style:normal; color:var(--accent); }
+  .how{
+    margin:8px auto 0; max-width:44ch;
+    color:var(--muted); font-size:clamp(13px,3.4vw,15px); line-height:1.5;
+  }
+  .how b{ color:var(--ink); }
+
+  .stage{
+    display:flex; gap:20px; align-items:flex-start; justify-content:center;
+    flex-wrap:wrap;
+  }
+
+  .boardCard{
+    background:var(--card); padding:12px; border-radius:20px;
+    box-shadow:0 18px 40px -18px rgba(60,45,15,.45), 0 3px 0 rgba(0,0,0,.05);
+    border:1px solid rgba(0,0,0,.04);
+  }
+  canvas{
+    display:block;
+    width:min(78vw, 460px); height:min(78vw, 460px);
+    border-radius:10px;
+    image-rendering:pixelated; image-rendering:crisp-edges;
+    touch-action:none; cursor:crosshair;
+    background:#efece4;
+  }
+
+  .panel{
+    width:min(320px, 100%);
+    display:flex; flex-direction:column; gap:12px;
+  }
+
+  .card{
+    background:var(--card); border-radius:16px; padding:12px 14px;
+    border:1px solid rgba(0,0,0,.04);
+    box-shadow:0 12px 30px -20px rgba(60,45,15,.5);
+  }
+
+  .label{
+    font-size:10.5px; letter-spacing:.2em; text-transform:uppercase;
+    color:#a49b88; font-weight:800; margin:0 0 9px;
+  }
+
+  .promptRow{ display:flex; align-items:center; gap:8px; }
+  .promptRow .label{ margin:0; flex:0 0 auto; }
+  .prompt{
+    flex:1 1 auto; text-align:left; cursor:pointer;
+    font:inherit; font-weight:800; font-size:15px; color:var(--ink);
+    background:#fff6e2; border:2px dashed #f0d9a8; border-radius:11px;
+    padding:8px 12px; transition:transform .08s, background .15s;
+  }
+  .prompt:hover{ background:#ffefd0; }
+  .prompt:active{ transform:scale(.97); }
+  .shuffle{
+    flex:0 0 auto; width:40px; height:40px; border-radius:11px; cursor:pointer;
+    font-size:18px; line-height:1; color:var(--ink);
+    background:#fff; border:2px solid var(--line);
+    display:grid; place-items:center; transition:transform .08s, background .15s;
+  }
+  .shuffle:hover{ background:#f6f2e8; }
+  .shuffle:active{ transform:scale(.94); }
+
+  .palette{ display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; }
+  .swatch{
+    position:relative; aspect-ratio:1/1; border-radius:12px; cursor:pointer;
+    border:2px solid rgba(0,0,0,.10); padding:0;
+    box-shadow:inset 0 -3px 0 rgba(0,0,0,.14);
+    transition:transform .08s, box-shadow .12s;
+  }
+  .swatch:hover{ transform:translateY(-1px); }
+  .swatch:active{ transform:scale(.94); }
+  .swatch .num{
+    position:absolute; right:5px; bottom:4px; font-size:10px; font-weight:800;
+    color:rgba(0,0,0,.4); pointer-events:none;
+  }
+  .swatch.light .num{ color:rgba(0,0,0,.3); }
+  .swatch.on{
+    box-shadow:0 0 0 3px var(--card), 0 0 0 6px var(--ink), inset 0 -3px 0 rgba(0,0,0,.14);
+    transform:translateY(-2px);
+  }
+
+  .tools{ display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
+  .btn{
+    font:inherit; font-weight:800; font-size:14px; color:var(--ink);
+    background:#fff; border:2px solid var(--line); border-radius:12px;
+    padding:9px 8px; cursor:pointer; transition:transform .08s, background .15s, border-color .15s;
+  }
+  .btn:hover{ background:#f8f5ee; }
+  .btn:active{ transform:translateY(1px) scale(.98); }
+  .btn.on{ background:var(--ink); border-color:var(--ink); color:#fff; }
+  .btn:disabled{ opacity:.4; cursor:default; transform:none; }
+
+  .actions{ display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; }
+
+  footer{
+    margin:18px auto 0; text-align:center; color:#a49b88;
+    font-size:12.5px; line-height:1.7; max-width:52ch;
+  }
+  footer kbd{
+    display:inline-block; padding:1px 7px; margin:0 1px;
+    border-radius:6px; font:inherit; font-weight:800; font-size:.86em;
+    background:#fff; border:1px solid var(--line); border-bottom-width:2px; color:#6b6b78;
+  }
+  @media (max-width:720px){
+    .panel{ width:min(78vw, 460px); }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Pixel <em>Painter</em></h1>
+    <p class="how">How to play: <b>pick a color</b>, then <b>click or drag</b> on the grid to paint pixels. Fill floods, eraser clears, and everything is undoable.</p>
+  </header>
+
+  <div class="stage">
+    <div class="boardCard">
+      <canvas id="board" width="512" height="512" aria-label="Pixel drawing canvas"></canvas>
+    </div>
+
+    <aside class="panel">
+      <div class="card">
+        <div class="promptRow">
+          <span class="label">Draw</span>
+          <button id="promptBtn" class="prompt" title="Click for another idea">a cat</button>
+          <button id="shuffleBtn" class="shuffle" title="New idea" aria-label="New drawing idea">↻</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <p class="label">Colors</p>
+        <div id="palette" class="palette"></div>
+      </div>
+
+      <div class="card">
+        <p class="label">Tools</p>
+        <div class="tools">
+          <button class="btn tool on" data-tool="pen">Pen</button>
+          <button class="btn tool" data-tool="fill">Fill</button>
+          <button class="btn tool" data-tool="eraser">Eraser</button>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="undoBtn" class="btn" disabled>Undo</button>
+        <button id="clearBtn" class="btn">Clear</button>
+        <button id="saveBtn" class="btn">Save PNG</button>
+        <button id="muteBtn" class="btn">Sound: on</button>
+      </div>
+    </aside>
+  </div>
+
+  <footer>
+    <kbd>1</kbd>–<kbd>8</kbd> colors &middot; <kbd>B</kbd> pen &middot; <kbd>F</kbd> fill &middot; <kbd>E</kbd> eraser &middot; <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo &middot; <kbd>R</kbd> new idea
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- configuration ---------- */
+  var W = 32, H = 32, CELL = 16;
+  var COLORS = [
+    { hex:"#1b1b26", name:"Ink" },
+    { hex:"#ffffff", name:"White" },
+    { hex:"#ff6b6b", name:"Red" },
+    { hex:"#ffa94d", name:"Orange" },
+    { hex:"#ffd43b", name:"Yellow" },
+    { hex:"#51cf66", name:"Green" },
+    { hex:"#4dabf7", name:"Blue" },
+    { hex:"#b197fc", name:"Purple" }
+  ];
+  var PROMPTS = [
+    "a cat","a house","a tree","a star","a heart","a robot","a mushroom","a fish",
+    "a flower","a ghost","a rocket","a smiley face","a cloud","a gem","a skull",
+    "a butterfly","a cactus","a slice of pizza","a tiny dragon","a mountain"
+  ];
+
+  /* ---------- elements ---------- */
+  var canvas    = document.getElementById("board");
+  var ctx       = canvas.getContext("2d");
+  var paletteEl = document.getElementById("palette");
+  var promptBtn = document.getElementById("promptBtn");
+  var shuffleBtn= document.getElementById("shuffleBtn");
+  var undoBtn   = document.getElementById("undoBtn");
+  var clearBtn  = document.getElementById("clearBtn");
+  var saveBtn   = document.getElementById("saveBtn");
+  var muteBtn   = document.getElementById("muteBtn");
+  var toolBtns  = Array.prototype.slice.call(document.querySelectorAll(".tool"));
+
+  /* ---------- state ---------- */
+  var grid = new Array(W * H);
+  for (var i = 0; i < grid.length; i++) grid[i] = -1;
+
+  var colorIndex = 2;          /* start on Red */
+  var tool = "pen";
+  var undoStack = [];
+  var drawing = false;
+  var last = null;
+  var hover = null;
+  var muted = false;
+
+  /* ---------- audio (lazy, fully guarded) ---------- */
+  var actx = null;
+  function audio(){
+    if (actx === null) {
+      try {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        actx = AC ? new AC() : false;
+      } catch (e) { actx = false; }
+    }
+    if (actx && actx.state === "suspended") {
+      try { actx.resume().catch(function(){}); } catch (e) {}
+    }
+    return actx;
+  }
+  function beep(freq, dur, type, vol){
+    if (muted) return;
+    var a = audio();
+    if (!a || a.state !== "running") return;   /* never beep while suspended */
+    try {
+      var o = a.createOscillator();
+      var g = a.createGain();
+      o.type = type || "square";
+      o.frequency.value = freq;
+      var t = a.currentTime;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol || 0.035, t + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g);
+      g.connect(a.destination);
+      o.start(t);
+      o.stop(t + dur + 0.02);
+    } catch (e) { /* audio is a bonus, never a crash */ }
+  }
+  var lastBeep = 0;
+  function paintSound(){
+    var now = (window.performance && performance.now) ? performance.now() : Date.now();
+    if (now - lastBeep < 38) return;
+    lastBeep = now;
+    beep(320 + Math.random() * 520, 0.035, "square", 0.028);
+  }
+
+  /* resume audio on the very first gesture */
+  window.addEventListener("pointerdown", function(){ audio(); }, { once:true });
+  window.addEventListener("keydown",     function(){ audio(); }, { once:true });
+
+  /* ---------- rendering ---------- */
+  var CHECK_A = "#efece4", CHECK_B = "#e5e1d6", LINE = "rgba(40,35,25,0.07)";
+  function render(){
+    var px = W * CELL, py = H * CELL;
+    ctx.clearRect(0, 0, px, py);
+
+    for (var y = 0; y < H; y++){
+      for (var x = 0; x < W; x++){
+        var v = grid[y * W + x];
+        ctx.fillStyle = (v >= 0) ? COLORS[v].hex
+                                 : (((x + y) & 1) ? CHECK_B : CHECK_A);
+        ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
+      }
+    }
+
+    ctx.strokeStyle = LINE;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (var gx = 1; gx < W; gx++){
+      ctx.moveTo(gx * CELL + 0.5, 0);
+      ctx.lineTo(gx * CELL + 0.5, py);
+    }
+    for (var gy = 1; gy < H; gy++){
+      ctx.moveTo(0, gy * CELL + 0.5);
+      ctx.lineTo(px, gy * CELL + 0.5);
+    }
+    ctx.stroke();
+
+    if (hover){
+      ctx.strokeStyle = "rgba(20,18,12,0.6)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(hover.x * CELL + 1, hover.y * CELL + 1, CELL - 2, CELL - 2);
+    }
+  }
+
+  /* ---------- editing ---------- */
+  function pushUndo(){
+    undoStack.push(grid.slice());
+    if (undoStack.length > 80) undoStack.shift();
+    undoBtn.disabled = undoStack.length === 0;
+  }
+  function undo(){
+    if (!undoStack.length) return;
+    grid = undoStack.pop();
+    undoBtn.disabled = undoStack.length === 0;
+    render();
+    beep(300, 0.05, "triangle", 0.03);
+  }
+
+  function setCell(x, y, v){
+    if (x < 0 || y < 0 || x >= W || y >= H) return;
+    var i = y * W + x;
+    if (grid[i] !== v){ grid[i] = v; paintSound(); }
+  }
+  function paintCell(x, y){
+    setCell(x, y, tool === "eraser" ? -1 : colorIndex);
+  }
+  function paintLine(a, b){
+    var x0 = a.x, y0 = a.y, x1 = b.x, y1 = b.y;
+    var dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+    var dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+    var err = dx + dy, e2;
+    for (;;){
+      paintCell(x0, y0);
+      if (x0 === x1 && y0 === y1) break;
+      e2 = 2 * err;
+      if (e2 >= dy){ err += dy; x0 += sx; }
+      if (e2 <= dx){ err += dx; y0 += sy; }
+    }
+  }
+  function floodFill(sx, sy, val){
+    var start = sy * W + sx;
+    var target = grid[start];
+    if (target === val) return;
+    var stack = [start];
+    while (stack.length){
+      var i = stack.pop();
+      if (grid[i] !== target) continue;
+      grid[i] = val;
+      var x = i % W, y = (i / W) | 0;
+      if (x > 0)     stack.push(i - 1);
+      if (x < W - 1) stack.push(i + 1);
+      if (y > 0)     stack.push(i - W);
+      if (y < H - 1) stack.push(i + W);
+    }
+    paintSound();
+  }
+
+  function cellFromEvent(e){
+    var r = canvas.getBoundingClientRect();
+    if (!r.width || !r.height) return null;
+    var x = Math.floor((e.clientX - r.left) / r.width * W);
+    var y = Math.floor((e.clientY - r.top) / r.height * H);
+    if (x < 0 || y < 0 || x >= W || y >= H) return null;
+    return { x:x, y:y };
+  }
+
+  /* ---------- pointer input ---------- */
+  canvas.addEventListener("pointerdown", function(e){
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    audio();
+    var p = cellFromEvent(e);
+    if (!p) return;
+    e.preventDefault();
+    pushUndo();
+    drawing = true;
+    last = p;
+    hover = p;
+    if (tool === "fill") floodFill(p.x, p.y, colorIndex);
+    else paintCell(p.x, p.y);
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    render();
+  });
+
+  canvas.addEventListener("pointermove", function(e){
+    var p = cellFromEvent(e);
+    var changed = (!!p !== !!hover) || (p && hover && (p.x !== hover.x || p.y !== hover.y));
+    hover = p;
+    if (drawing && p){
+      if (last) paintLine(last, p); else paintCell(p.x, p.y);
+      last = p;
+      changed = true;
+    }
+    if (changed) render();
+  });
+
+  function endStroke(){ drawing = false; last = null; }
+  window.addEventListener("pointerup", endStroke);
+  window.addEventListener("pointercancel", endStroke);
+  canvas.addEventListener("pointerleave", function(){
+    if (!drawing && hover){ hover = null; render(); }
+  });
+  canvas.addEventListener("contextmenu", function(e){ e.preventDefault(); });
+
+  /* ---------- palette ---------- */
+  var swatches = [];
+  COLORS.forEach(function(c, idx){
+    var b = document.createElement("button");
+    b.className = "swatch" + (idx === 1 ? " light" : "");
+    b.type = "button";
+    b.style.background = c.hex;
+    b.title = c.name + " (" + (idx + 1) + ")";
+    b.setAttribute("aria-label", c.name);
+    b.innerHTML = '<span class="num">' + (idx + 1) + "</span>";
+    b.addEventListener("click", function(){
+      colorIndex = idx;
+      if (tool === "eraser") setTool("pen");
+      syncUI();
+      beep(520 + idx * 60, 0.045, "sine", 0.035);
+    });
+    paletteEl.appendChild(b);
+    swatches.push(b);
+  });
+
+  function syncUI(){
+    swatches.forEach(function(s, i){ s.classList.toggle("on", i === colorIndex); });
+    toolBtns.forEach(function(b){ b.classList.toggle("on", b.getAttribute("data-tool") === tool); });
+    undoBtn.disabled = undoStack.length === 0;
+    muteBtn.textContent = "Sound: " + (muted ? "off" : "on");
+  }
+
+  /* ---------- tools & actions ---------- */
+  function setTool(t){
+    tool = t;
+    syncUI();
+  }
+  toolBtns.forEach(function(b){
+    b.addEventListener("click", function(){
+      setTool(b.getAttribute("data-tool"));
+      beep(660, 0.04, "square", 0.03);
+    });
+  });
+
+  undoBtn.addEventListener("click", undo);
+  clearBtn.addEventListener("click", function(){
+    pushUndo();
+    for (var i = 0; i < grid.length; i++) grid[i] = -1;
+    render();
+    beep(220, 0.09, "triangle", 0.035);
+  });
+  saveBtn.addEventListener("click", function(){
+    var out = document.createElement("canvas");
+    out.width = W * CELL; out.height = H * CELL;
+    var c = out.getContext("2d");
+    c.fillStyle = CHECK_A;
+    c.fillRect(0, 0, out.width, out.height);
+    for (var y = 0; y < H; y++){
+      for (var x = 0; x < W; x++){
+        var v = grid[y * W + x];
+        if (v < 0) continue;
+        c.fillStyle = COLORS[v].hex;
+        c.fillRect(x * CELL, y * CELL, CELL, CELL);
+      }
+    }
+    try {
+      var a = document.createElement("a");
+      a.href = out.toDataURL("image/png");
+      a.download = "pixel-art.png";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      beep(880, 0.07, "sine", 0.035);
+    } catch (e) {}
+  });
+  muteBtn.addEventListener("click", function(){
+    muted = !muted;
+    syncUI();
+    if (!muted) beep(740, 0.06, "sine", 0.035);
+  });
+
+  /* ---------- prompts ---------- */
+  function newPrompt(){
+    var next = promptBtn.textContent;
+    for (var tries = 0; tries < 12 && next === promptBtn.textContent; tries++){
+      next = PROMPTS[Math.floor(Math.random() * PROMPTS.length)];
+    }
+    promptBtn.textContent = next;
+  }
+  promptBtn.addEventListener("click", function(){ newPrompt(); beep(600, 0.05, "sine", 0.03); });
+  shuffleBtn.addEventListener("click", function(){ newPrompt(); beep(600, 0.05, "sine", 0.03); });
+
+  /* ---------- keyboard ---------- */
+  window.addEventListener("keydown", function(e){
+    if (e.metaKey || e.ctrlKey){
+      if (e.key === "z" || e.key === "Z"){ e.preventDefault(); undo(); }
+      return;
+    }
+    if (e.altKey) return;
+    var k = e.key;
+    if (k >= "1" && k <= "8"){
+      e.preventDefault();
+      colorIndex = parseInt(k, 10) - 1;
+      if (tool === "eraser") tool = "pen";
+      syncUI();
+      beep(520 + colorIndex * 60, 0.045, "sine", 0.035);
+    } else if (k === "b" || k === "B"){ e.preventDefault(); setTool("pen"); }
+    else if (k === "f" || k === "F"){ e.preventDefault(); setTool("fill"); }
+    else if (k === "e" || k === "E"){ e.preventDefault(); setTool("eraser"); }
+    else if (k === "r" || k === "R"){ e.preventDefault(); newPrompt(); }
+  });
+
+  /* ---------- go ---------- */
+  syncUI();
+  render();
+})();
+</script>
+</body>
+</html>

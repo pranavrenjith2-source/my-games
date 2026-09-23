@@ -1,0 +1,2 @@
+2026-09-18 | (baseline) | removed saw-blade hazard tiles
+2026-09-18 | The Copper Update | added COPPER Conduit power-up tile (id 35) with zapping electric aura that damages nearby enemies, pickup sfx/popup, animated tile art, HUD timer bar, and placement in Level 1 + generated levels

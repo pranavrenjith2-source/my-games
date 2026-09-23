@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audio Test</title>
+<style>
+  body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:#0b1020;color:#dbe7ff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;text-align:center;padding:24px}
+  h1{font-size:22px;margin:0}
+  button{font:inherit;font-size:20px;font-weight:800;padding:18px 40px;border:none;border-radius:14px;background:linear-gradient(145deg,#4dd0ff,#2ecc40);color:#05121a;cursor:pointer}
+  button:active{transform:translateY(2px)}
+  #state{font-family:ui-monospace,monospace;font-size:14px;color:#9fb3d1;white-space:pre-wrap;max-width:640px}
+  #verdict{font-size:15px;max-width:640px;line-height:1.6}
+  .ok{color:#4de355}.bad{color:#ff6a5a}.warn{color:#ffd42a}
+</style>
+</head>
+<body>
+  <h1>Audio Test</h1>
+  <button id="go">🔊 PLAY A TONE</button>
+  <div id="state">not started</div>
+  <div id="verdict">Click the button. You should hear a short two-note chime.</div>
+
+<script>
+(function(){
+  "use strict";
+  var ctx = null, log = [];
+  function show(msg, cls){ document.getElementById("verdict").innerHTML = cls ? ('<span class="'+cls+'">'+msg+'</span>') : msg; }
+  function dump(){
+    var s = "context: " + (ctx ? ctx.state : "none");
+    if (ctx) s += "\nsampleRate: " + ctx.sampleRate + "  baseLatency: " + (ctx.baseLatency!=null?ctx.baseLatency:"?");
+    s += "\nmuted(element): " + (navigator.muted!==undefined ? navigator.muted : "n/a");
+    document.getElementById("state").textContent = s;
+  }
+  document.getElementById("go").addEventListener("click", function(){
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC){ show("This browser has no Web Audio API.","bad"); return; }
+      if (!ctx) ctx = new AC();
+      var go = function(){
+        dump();
+        var t = ctx.currentTime;
+        [ [660,0], [990,0.18] ].forEach(function(pair){
+          var o = ctx.createOscillator(), g = ctx.createGain();
+          o.type = "sine"; o.frequency.value = pair[0];
+          var st = t + pair[1];
+          g.gain.setValueAtTime(0.0001, st);
+          g.gain.exponentialRampToValueAtTime(0.25, st + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, st + 0.35);
+          o.connect(g); g.connect(ctx.destination);
+          o.start(st); o.stop(st + 0.4);
+        });
+        show("A chime just played. If you did NOT hear it: check the Safari tab's speaker icon (site may be muted), the system volume, and Safari → Settings → Websites → Auto-Play. Context state: <b>" + ctx.state + "</b>.", ctx.state === "running" ? "ok" : "warn");
+      };
+      if (ctx.state === "suspended") {
+        ctx.resume().then(function(){ go(); }).catch(function(e){ show("resume() failed: " + e.message, "bad"); dump(); });
+      } else go();
+    } catch(e){ show("Error: " + e.message, "bad"); }
+  });
+})();
+</script>
+</body>
+</html>

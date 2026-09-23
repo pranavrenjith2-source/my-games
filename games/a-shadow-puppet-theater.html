@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>Shadow Puppet Theater</title>
+<style>
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{
+    background:#0a0604;
+    overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:#f6e2c8;
+    -webkit-user-select:none;user-select:none;
+    -webkit-tap-highlight-color:transparent;
+  }
+  #c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair;}
+  header{
+    position:fixed;top:0;left:0;right:0;z-index:2;
+    display:flex;justify-content:space-between;align-items:flex-start;
+    gap:12px;padding:16px 20px;pointer-events:none;
+  }
+  h1{
+    margin:0;font-size:clamp(14px,2.2vw,20px);
+    letter-spacing:.16em;text-transform:uppercase;font-weight:700;
+    color:#ffd9a8;text-shadow:0 0 18px rgba(255,150,60,.45);
+  }
+  .tag{margin:5px 0 0;font-size:clamp(11px,1.5vw,13px);opacity:.62;letter-spacing:.03em;}
+  .hint{text-align:right;font-size:clamp(11px,1.4vw,13px);line-height:1.65;opacity:.62;}
+  .hint b{color:#ffcf94;font-weight:600;}
+  footer{
+    position:fixed;left:0;right:0;bottom:0;z-index:3;
+    display:flex;justify-content:center;flex-wrap:wrap;gap:8px;
+    padding:12px 12px calc(12px + env(safe-area-inset-bottom));
+  }
+  button{
+    font:inherit;font-size:13px;font-weight:600;
+    color:#e9cfae;background:rgba(30,16,9,.72);
+    border:1px solid rgba(255,190,120,.22);
+    border-radius:999px;padding:9px 15px;cursor:pointer;
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    transition:transform .12s ease,background .2s,color .2s,border-color .2s,box-shadow .2s;
+  }
+  button:hover{background:rgba(60,32,16,.85);}
+  button.on{
+    color:#1a0d06;background:#ffcf94;border-color:#ffcf94;
+    box-shadow:0 0 22px rgba(255,170,90,.55);
+  }
+  button:active{transform:scale(.94);}
+  button span{opacity:.5;margin-left:6px;font-weight:500;}
+  button.on span{opacity:.55;}
+  @media (max-width:560px){ .hint{display:none;} }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<header>
+  <div>
+    <h1>Shadow Puppet Theater</h1>
+    <p class="tag">Move to cast a shadow &mdash; hold to bring it to the lamp.</p>
+  </div>
+  <div class="hint">
+    <div><b>Move</b> &nbsp;mouse / finger</div>
+    <div><b>Hold</b> &nbsp;click or Space</div>
+    <div><b>1&ndash;4</b> &nbsp;change puppet</div>
+  </div>
+</header>
+<footer id="picker"></footer>
+<script>
+(function(){
+"use strict";
+
+var TAU = Math.PI * 2;
+var canvas = document.getElementById('c');
+var ctx = canvas.getContext('2d');
+var picker = document.getElementById('picker');
+
+var W = 0, H = 0, DPR = 1;
+var sx = 0, sy = 0, sw = 0, sh = 0;
+var BASE = 64;
+
+var SUPPORT_FILTER = (function(){
+  try {
+    var c = document.createElement('canvas').getContext('2d');
+    c.filter = 'blur(2px)';
+    return c.filter === 'blur(2px)';
+  } catch(e){ return false; }
+})();
+
+var SHADOW = '#180d07';
+
+/* ------------------------------------------------------------------ audio */
+var ac = null;
+function initAudio(){
+  try {
+    if (ac){
+      if (ac.state === 'suspended' && ac.resume) ac.resume().catch(function(){});
+      return;
+    }
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    ac = new AC();
+    if (ac.state === 'suspended' && ac.resume) ac.resume().catch(function(){});
+  } catch(e){ ac = null; }
+}
+function tone(freq, dur, type, vol){
+  if (!ac || ac.state !== 'running') return;
+  try {
+    var o = ac.createOscillator(), g = ac.createGain();
+    o.type = type || 'sine';
+    o.frequency.value = freq;
+    var t0 = ac.currentTime;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(vol || 0.05, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(ac.destination);
+    o.start(t0); o.stop(t0 + dur + 0.03);
+  } catch(e){}
+}
+
+/* --------------------------------------------------------------- puppets */
+function ell(x, y, rx, ry, rot){
+  ctx.beginPath();
+  ctx.ellipse(x, y, rx, ry, rot || 0, 0, TAU);
+  ctx.fill();
+}
+
+function drawRabbit(t, mouth){
+  var wig = Math.sin(t * 2.2) * 0.05;
+  ell(-0.26, 0.06, 0.075, 0.075);                 // tail
+  ell(0, 0.12, 0.27, 0.20);                       // body
+  ell(0.13, 0.30, 0.055, 0.095);                  // front leg
+  ell(-0.09, 0.30, 0.065, 0.10);                  // back leg
+  ell(0.15 + wig * 0.4, -0.31, 0.045, 0.17, -0.22 + wig);  // ear
+  ell(0.27 + wig * 0.4, -0.32, 0.045, 0.17, 0.10 + wig);   // ear
+  ell(0.21, -0.06, 0.15, 0.13);                   // head
+  ctx.beginPath();                                // nose
+  ctx.moveTo(0.36, -0.06);
+  ctx.lineTo(0.40, -0.02 + mouth * 0.03);
+  ctx.lineTo(0.36, -0.01);
+  ctx.closePath(); ctx.fill();
+}
+
+function drawBird(t, mouth){
+  var flap = Math.sin(t * 3.1) * 0.06;
+  ctx.beginPath();                                // tail
+  ctx.moveTo(-0.26, 0.00);
+  ctx.lineTo(-0.58, -0.14);
+  ctx.lineTo(-0.30, 0.16);
+  ctx.closePath(); ctx.fill();
+
+  ell(0, 0.08, 0.30, 0.20);                       // body
+  ell(-0.02, 0.05, 0.17, 0.11, -0.25 + flap);     // wing
+
+  ctx.save();                                     // legs
+  ctx.lineWidth = 0.032; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(0.04, 0.25); ctx.lineTo(0.04, 0.42);
+  ctx.moveTo(-0.08, 0.25); ctx.lineTo(-0.08, 0.42);
+  ctx.stroke();
+  ctx.restore();
+
+  ell(0.26, -0.10, 0.14, 0.14);                   // head
+
+  ctx.beginPath();                                // upper beak
+  ctx.moveTo(0.34, -0.16);
+  ctx.lineTo(0.63, -0.07);
+  ctx.lineTo(0.34, -0.03);
+  ctx.closePath(); ctx.fill();
+
+  ctx.save();                                     // lower beak
+  ctx.translate(0.34, -0.03);
+  ctx.rotate(mouth * 0.55);
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(0.28, 0.005);
+  ctx.lineTo(0, 0.06);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+function drawWolf(t, mouth){
+  var sway = Math.sin(t * 1.6) * 0.05;
+  ctx.beginPath();                                // tail
+  ctx.moveTo(-0.24, 0.04);
+  ctx.quadraticCurveTo(-0.54, -0.04, -0.46 + sway * 0.3, -0.26);
+  ctx.quadraticCurveTo(-0.40, -0.02, -0.22, 0.16);
+  ctx.closePath(); ctx.fill();
+
+  ell(0, 0.10, 0.30, 0.19);                       // body
+  ell(0.16, 0.30, 0.05, 0.11);                    // front leg
+  ell(-0.12, 0.30, 0.05, 0.11);                   // back leg
+
+  ctx.beginPath();                                // ears
+  ctx.moveTo(0.19, -0.19); ctx.lineTo(0.18, -0.38); ctx.lineTo(0.30, -0.24);
+  ctx.closePath(); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(0.32, -0.20); ctx.lineTo(0.37, -0.39); ctx.lineTo(0.43, -0.22);
+  ctx.closePath(); ctx.fill();
+
+  ell(0.30, -0.10, 0.16, 0.13);                   // head
+
+  ctx.beginPath();                                // upper snout
+  ctx.moveTo(0.40, -0.17);
+  ctx.lineTo(0.65, -0.09);
+  ctx.lineTo(0.65, -0.05);
+  ctx.lineTo(0.40, -0.06);
+  ctx.closePath(); ctx.fill();
+
+  ctx.save();                                     // lower jaw
+  ctx.translate(0.42, -0.05);
+  ctx.rotate(mouth * 0.5);
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(0.24, -0.005);
+  ctx.lineTo(0.22, 0.055);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+function drawHand(t, mouth){
+  var spread = 0.035 + mouth * 0.06;
+  var lens = [0.24, 0.31, 0.29, 0.22];
+
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  ctx.lineWidth = 0.15;                           // wrist
+  ctx.beginPath(); ctx.moveTo(0, 0.22); ctx.lineTo(0, 0.46); ctx.stroke();
+
+  ell(0, 0.10, 0.24, 0.20);                       // palm
+
+  ctx.lineWidth = 0.078;                          // fingers
+  for (var i = 0; i < 4; i++){
+    var x = -0.15 + i * 0.10;
+    var l = lens[i] * (1 + Math.sin(t * 1.7 + i) * 0.02);
+    var ang = -0.05 + (i - 1.5) * spread * 2.3;
+    ctx.beginPath();
+    ctx.moveTo(x, 0.02);
+    ctx.lineTo(x + Math.sin(ang) * l, 0.02 - Math.cos(ang) * l);
+    ctx.stroke();
+  }
+
+  ctx.lineWidth = 0.09;                           // thumb
+  var ta = -0.85 - mouth * 0.2;
+  ctx.beginPath();
+  ctx.moveTo(-0.19, 0.10);
+  ctx.lineTo(-0.19 + Math.cos(ta) * 0.24, 0.10 + Math.sin(ta) * 0.24);
+  ctx.stroke();
+}
+
+var puppets = [
+  { name: 'Rabbit', draw: drawRabbit },
+  { name: 'Bird',   draw: drawBird   },
+  { name: 'Wolf',   draw: drawWolf   },
+  { name: 'Hand',   draw: drawHand   }
+];
+
+/* ----------------------------------------------------------------- state */
+var state = {
+  t: 0,
+  kind: 0,
+  tx: 0, ty: 0,
+  px: 0, py: 0,
+  prevX: 0,
+  lean: 0,
+  m: 2.1,
+  mouth: 0,
+  holding: false,
+  light: { x: 0, y: 0 }
+};
+
+var dust = [];
+var audience = [];
+
+function buildDust(){
+  dust.length = 0;
+  for (var i = 0; i < 70; i++){
+    dust.push({
+      nx: Math.random(),
+      ny: Math.random(),
+      r: 0.6 + Math.random() * 1.7,
+      sp: 0.4 + Math.random() * 1.4,
+      vx: (Math.random() - 0.5) * 0.006,
+      vy: 0.006 + Math.random() * 0.014,
+      ph: Math.random() * TAU
+    });
+  }
+}
+function buildAudience(){
+  audience.length = 0;
+  var n = Math.max(7, Math.min(18, Math.round(window.innerWidth / 95)));
+  for (var i = 0; i < n; i++){
+    audience.push({
+      nx: (i + 0.5) / n + (Math.random() - 0.5) * 0.02,
+      size: 32 + Math.random() * 26,
+      ph: Math.random() * TAU
+    });
+  }
+}
+
+/* ---------------------------------------------------------------- layout */
+function layout(){
+  sx = W * 0.06;
+  sw = W * 0.88;
+  sy = Math.max(H * 0.15, 76);
+  var bottom = Math.max(H * 0.20, 92);
+  sh = Math.max(120, H - sy - bottom);
+  BASE = Math.max(32, Math.min(92, Math.min(sw, sh) * 0.17));
+}
+
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = canvas.clientWidth || window.innerWidth;
+  H = canvas.clientHeight || window.innerHeight;
+  canvas.width = Math.round(W * DPR);
+  canvas.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  layout();
+  if (!state.px && !state.py){
+    state.px = sx + sw / 2;
+    state.py = sy + sh / 2;
+    state.tx = state.px;
+    state.ty = state.py;
+  }
+  clampTarget();
+}
+
+function clampTarget(){
+  var mx = Math.max(24, BASE * 0.5);
+  state.tx = Math.max(sx + mx, Math.min(sx + sw - mx, state.tx));
+  state.ty = Math.max(sy + mx, Math.min(sy + sh - mx, state.ty));
+}
+
+function rr(x, y, w, h, r){
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+/* ---------------------------------------------------------------- update */
+function update(dt){
+  state.t += dt;
+
+  state.light.x = sx + sw / 2 + Math.sin(state.t * 0.33) * sw * 0.05;
+  state.light.y = sy + sh / 2 + Math.cos(state.t * 0.24) * sh * 0.05;
+
+  var k = 1 - Math.exp(-14 * dt);
+  state.px += (state.tx - state.px) * k;
+  state.py += (state.ty - state.py) * k;
+
+  var vx = (state.px - state.prevX) / Math.max(dt, 0.0001);
+  state.prevX = state.px;
+  var targetLean = Math.max(-0.32, Math.min(0.32, vx * 0.0006));
+  state.lean += (targetLean - state.lean) * (1 - Math.exp(-9 * dt));
+
+  var mTarget = state.holding ? 4.6 : 2.1;
+  state.m += (mTarget - state.m) * (1 - Math.exp(-9 * dt));
+
+  var mouthTarget = state.holding ? 1 : 0;
+  state.mouth += (mouthTarget - state.mouth) * (1 - Math.exp(-13 * dt));
+
+  for (var i = 0; i < dust.length; i++){
+    var d = dust[i];
+    d.ny -= d.vy * dt;
+    d.nx += d.vx * dt;
+    if (d.ny < 0) d.ny += 1;
+    if (d.nx < 0) d.nx += 1;
+    if (d.nx > 1) d.nx -= 1;
+  }
+}
+
+/* ---------------------------------------------------------------- render */
+function drawShadow(){
+  var scale = BASE * state.m;
+  var blur = 3 + scale * 0.035;
+
+  ctx.save();
+  ctx.translate(state.px, state.py);
+  ctx.rotate(state.lean);
+  ctx.scale(scale, scale);
+  if (SUPPORT_FILTER) ctx.filter = 'blur(' + blur.toFixed(1) + 'px)';
+  ctx.fillStyle = SHADOW;
+  ctx.strokeStyle = SHADOW;
+  puppets[state.kind].draw(state.t, state.mouth);
+  if (SUPPORT_FILTER) ctx.filter = 'none';
+  ctx.restore();
+}
+
+function drawDust(){
+  var lx = state.light.x, ly = state.light.y;
+  var maxD = Math.max(sw, sh) * 0.62;
+  for (var i = 0; i < dust.length; i++){
+    var d = dust[i];
+    var x = sx + d.nx * sw;
+    var y = sy + d.ny * sh + Math.sin(state.t * d.sp + d.ph) * 8;
+    var dist = Math.sqrt((x - lx) * (x - lx) + (y - ly) * (y - ly));
+    var a = Math.max(0, 1 - dist / maxD) * 0.55;
+    if (a <= 0.015) continue;
+    ctx.beginPath();
+    ctx.arc(x, y, d.r, 0, TAU);
+    ctx.fillStyle = 'rgba(255,232,196,' + a.toFixed(3) + ')';
+    ctx.fill();
+  }
+}
+
+function drawAudience(){
+  for (var i = 0; i < audience.length; i++){
+    var p = audience[i];
+    var x = p.nx * W;
+    var bob = Math.sin(state.t * 1.2 + p.ph) * 3;
+    var r = p.size * 0.5;
+    var hy = H - p.size * 0.72 + bob;
+
+    ctx.beginPath();
+    ctx.ellipse(x, H + p.size * 0.15, p.size * 0.95, p.size * 0.9, 0, Math.PI, TAU);
+    ctx.fillStyle = '#0a0604';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(x, hy - 2, r * 1.05, 0, TAU);
+    ctx.fillStyle = 'rgba(255,170,90,0.5)';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(x, hy, r, 0, TAU);
+    ctx.fillStyle = '#0a0604';
+    ctx.fill();
+
+    if (state.holding){
+      var a = Math.sin(state.t * 12 + p.ph) * 0.25;
+      ctx.strokeStyle = '#0a0604';
+      ctx.lineWidth = p.size * 0.17;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x - p.size * 0.45, H - p.size * 0.55);
+      ctx.lineTo(x - p.size * 1.0, H - p.size * 1.25 + a * p.size);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x + p.size * 0.45, H - p.size * 0.55);
+      ctx.lineTo(x + p.size * 1.0, H - p.size * 1.25 + a * p.size);
+      ctx.stroke();
+    }
+  }
+}
+
+function render(){
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+  var bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#0b0604');
+  bg.addColorStop(1, '#160b06');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,140,60,0.35)';
+  ctx.shadowBlur = Math.max(28, Math.min(sw, sh) * 0.18);
+  ctx.fillStyle = '#2a1409';
+  rr(sx - 8, sy - 8, sw + 16, sh + 16, 22);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  rr(sx, sy, sw, sh, 16);
+  ctx.clip();
+
+  var lx = state.light.x, ly = state.light.y;
+  var g = ctx.createRadialGradient(lx, ly, Math.min(sw, sh) * 0.02, lx, ly, Math.max(sw, sh) * 0.8);
+  g.addColorStop(0, '#fff3da');
+  g.addColorStop(0.22, '#ffd39a');
+  g.addColorStop(0.5, '#e59d5c');
+  g.addColorStop(0.78, '#9c5a2e');
+  g.addColorStop(1, '#4a2311');
+  ctx.fillStyle = g;
+  ctx.fillRect(sx, sy, sw, sh);
+
+  drawShadow();
+  drawDust();
+  ctx.restore();
+
+  ctx.save();
+  rr(sx, sy, sw, sh, 16);
+  ctx.strokeStyle = 'rgba(255,200,140,0.18)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+
+  drawAudience();
+
+  var vg = ctx.createRadialGradient(W / 2, H * 0.45, Math.min(W, H) * 0.25, W / 2, H * 0.45, Math.max(W, H) * 0.78);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(0,0,0,0.62)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W, H);
+}
+
+/* ------------------------------------------------------------------ loop */
+var last = performance.now();
+function frame(now){
+  var dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  update(dt);
+  render();
+  requestAnimationFrame(frame);
+}
+
+/* ------------------------------------------------------------------ input */
+function setKind(i){
+  i = ((i % puppets.length) + puppets.length) % puppets.length;
+  if (i === state.kind) return;
+  state.kind = i;
+  for (var b = 0; b < picker.children.length; b++){
+    picker.children[b].classList.toggle('on', b === i);
+  }
+  tone(430 + i * 95, 0.16, 'triangle', 0.05);
+}
+
+function pointerPos(e){
+  var r = canvas.getBoundingClientRect();
+  state.tx = e.clientX - r.left;
+  state.ty = e.clientY - r.top;
+  clampTarget();
+}
+
+canvas.addEventListener('pointerdown', function(e){
+  initAudio();
+  pointerPos(e);
+  state.holding = true;
+  tone(170, 0.34, 'sine', 0.045);
+  try { canvas.setPointerCapture(e.pointerId); } catch(err){}
+  e.preventDefault();
+}, { passive: false });
+
+canvas.addEventListener('pointermove', function(e){
+  pointerPos(e);
+}, { passive: true });
+
+function release(){
+  state.holding = false;
+}
+canvas.addEventListener('pointerup', release);
+canvas.addEventListener('pointercancel', release);
+
+window.addEventListener('keydown', function(e){
+  initAudio();
+  var k = e.key;
+  if (k === ' ' || k === 'Spacebar' || e.code === 'Space'){
+    e.preventDefault();
+    if (!state.holding){
+      state.holding = true;
+      tone(170, 0.34, 'sine', 0.045);
+    }
+    return;
+  }
+  if (k >= '1' && k <= '4'){ setKind(parseInt(k, 10) - 1); return; }
+  if (k === 'ArrowRight'){ setKind(state.kind + 1); return; }
+  if (k === 'ArrowLeft'){ setKind(state.kind - 1); }
+}, { passive: false });
+
+window.addEventListener('keyup', function(e){
+  if (e.key === ' ' || e.key === 'Spacebar' || e.code === 'Space'){
+    release();
+  }
+});
+
+window.addEventListener('resize', resize);
+window.addEventListener('blur', release);
+
+/* ------------------------------------------------------------------- init */
+puppets.forEach(function(p, i){
+  var b = document.createElement('button');
+  b.type = 'button';
+  b.innerHTML = p.name + '<span>' + (i + 1) + '</span>';
+  b.addEventListener('click', function(){
+    initAudio();
+    setKind(i);
+    b.blur();
+  });
+  picker.appendChild(b);
+});
+picker.children[0].classList.add('on');
+
+buildDust();
+buildAudience();
+resize();
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>

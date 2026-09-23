@@ -1,0 +1,20 @@
+a markdown editor with live preview, autosave and export
+a color palette generator with accessibility contrast checks
+a unit + currency converter that works fully offline
+a password generator and strength analyzer
+a regex tester with live match highlighting
+a JSON formatter, validator and tree explorer
+a side-by-side text diff tool
+a cron expression explainer with next-run times
+a subnet / IP calculator
+a Pomodoro timer with session statistics
+a habit tracker stored locally with streaks
+a note-taking app with tags and search
+an image to ASCII art converter
+an offline QR code generator drawn on canvas
+a base64 / URL / hash encoder-decoder
+a world clock across many timezones
+a CSS gradient and box-shadow playground with copyable code
+a kanban board stored locally with drag and drop
+a typing speed test with accuracy and history
+a stopwatch / lap timer with keyboard shortcuts

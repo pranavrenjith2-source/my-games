@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mouse Screen Saver</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: #05070f; overflow: hidden;
+    font-family: ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  #c { display: block; position: fixed; inset: 0; cursor: crosshair; touch-action: none; }
+  #ui {
+    position: fixed; top: 0; left: 0; padding: 22px 26px;
+    pointer-events: none; user-select: none;
+    transition: opacity .8s ease;
+    z-index: 2;
+  }
+  #ui.hidden { opacity: 0; }
+  #ui h1 {
+    margin: 0; font-size: 20px; font-weight: 800; letter-spacing: .01em;
+    color: #fff; text-shadow: 0 0 22px rgba(120,190,255,.65);
+  }
+  #ui h1 span { color: #7ee0ff; }
+  #ui p {
+    margin: 6px 0 0; font-size: 13px; font-weight: 500;
+    color: rgba(255,255,255,.6); max-width: 46ch; line-height: 1.45;
+  }
+  #ui kbd {
+    font: inherit; font-size: 11px; padding: 1px 6px; border-radius: 6px;
+    background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18);
+    color: #cfefff;
+  }
+  #badge {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+    pointer-events: none; user-select: none; z-index: 2;
+    font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
+    color: rgba(255,255,255,.35); transition: opacity .5s ease;
+    text-shadow: 0 0 14px rgba(120,190,255,.4);
+  }
+  #badge.hidden { opacity: 0; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="ui">
+  <h1>Mouse <span>Screen Saver</span></h1>
+  <p>Move your mouse to stir the particle flow &middot; click for a shockwave &middot; <kbd>space</kbd> toggles warp. Sit still and the little logo takes over.</p>
+</div>
+
+<div id="badge">warp x1</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var canvas = document.getElementById('c');
+  var ctx = canvas.getContext('2d', { alpha: false });
+  var ui = document.getElementById('ui');
+  var badge = document.getElementById('badge');
+
+  if (!ctx) { return; }
+
+  var DPR = 1, W = 0, H = 0;
+  var particles = [];
+  var rings = [];
+  var mouse = { x: 0, y: 0, active: false };
+  var lastInput = performance.now();
+  var warp = 1;
+  var badgeTimer = 0;
+
+  // ---------- optional audio (fully guarded) ----------
+  var actx = null;
+  function audioCtx() {
+    if (actx === null) {
+      try {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        actx = AC ? new AC() : false;
+      } catch (e) { actx = false; }
+    }
+    return actx || null;
+  }
+  function resumeAudio() {
+    var ac = audioCtx();
+    if (ac && ac.state === 'suspended') { try { ac.resume(); } catch (e) {} }
+  }
+  function blip(f0, f1, dur, vol, type) {
+    var ac = audioCtx();
+    if (!ac) { return; }
+    if (ac.state !== 'running') { resumeAudio(); return; } // never beep while suspended
+    try {
+      var t = ac.currentTime;
+      var o = ac.createOscillator();
+      var g = ac.createGain();
+      o.type = type || 'sine';
+      o.frequency.setValueAtTime(f0, t);
+      o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(ac.destination);
+      o.start(t); o.stop(t + dur + 0.03);
+    } catch (e) {}
+  }
+
+  // ---------- setup ----------
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = Math.floor(window.innerWidth * DPR);
+    H = Math.floor(window.innerHeight * DPR);
+    canvas.width = W;
+    canvas.height = H;
+    canvas.style.width = window.innerWidth + 'px';
+    canvas.style.height = window.innerHeight + 'px';
+
+    ctx.fillStyle = '#05070f';
+    ctx.fillRect(0, 0, W, H);
+
+    buildParticles();
+  }
+
+  function buildParticles() {
+    var area = (W / DPR) * (H / DPR);
+    var count = Math.max(240, Math.min(900, Math.round(area / 2400)));
+    particles = [];
+    for (var i = 0; i < count; i++) {
+      particles.push(spawn(true));
+    }
+  }
+
+  function spawn(anywhere) {
+    var x = Math.random() * W;
+    var y = Math.random() * H;
+    if (!anywhere) {
+      var edge = Math.random() * 4 | 0;
+      if (edge === 0) x = -10 * DPR;
+      else if (edge === 1) x = W + 10 * DPR;
+      else if (edge === 2) y = -10 * DPR;
+      else y = H + 10 * DPR;
+    }
+    return {
+      x: x, y: y, px: x, py: y,
+      vx: (Math.random() - 0.5) * 0.6 * DPR,
+      vy: (Math.random() - 0.5) * 0.6 * DPR,
+      r: (0.6 + Math.random() * 1.5) * DPR,
+      hue: 170 + Math.random() * 160
+    };
+  }
+
+  // ---------- flow field ----------
+  function flowAngle(x, y, t) {
+    return Math.sin(x * 0.0016 + t * 0.55) * 1.2 +
+           Math.cos(y * 0.0013 - t * 0.47) * 1.2 +
+           Math.sin((x + y) * 0.0009 + t * 0.31) * 0.9;
+  }
+
+  // ---------- shockwave ----------
+  function shockwave(x, y, power) {
+    var R = 340 * DPR * power;
+    var impulse = 26 * DPR * power;
+    for (var i = 0; i < particles.length; i++) {
+      var p = particles[i];
+      var dx = p.x - x, dy = p.y - y;
+      var d = Math.sqrt(dx * dx + dy * dy) || 1;
+      if (d < R) {
+        var f = (1 - d / R) * impulse;
+        p.vx += (dx / d) * f;
+        p.vy += (dy / d) * f;
+      }
+    }
+    rings.push({ x: x, y: y, r: 6 * DPR, max: R * 1.35, a: 1, hue: 170 + Math.random() * 140 });
+    blip(300, 70, 0.42, 0.07, 'sine');
+  }
+
+  // ---------- bouncing logo (idle mode) ----------
+  var logo = { x: 0, y: 0, vx: 0, vy: 0, w: 0, h: 0, hue: 205, a: 0, born: false };
+  var cornerFlash = 0;
+
+  function initLogo() {
+    logo.w = 250 * DPR;
+    logo.h = 120 * DPR;
+    logo.x = (W - logo.w) * 0.5;
+    logo.y = (H - logo.h) * 0.5;
+    var sp = 3.0 * DPR;
+    var ang = (Math.random() * 0.7 + 0.3);
+    logo.vx = Math.cos(ang) * sp;
+    logo.vy = Math.sin(ang) * sp;
+    logo.born = true;
+  }
+
+  function updateLogo(k) {
+    if (!logo.born) { initLogo(); }
+    var bounced = 0;
+    logo.x += logo.vx * k;
+    logo.y += logo.vy * k;
+    if (logo.x < 0) { logo.x = 0; logo.vx = Math.abs(logo.vx); bounced++; }
+    else if (logo.x + logo.w > W) { logo.x = W - logo.w; logo.vx = -Math.abs(logo.vx); bounced++; }
+    if (logo.y < 0) { logo.y = 0; logo.vy = Math.abs(logo.vy); bounced++; }
+    else if (logo.y + logo.h > H) { logo.y = H - logo.h; logo.vy = -Math.abs(logo.vy); bounced++; }
+    if (bounced > 0) {
+      logo.hue = (logo.hue + 47) % 360;
+      if (bounced >= 2) {
+        cornerFlash = 1;
+        shockwave(logo.x + logo.w * 0.5, logo.y + logo.h * 0.5, 1.25);
+        blip(520, 1040, 0.3, 0.06, 'triangle');
+      }
+    }
+  }
+
+  function roundRect(c, x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+
+  function drawLogo() {
+    if (logo.a <= 0.01) { return; }
+    ctx.save();
+    ctx.globalAlpha = logo.a;
+
+    var grd = ctx.createLinearGradient(logo.x, logo.y, logo.x + logo.w, logo.y + logo.h);
+    grd.addColorStop(0, 'hsl(' + logo.hue + ',85%,58%)');
+    grd.addColorStop(1, 'hsl(' + ((logo.hue + 55) % 360) + ',85%,50%)');
+
+    ctx.globalCompositeOperation = 'source-over';
+    roundRect(ctx, logo.x, logo.y, logo.w, logo.h, 26 * DPR);
+    ctx.fillStyle = grd;
+    ctx.fill();
+
+    if (cornerFlash > 0) {
+      ctx.globalAlpha = logo.a * cornerFlash;
+      ctx.lineWidth = 6 * DPR;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+      ctx.globalAlpha = logo.a;
+    }
+
+    // eyes that follow the cursor
+    var cx = logo.x + logo.w * 0.5;
+    var cy = logo.y + logo.h * 0.5;
+    var dirx = mouse.x - cx, diry = mouse.y - cy;
+    var dl = Math.sqrt(dirx * dirx + diry * diry) || 1;
+    var maxOff = 7 * DPR;
+    var ox = (dirx / dl) * maxOff;
+    var oy = (diry / dl) * maxOff;
+
+    var er = 15 * DPR;
+    var ey = logo.y + logo.h * 0.42;
+    var e1 = logo.x + logo.w * 0.34;
+    var e2 = logo.x + logo.w * 0.66;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(e1, ey, er, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2, ey, er, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = '#0b1020';
+    ctx.beginPath(); ctx.arc(e1 + ox, ey + oy, 7 * DPR, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2 + ox, ey + oy, 7 * DPR, 0, Math.PI * 2); ctx.fill();
+
+    // smile
+    ctx.strokeStyle = 'rgba(255,255,255,.92)';
+    ctx.lineWidth = 6 * DPR;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(cx, logo.y + logo.h * 0.5, 30 * DPR, 0.25 * Math.PI, 0.75 * Math.PI);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // ---------- input ----------
+  function noteInput() {
+    lastInput = performance.now();
+    ui.classList.remove('hidden');
+    badge.classList.remove('hidden');
+    if (badgeTimer <= 0) { badgeTimer = 2.2; }
+  }
+
+  window.addEventListener('pointermove', function (e) {
+    mouse.x = e.clientX * DPR;
+    mouse.y = e.clientY * DPR;
+    mouse.active = true;
+    noteInput();
+  }, { passive: true });
+
+  window.addEventListener('pointerdown', function (e) {
+    resumeAudio();
+    mouse.x = e.clientX * DPR;
+    mouse.y = e.clientY * DPR;
+    mouse.active = true;
+    noteInput();
+    shockwave(mouse.x, mouse.y, 1);
+  }, { passive: true });
+
+  window.addEventListener('pointerleave', function () { mouse.active = false; });
+
+  window.addEventListener('keydown', function (e) {
+    resumeAudio();
+    noteInput();
+    if (e.code === 'Space') {
+      e.preventDefault();
+      warp = warp === 1 ? 2.6 : 1;
+      badge.textContent = 'warp x' + (warp === 1 ? '1' : '2.6');
+      badgeTimer = 1.6;
+      blip(warp > 1 ? 440 : 300, warp > 1 ? 880 : 220, 0.16, 0.05, 'triangle');
+    } else if (e.key === 'c' || e.key === 'C') {
+      for (var i = 0; i < particles.length; i++) { particles[i] = spawn(true); }
+      blip(700, 200, 0.25, 0.05, 'sine');
+    }
+  });
+
+  window.addEventListener('resize', resize);
+
+  // ---------- main loop ----------
+  var last = performance.now();
+
+  function frame(now) {
+    var dt = now - last;
+    last = now;
+    var k = Math.min(dt / 16.6667, 2.5);
+    if (k <= 0) { k = 0.0001; }
+
+    var idle = (now - lastInput) > 5000;
+
+    if (idle) {
+      ui.classList.add('hidden');
+      badge.classList.add('hidden');
+    } else if (badgeTimer > 0) {
+      badgeTimer -= dt / 1000;
+      if (badgeTimer <= 0) { badge.classList.add('hidden'); }
+    }
+
+    // trail fade
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(5,7,15,0.16)';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+
+    var t = now * 0.00035;
+    var flowScale = idle ? 0.42 : 1;
+    var damp = Math.pow(0.955, k);
+    var maxSp = 8 * DPR;
+    var R = 300 * DPR;
+
+    for (var i = 0; i < particles.length; i++) {
+      var p = particles[i];
+
+      var a = flowAngle(p.x, p.y, t);
+      p.vx += Math.cos(a) * 0.06 * DPR * flowScale * warp * k;
+      p.vy += Math.sin(a) * 0.06 * DPR * flowScale * warp * k;
+
+      if (mouse.active && !idle) {
+        var dx = p.x - mouse.x, dy = p.y - mouse.y;
+        var d2 = dx * dx + dy * dy;
+        if (d2 < R * R) {
+          var d = Math.sqrt(d2) || 1;
+          var f = 1 - d / R;
+          p.vx += (-dy / d) * f * 0.95 * DPR * k;   // swirl
+          p.vy += (dx / d) * f * 0.95 * DPR * k;
+          p.vx += (-dx / d) * f * 0.18 * DPR * k;   // gentle pull inward
+          p.vy += (-dy / d) * f * 0.18 * DPR * k;
+        }
+      }
+
+      p.vx *= damp; p.vy *= damp;
+
+      var sp = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+      if (sp > maxSp) { p.vx = p.vx / sp * maxSp; p.vy = p.vy / sp * maxSp; }
+
+      p.px = p.x; p.py = p.y;
+      p.x += p.vx * k;
+      p.y += p.vy * k;
+
+      // wrap around edges
+      if (p.x < -30 * DPR) p.x = W + 30 * DPR;
+      else if (p.x > W + 30 * DPR) p.x = -30 * DPR;
+      if (p.y < -30 * DPR) p.y = H + 30 * DPR;
+      else if (p.y > H + 30 * DPR) p.y = -30 * DPR;
+
+      var hue = (p.hue + sp * 7) % 360;
+      var alpha = Math.min(0.85, 0.28 + sp * 0.11);
+      ctx.strokeStyle = 'hsla(' + hue.toFixed(0) + ',95%,62%,' + alpha.toFixed(2) + ')';
+      ctx.lineWidth = p.r;
+      ctx.beginPath();
+      ctx.moveTo(p.px, p.py);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+    }
+
+    // cursor glow
+    if (mouse.active && !idle) {
+      var g = ctx.createRadialGradient(mouse.x, mouse.y, 0, mouse.x, mouse.y, 190 * DPR);
+      g.addColorStop(0, 'rgba(130,200,255,0.16)');
+      g.addColorStop(0.45, 'rgba(150,120,255,0.06)');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(mouse.x, mouse.y, 190 * DPR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // shockwave rings
+    for (var j = rings.length - 1; j >= 0; j--) {
+      var ring = rings[j];
+      ring.r += (ring.max - ring.r) * 0.06 * k;
+      ring.a -= 0.022 * k;
+      if (ring.a <= 0) { rings.splice(j, 1); continue; }
+      ctx.strokeStyle = 'hsla(' + ring.hue.toFixed(0) + ',95%,70%,' + ring.a.toFixed(3) + ')';
+      ctx.lineWidth = 3 * DPR * ring.a;
+      ctx.beginPath();
+      ctx.arc(ring.x, ring.y, ring.r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // idle logo
+    var targetA = idle ? 1 : 0;
+    logo.a += (targetA - logo.a) * 0.045 * k;
+    if (logo.a > 0.01) { updateLogo(k); }
+    if (cornerFlash > 0) { cornerFlash -= 0.02 * k; if (cornerFlash < 0) cornerFlash = 0; }
+    drawLogo();
+
+    requestAnimationFrame(frame);
+  }
+
+  resize();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

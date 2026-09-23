@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset='UTF-8'>
+  <title>Real Size Slider</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 40px; background: #fafafa; }
+    h1 { margin: 0 0 20px; }
+    #instruction { font-size: 1.2em; color: #555; }
+    #slider { width: 80%; margin: 30px 0; }
+    #display { font-size: 1.5em; margin: 20px 0; }
+    #sound-btn { margin-top: 20px; padding: 10px 20px; font-size: 1em; }
+  </style>
+</head>
+<body>
+  <h1>How big is that thing?</h1>
+  <p id='instruction'>Drag the slider to see real-world sizes compared to a human</p>
+  <input type='range' id='slider' min='0' max='100' value='50'>
+  <div id='display'>Loading...</div>
+  <button id='sound-btn'>Play Sound</button>
+
+  <script>
+    const objects = [
+      { size: 0.001, name: 'Red blood cell' },
+      { size: 0.01, name: 'Paramecium' },
+      { size: 0.1, name: 'Fly' },
+      { size: 1, name: 'Human' },
+      { size: 10, name: 'Car' },
+      { size: 100, name: 'Bus' },
+      { size: 1000, name: 'House' },
+      { size: 10000, name: 'Tall building' },
+      { size: 100000, name: 'Dam' },
+      { size: 1000000, name: 'Great Pyramid' }
+    ];
+
+    const slider = document.getElementById('slider');
+    const display = document.getElementById('display');
+    const soundBtn = document.getElementById('sound-btn');
+    let audioCtx;
+    let soundPlaying = false;
+
+    function updateDisplay() {
+      const index = Math.floor(slider.value / 10);
+      const obj = objects[index];
+      display.textContent = `${obj.name} is ${obj.size} meters tall (human is 1.7m)`;
+    }
+
+    slider.addEventListener('input', updateDisplay);
+    updateDisplay();
+
+    // Sound setup
+    const sound = new Audio('beep.wav'); // This file is not included - sound is optional
+    soundBtn.addEventListener('click', () => {
+      if (!soundPlaying) {
+        if (!audioCtx || audioCtx.state === 'suspended') {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          audioCtx.resume();
+        }
+        sound.play().catch(() => {});
+        soundPlaying = true;
+      }
+    });
+  </script>
+</body>
+</html>

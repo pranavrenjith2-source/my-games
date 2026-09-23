@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ultraviolet Browser</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #04050a; color: #cfe3d6; font-family: 'Courier New', monospace; overflow: hidden; }
+  #app { display: flex; flex-direction: column; height: 100%; }
+  #bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #0a1410; border-bottom: 2px solid #1f5f3a; }
+  #bar button { font-family: inherit; font-size: 12px; cursor: pointer; background: #0f2417; color: #4de355; border: 1px solid #1f5f3a; border-radius: 4px; padding: 8px 11px; }
+  #bar button:hover { border-color: #2ecc40; }
+  #addr { flex: 1; font-family: inherit; font-size: 13px; color: #c8f0d2; background: #08120c; border: 1px solid #1f5f3a; border-radius: 4px; padding: 9px 12px; outline: none; }
+  #addr:focus { border-color: #2ecc40; }
+  #status { font-size: 11px; color: #4dd0ff; white-space: nowrap; }
+  #frame { flex: 1; border: none; background: #fff; }
+  #note { font-size: 11px; color: #6b7390; padding: 4px 10px; background: #0a1410; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="bar">
+    <button id="back">&#8592;</button>
+    <button id="reload">&#8635;</button>
+    <button id="home">&#8962;</button>
+    <input id="addr" placeholder="search or type a URL" autocomplete="off" spellcheck="false" />
+    <button id="go">GO</button>
+    <span id="status">starting proxy...</span>
+  </div>
+  <div id="note">Local Ultraviolet proxy (personal use). Ad &amp; tracker domains are blocked by the service worker. Runs only while <b>uv-proxy/server.js</b> is running.</div>
+  <iframe id="frame" title="browser"></iframe>
+</div>
+
+<script src="/uv.bundle.js"></script>
+<script src="/uv.config.js"></script>
+<script>
+(function () {
+  "use strict";
+  var frame = document.getElementById("frame");
+  var addr = document.getElementById("addr");
+  var status = document.getElementById("status");
+  var hist = [], hi = -1;
+
+  function toUrl(s) {
+    s = s.trim(); if (!s) return null;
+    if (/^https?:\/\//i.test(s)) return s;
+    if (/^[^\s]+\.[^\s]{2,}/.test(s) && s.indexOf(" ") < 0) return "https://" + s;
+    return "https://duckduckgo.com/?q=" + encodeURIComponent(s);
+  }
+  function proxySrc(u) { return __uv$config.prefix + __uv$config.encodeUrl(u); }
+  function go(input, push) {
+    var u = toUrl(input);
+    if (!u) return;
+    frame.src = proxySrc(u);
+    addr.value = u;
+    if (push !== false) { hist = hist.slice(0, hi + 1); hist.push(u); hi = hist.length - 1; }
+  }
+
+  navigator.serviceWorker.register("/sw.js", { scope: "/" })
+    .then(function () { return navigator.serviceWorker.ready; })
+    .then(function () { status.textContent = "proxy ready \u00B7 adblock on"; })
+    .catch(function (e) { status.textContent = "service worker error: " + e.message; });
+
+  document.getElementById("go").addEventListener("click", function () { go(addr.value); });
+  addr.addEventListener("keydown", function (e) { if (e.key === "Enter") go(addr.value); });
+  document.getElementById("reload").addEventListener("click", function () { if (frame.src) frame.src = frame.src; });
+  document.getElementById("home").addEventListener("click", function () { frame.removeAttribute("src"); addr.value = ""; });
+  document.getElementById("back").addEventListener("click", function () { if (hi > 0) { hi--; go(hist[hi], false); } });
+
+  // Optional ?url= / ?q= deep link.
+  var params = new URLSearchParams(location.search);
+  if (params.get("url")) go(params.get("url"));
+  else if (params.get("q")) go(params.get("q"));
+})();
+</script>
+</body>
+</html>

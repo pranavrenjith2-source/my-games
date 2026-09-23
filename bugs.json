@@ -1,0 +1,207 @@
+[
+  {
+    "file": "audio-test.html",
+    "title": "Audio Test",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "billwurtz-portal.html",
+    "title": "Bill Wurtz Portal",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "billwurtz.html",
+    "title": "Bill Wurtz Sentence Machine",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "bot-arena.html",
+    "title": "BOT ARENA",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "browser.html",
+    "title": "Browser",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "gloop-escape.html",
+    "title": "Gloop's Great Escape",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "hub.html",
+    "title": "My Games",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "index.html",
+    "title": "My Games",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "youtube.html",
+    "title": "YouTube Player",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "youtubers.html",
+    "title": "YouTubers",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "drops/2026-09-21-a-base64-url-hash-encoder-decoder.html",
+    "title": "CIPHERDECK — Base64 · URL · Hash Encoder/Decoder",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "drops/2026-09-21-dropworks.html",
+    "title": "DROPWORKS — 2D Vehicle &amp; Machine Sandbox",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "games/a-fake-daily-horoscope-generator-with-.html",
+    "title": "Fake Daily Horoscope",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "games/a-screensaver-that-reacts-to-your-mous.html",
+    "title": "Mouse Screen Saver",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "games/a-maze-that-rearranges-itself-every-fe.html",
+    "title": "Shift Maze — a maze that rearranges itself every few seconds",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "games/a-shadow-puppet-theater.html",
+    "title": "Shadow Puppet Theater",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "games/a-mini-stock-market-you-can-crash.html",
+    "title": "CRASH! — A Tiny Stock Market",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "games/a-choose-your-own-adventure-that-lasts.html",
+    "title": "30 Seconds — a choose-your-own-adventure that lasts 30 seconds",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "games/a-minimalist-tower-defense-on-a-grid.html",
+    "title": "Grid Defense — A Minimalist Tower Defense",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "games/a-cookie-clicker-but-for-stars.html",
+    "title": "✦ Star Clicker — a cookie clicker but for stars",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "games/a-food-chain-ecosystem-you-feed.html",
+    "title": "Feed the Food Chain",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "games/a-one-key-rhythm-game.html",
+    "title": "ONE KEY — a one-key rhythm game",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "games/a-gravity-sandbox-where-you-throw-plan.html",
+    "title": "Gravity Sandbox — throw planets around",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "games/a-password-strength-meter-that-judges-.html",
+    "title": "The Password Judge",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "games/a-petri-dish-where-bacteria-evolve-on-.html",
+    "title": "Petri — a dish where bacteria evolve on their own",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "games/a-button-that-does-something-different.html",
+    "title": "A Button That Does Something Different",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "games/a-language-generator-that-invents-word.html",
+    "title": "The Word Forge — a language generator that invents words",
+    "ok": true,
+    "errors": [],
+    "warnings": [
+      "id \"panel-\" used in code but not defined in the HTML"
+    ]
+  },
+  {
+    "file": "games/a-pixel-art-painter-with-8-colors.html",
+    "title": "Pixel Painter — draw with 8 colors",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "games/a-rubber-band-physics-toy.html",
+    "title": "Rubber Band — a physics toy",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  }
+]

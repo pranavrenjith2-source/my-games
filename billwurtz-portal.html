@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bill Wurtz Portal</title>
+<style>
+  html, body { margin: 0; min-height: 100%; background: radial-gradient(circle at 50% 0%, #101026 0%, #05060d 60%); color: #dfe4f2; font-family: 'Courier New', monospace; }
+  header { text-align: center; padding: 26px 16px 8px; }
+  h1 { margin: 0; color: #7cc4ff; letter-spacing: 5px; text-shadow: 0 0 18px rgba(124,196,255,0.45); font-size: 30px; }
+  header p { color: #6b7390; font-size: 13px; margin: 8px 0 0; }
+  a.back { color: #7cc4ff; text-decoration: none; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 16px 20px 60px; }
+  .links { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 22px; }
+  .links a { display: block; text-align: center; padding: 14px 10px; border-radius: 8px; text-decoration: none; font-size: 13px; letter-spacing: 1px; color: #cfe8ff; background: #0b1030; border: 1px solid #24406b; transition: .12s; }
+  .links a:hover { border-color: #7cc4ff; background: #12204a; color: #fff; transform: translateY(-1px); }
+  .bar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+  #q { flex: 1; font-family: inherit; font-size: 14px; color: #cfe8ff; background: #0a0f22; border: 1px solid #24406b; border-radius: 6px; padding: 11px 13px; outline: none; }
+  #q:focus { border-color: #7cc4ff; }
+  #count { font-size: 12px; color: #6b7390; white-space: nowrap; }
+  #list { display: flex; flex-direction: column; gap: 5px; }
+  .song { display: flex; align-items: center; gap: 10px; background: #080c1c; border: 1px solid #1b2b48; border-radius: 6px; padding: 7px 10px; font-size: 13px; }
+  .song:hover { border-color: #2f5a8f; }
+  .song.cur { border-color: #7cc4ff; background: #0e1a3a; }
+  .song .pb { cursor: pointer; color: #7cc4ff; background: transparent; border: 1px solid #24406b; border-radius: 5px; padding: 4px 9px; font-family: inherit; font-size: 12px; }
+  .song .pb:hover { border-color: #7cc4ff; }
+  .song .t { flex: 1; color: #dfe4f2; }
+  .song .t:hover { color: #7cc4ff; cursor: pointer; }
+  .song .d { color: #556080; font-size: 11px; }
+  .song .o { color: #7a86a8; text-decoration: none; font-size: 11px; }
+  .song .o:hover { color: #7cc4ff; }
+  .note { font-size: 12px; color: #6b7390; margin-top: 22px; line-height: 1.7; }
+</style>
+</head>
+<body>
+<header>
+  <h1>BILL WURTZ PORTAL</h1>
+  <p>a local launcher for billwurtz.com &mdash; opens as a plain file, no server needed. <a class="back" href="index.html">back</a></p>
+</header>
+<div class="wrap">
+  <div class="links">
+    <a href="https://billwurtz.com/songs.html" target="_blank" rel="noopener">&#9834; SONGS</a>
+    <a href="https://billwurtz.com/videos.html" target="_blank" rel="noopener">&#9654; VIDEOS</a>
+    <a href="https://billwurtz.com/notebook.html" target="_blank" rel="noopener">&#9998; NOTEBOOK</a>
+    <a href="https://billwurtz.com/other.html" target="_blank" rel="noopener">&#10022; OTHER</a>
+    <a href="https://billwurtz.com/expert.html" target="_blank" rel="noopener">&#9881; EXPERT MODE</a>
+    <a href="https://billwurtz.com/store.html" target="_blank" rel="noopener">&#128722; STORE</a>
+    <a href="https://billwurtz.com/" target="_blank" rel="noopener">&#8962; HOME</a>
+    <a href="https://mastodon.social/@billwurtz" target="_blank" rel="noopener">&#64; MASTODON</a>
+    <a href="https://bsky.app/profile/billwurtz.com" target="_blank" rel="noopener">&#9737; BLUESKY</a>
+  </div>
+
+  <div class="bar">
+    <input id="q" placeholder="search 222 songs\u2026" autocomplete="off" spellcheck="false" />
+    <span id="count"></span>
+  </div>
+  <div id="list"></div>
+  <div class="note">
+    Everything here links to bill wurtz's own site &mdash; this page just gathers it in one place and plays the songs.
+    Audio streams straight from billwurtz.com, so it needs an internet connection but no local server, and it works
+    when opened directly as a file. All songs &copy; bill wurtz.
+  </div>
+</div>
+<audio id="player" preload="none"></audio>
+<script>
+var SONGS = [{"t":"_____notbugs","f":"_____notbugs.mp3","d":15},{"t":"(what) Love Is","f":"(What)%20Love%20Is.mp3","d":195},{"t":"15 minutes","f":"precursor.mp3","d":52},{"t":"2010","f":"2010.mp3","d":152},{"t":"9 8 7","f":"987.mp3","d":213},{"t":"abcdefghijk","f":"abcdefghijk.mp3","d":7},{"t":"all u gotta do is","f":"all-u-gotta-do-is.mp3","d":45},{"t":"All U Need Is Love","f":"All%20U%20Need%20Is%20Love.mp3","d":210},{"t":"alphabet shuffle","f":"alphabet-shuffle.mp3","d":59},{"t":"and the day goes on","f":"and-the-day-goes-on.mp3","d":131},{"t":"apple juice (tribute to DJO)","f":"applejuice.aif","d":8},{"t":"Are you the Real You?","f":"are-you-the-real-you.mp3","d":5},{"t":"at the airport terminal","f":"at-the-airport-terminal.mp3","d":168},{"t":"at the corner store","f":"at-the-corner-store.mp3","d":200},{"t":"barf on me","f":"preface%20to%20creepy%20song.mp3","d":46},{"t":"be free and don't sell records","f":"be%20free%20and%20don't%20sell%20records.mp3","d":86},{"t":"be someone","f":"be%20someone.mp3","d":31},{"t":"bears","f":"bears.mp3","d":1},{"t":"blind (to no avail)","f":"blind%20(to%20no%20avail).mp3","d":59},{"t":"blue boy","f":"blue%20boy.mp3","d":75},{"t":"brooklyn museum","f":"brooklyn-museum.mp3","d":27},{"t":"burger king","f":"burger%20king.mp3","d":34},{"t":"cable television","f":"cable-television.mp3","d":9},{"t":"can i","f":"can%20i.mp3","d":5},{"t":"can't write songs so i'll just make a silly thing","f":"cant-write-songs-so-ill-just-make-a-silly-thing.mp3","d":7},{"t":"chips (sponsored)","f":"chips.mp3","d":5},{"t":"christmas isn't real","f":"christmas-isnt-real.mp3","d":135},{"t":"couldn't succeed","f":"couldnt%20succeed.mp3","d":5},{"t":"dance the","f":"dance%20the.mp3","d":66},{"t":"desk and chair","f":"desk%20and%20chair.mp3","d":54},{"t":"diamond","f":"diamond.mp3","d":41},{"t":"die","f":"die.mp3","d":2},{"t":"do the thing","f":"Do%20The%20Thing.mp3","d":161},{"t":"Do What You Want To Do","f":"Do%20What%20You%20Want%20To%20Do.mp3","d":256},{"t":"do you ever get tired of yourself","f":"do-you-ever-get-tired-of-yourself.mp3","d":3},{"t":"do you like music?","f":"do-you-like-music.mp3","d":3},{"t":"don't be good to your neighbor","f":"don't%20be%20good%20to%20your%20neighbor.mp3","d":4},{"t":"don't let the world be terrible","f":"dont-let-the-world-be-terrible.mp3","d":5},{"t":"don't look in a boot","f":"dontlookinaboot.mp3","d":6},{"t":"don't make","f":"don't%20make.mp3","d":23},{"t":"don't talk to me","f":"don't%20talk%20to%20me.mp3","d":2},{"t":"donald rumsfeld","f":"donald-rumsfeld.mp3","d":4},{"t":"downstairs","f":"downstairs.mp3","d":6},{"t":"dream of evil","f":"dream%20of%20evil.mp3","d":195},{"t":"drink beans","f":"drinkbeans.mp3","d":10},{"t":"dumpies ft. joe no","f":"dumpies%20-%20joe%20no.mp3","d":61},{"t":"eat bread (feel sure)","f":"feel%20sure%20(eat%20bread).mp3","d":210},{"t":"eat dirt","f":"eat%20dirt.mp3","d":10},{"t":"eat trees","f":"eat-trees.mp3","d":3},{"t":"feathered box","f":"feathered%20box.mp3","d":25},{"t":"feel okay","f":"feel%20okay.mp3","d":44},{"t":"feels great to be doin stuff","f":"feels-great-to-be-doin-stuff.mp3","d":4},{"t":"fever","f":"fever%20(is%20what%20makes%20you%20sick).mp3","d":97},{"t":"fly around","f":"fly-around.mp3","d":212},{"t":"fly away","f":"fly%20away.mp3","d":11},{"t":"fuck you","f":"fuck%20you.mp3","d":4},{"t":"get outta here","f":"get%20outta%20here.mp3","d":1},{"t":"get real","f":"get%20real.mp3","d":2},{"t":"go back to where you belong","f":"go%20back%20to%20where%20you%20belong.mp3","d":7},{"t":"go down south","f":"go-down-south.mp3","d":3},{"t":"go home","f":"go%20home.mp3","d":32},{"t":"go to mars and stay there","f":"go-to-mars-and-stay-there.mp3","d":3},{"t":"go to the store","f":"Go%20to%20the%20Store.mp3","d":130},{"t":"gonna buy a car and then change it","f":"gonna-buy-a-car-and-then-change-it.mp3","d":4},{"t":"goo soup","f":"goo-soup.mp3","d":90},{"t":"goodbye","f":"goodbye.mp3","d":3},{"t":"got to know (just)","f":"got-to-know-just.mp3","d":7},{"t":"got to know what's going on","f":"got-to-know-whats-going-on.mp3","d":151},{"t":"gross insides","f":"gross%20insides.mp3","d":2},{"t":"grow mushrooms on the sidewalk","f":"mushrooms%20on%20the%20sidewalk.mp3","d":6},{"t":"hallelujah","f":"hallelujah.mp3","d":132},{"t":"heebity deebities","f":"heebity%20deebities.mp3","d":5},{"t":"hello 1","f":"hello%201.mp3","d":4},{"t":"hello 2","f":"hello%202.mp3","d":2},{"t":"hello sexy pants","f":"hello-sexy-pants.mp3","d":150},{"t":"here comes the sun","f":"here-comes-the-sun.mp3","d":251},{"t":"hey baby, buy my car","f":"hey%20baby,%20buy%20my%20car.mp3","d":6},{"t":"hey jodie foster","f":"hey-jodie-foster.mp3","d":111},{"t":"hi bye","f":"hi%20bye.mp3","d":1},{"t":"hi, it's 1995","f":"hi%20it's%201995.mp3","d":3},{"t":"hibernate","f":"hibernate.mp3","d":3},{"t":"hide from strangers","f":"hide-from-strangers.mp3","d":3},{"t":"hide the money","f":"hide%20the%20money.mp3","d":10},{"t":"Home","f":"Home_1.mp3","d":230},{"t":"Home Again","f":"Home%20Again.mp3","d":183},{"t":"home from work","f":"home%20from%20work.mp3","d":18},{"t":"hope you have a good day","f":"hope-you-have-a-good-day.mp3","d":6},{"t":"how am i spost","f":"how%20am%20i%20spost.mp3","d":111},{"t":"how am i spost (Bill Wurtz ft. Flide Hamulton)","f":"how%20am%20i%20spost%20(Bill%20Wurtz%20ft.%20Flide%20Hamulton).mp3","d":92},{"t":"i can play","f":"i-can-play.mp3","d":185},{"t":"i don't understand anything","f":"i-dont-understand-anything.mp3","d":5},{"t":"I Guess I've Got to Listen to Bob Marley","f":"I%20Guess%20I've%20Got%20To%20Listen%20To%20Bob%20Marley.mp3","d":262},{"t":"i hope we figure it out","f":"i-hope-we-figure-it-out.mp3","d":8},{"t":"i like","f":"i%20like.mp3","d":115},{"t":"i like to sleep around","f":"i-like-to-sleep-around.mp3","d":30},{"t":"i like to wear soft clothing (cause it makes me feel like i'm rough in comparison)","f":"i-like-to-wear-soft-clothing-cause-it-makes-me-feel-like-im-rough-in-comparison.mp3","d":206},{"t":"i love you","f":"i-love-you.mp3","d":78},{"t":"i love you","f":"I%20Love%20You.mp3","d":197},{"t":"i wanna be with you","f":"i%20wanna%20be%20with%20you.mp3","d":48},{"t":"i wanna go home","f":"i%20wanna%20go%20home.mp3","d":31},{"t":"i wanna sail you away","f":"i-wanna-sail-you-away.mp3","d":109},{"t":"i write stupid music","f":"i%20write%20stupid%20music.mp3","d":7},{"t":"i wrote a letter to myself and now i'm opening it","f":"i-wrote-a-letter-to-myself-and-now-im-opening-it.mp3","d":5},{"t":"i'm a huge gamer most of the time","f":"im-a-huge-gamer-most-of-the-time.mp3","d":148},{"t":"i'm a piece of garbage","f":"im-a-piece-of-garbage.mp3","d":3},{"t":"i'm a princess","f":"im-a-princess.mp3","d":202},{"t":"i'm about to graduate from school","f":"im%20about%20to%20graduate%20from%20school.mp3","d":134},{"t":"i'm addicted to sunshine","f":"im-addicted-to-sunshine.mp3","d":3},{"t":"i'm best friends with my own front door","f":"im-best-friends-with-my-own-front-door.mp3","d":141},{"t":"i'm confused (i love you)","f":"imconfused.mp3","d":44},{"t":"i'm crazy / it's raining","f":"im-crazy-its-raining.mp3","d":176},{"t":"i'm different","f":"im-different.mp3","d":3},{"t":"i'm from the west coast","f":"im-from-the-west-coast.mp3","d":7},{"t":"i'm gonna do the things that i gotta do","f":"im-gonna-do-the-things-that-i-gotta-do.mp3","d":33},{"t":"i'm gonna figure out what everything means","f":"im-gonna-figure-out-what-everything-means.mp3","d":11},{"t":"i'm gonna plan my day","f":"i'm-gonna-plan-my-day.mp3","d":11},{"t":"i'm in bryant park","f":"bryantpark.mp3","d":92},{"t":"i'm not sure","f":"im%20not%20sure.mp3","d":7},{"t":"i'm sad","f":"i'm%20sad.mp3","d":37},{"t":"i'm scared","f":"im-scared.mp3","d":191},{"t":"i'm the same","f":"im-the-same.mp3","d":3},{"t":"i've been thinking","f":"ive-been-thinking.mp3","d":3},{"t":"icy james","f":"icyjames.mp3","d":50},{"t":"if the world doesn't end","f":"if-the-world-doesnt-end.mp3","d":203},{"t":"if you have questions then ask them","f":"if-you-have-questions-then-ask-them.mp3","d":5},{"t":"in california","f":"in-california.mp3","d":203},{"t":"it's 2015, and i got to go crazy","f":"its-2015-and-i-got-to-go-crazy.mp3","d":5},{"t":"It's Gonna Be Alright","f":"itsgonnabealright.mp3","d":218},{"t":"it's ok to love","f":"its-ok-to-love.mp3","d":27},{"t":"just did a bad thing","f":"just-did-a-bad-thing.mp3","d":167},{"t":"just opened the letter i wrote to myself and it says i'm a stupid idiot","f":"just-opened-the-letter-i-wrote-to-myself-and-it-says-im-a-stupid-idiot.mp3","d":5},{"t":"just try to have a good time","f":"just-try-to-have-a-good-time.mp3","d":4},{"t":"just wanna make longer videos","f":"just-wanna-make-longer-videos.mp3","d":9},{"t":"just wanna make Stronger videos","f":"just-wanna-make-stronger-videos.mp3","d":9},{"t":"just wish i could make some music","f":"just-wish-i-could-make-some-music.mp3","d":4},{"t":"La de da de da de da de day oh","f":"la-de-da-de-da-de-da-de-day-oh.mp3","d":191},{"t":"lalala","f":"lalala.mp3","d":3},{"t":"lima beans","f":"lima%20beans.mp3","d":5},{"t":"little door","f":"little%20door.mp3","d":11},{"t":"long long long journey","f":"long-long-long-journey.mp3","d":189},{"t":"macy's","f":"macys.mp3","d":19},{"t":"magnet","f":"magnet.mp3","d":33},{"t":"make me write my songs","f":"make%20me%20write%20my%20songs.mp3","d":19},{"t":"make things real","f":"make-things-real.mp3","d":5},{"t":"mcdonald's","f":"mcdonalds.mp3","d":15},{"t":"meet me in september","f":"meet-me-in-september.mp3","d":204},{"t":"might quit","f":"might-quit.mp3","d":165},{"t":"money","f":"money.mp3","d":200},{"t":"more than a dream","f":"more-than-a-dream.mp3","d":221},{"t":"mount st. helens is about to blow up","f":"mount-st-helens-is-about-to-blow-up.mp3","d":202},{"t":"move over","f":"move%20over.mp3","d":3},{"t":"movie star","f":"movie-star.mp3","d":176},{"t":"movies","f":"movies.mp3","d":6},{"t":"murder your demon","f":"murder%20your%20demon.mp3","d":76},{"t":"music","f":"music.mp3","d":7},{"t":"music is cool","f":"music-is-cool.mp3","d":11},{"t":"my penis","f":"my%20penis.mp3","d":4},{"t":"napkins","f":"napkins.mp3","d":32},{"t":"new canaan","f":"newcanaan.mp3","d":178},{"t":"no","f":"no.mp3","d":2},{"t":"no brains","f":"no-brains.mp3","d":36},{"t":"no harm","f":"no%20harm.mp3","d":18},{"t":"no place like home","f":"No%20Place%20Like%20Home.mp3","d":124},{"t":"not so hard to do","f":"not%20so%20hard%20to%20do.mp3","d":14},{"t":"now you can comb your hair by satellite","f":"now-you-can-comb-your-hair-by-satellite.mp3","d":6},{"t":"off the map","f":"off-the-map.mp3","d":213},{"t":"outside","f":"outside.mp3","d":207},{"t":"pairs","f":"pairs.mp3","d":6},{"t":"rabbit snakes","f":"rabbitsnakes.mp3","d":167},{"t":"raindrops","f":"raindrops.mp3","d":4},{"t":"rock'n'roll confusion","f":"rocknroll%20confusion.mp3","d":10},{"t":"school","f":"school.mp3","d":49},{"t":"sheep","f":"sheep.mp3","d":1},{"t":"shut up","f":"shut%20up.mp3","d":1},{"t":"sickness as usual","f":"sickness%20as%20usual.mp3","d":5},{"t":"sing a really dumb song","f":"sing-a-really-dumb-song.mp3","d":4},{"t":"sing me a song","f":"sing%20me%20a%20song.mp3","d":9},{"t":"skip to my loo","f":"skip%20to%20my%20loo.mp3","d":3},{"t":"slow down","f":"slow-down.mp3","d":198},{"t":"song 41","f":"song%2041.mp3","d":60},{"t":"still a piece of garbage","f":"still-a-piece-of-garbage.mp3","d":5},{"t":"still silly","f":"still%20silly.mp3","d":37},{"t":"stuck in a rut","f":"rut.mp3","d":7},{"t":"Stupid Song","f":"Stupid%20Song.mp3","d":193},{"t":"tape deck","f":"tape%20deck.mp3","d":37},{"t":"teddy bears","f":"teddy%20bears.mp3","d":9},{"t":"textin on my iphone","f":"textinonmyiphone.mp3","d":104},{"t":"the 'ngiueh' song","f":"ngiueh.mp3","d":1},{"t":"the ending","f":"the-ending.mp3","d":152},{"t":"the future song","f":"thefuturesong.mp3","d":190},{"t":"the ground plane","f":"the-ground-plane.mp3","d":125},{"t":"the halloween song","f":"halloween-song.mp3","d":4},{"t":"the ladies","f":"the%20ladies.mp3","d":20},{"t":"the looking glass","f":"the-looking-glass.mp3","d":15},{"t":"the moon is made of cheese, but i can't taste it","f":"the-moon-is-made-of-cheese-but-i-cant-taste-it.mp3","d":70},{"t":"the road","f":"the-road.mp3","d":106},{"t":"the song song","f":"THE%20SONG%20SONG.mp3","d":185},{"t":"the stupid song","f":"The%20Stupid%20Song.mp3","d":193},{"t":"the summertime","f":"the%20summertime.mp3","d":45},{"t":"the trees","f":"the%20trees%20(okay,%20alright).mp3","d":183},{"t":"the world","f":"The%20World's%20Got%20a%20Problem.mp3","d":206},{"t":"the zoo","f":"the%20zoo.mp3","d":9},{"t":"this is a song for my next album","f":"this-is-a-song-for-my-next-album.mp3","d":34},{"t":"this is not a song","f":"this-is-not-a-song.mp3","d":15},{"t":"time to rearrange my world","f":"time-to-rearrange-my-world.mp3","d":3},{"t":"tuesday","f":"tuesday.mp3","d":38},{"t":"we are humans","f":"we%20are%20humans.mp3","d":6},{"t":"we could just get high","f":"wecouldjustgethigh.mp3","d":208},{"t":"we're all gonna be fine","f":"were%20all%20gonna%20be%20fine.mp3","d":23},{"t":"what if spain was in greece","f":"what-if-spain-was-in-greece.mp3","d":3},{"t":"what the fuck","f":"what%20the%20fuck.mp3","d":3},{"t":"whatever","f":"whatever.mp3","d":2},{"t":"when i get older","f":"when-i-get-older.mp3","d":195},{"t":"where i've been","f":"where-ive-been.mp3","d":195},{"t":"wondering how to feel","f":"wondering%20how%20to%20feel.mp3","d":6},{"t":"write a song on the count of 3","f":"write-a-song-on-the-count-of-3.mp3","d":155},{"t":"write a tune that really sucks","f":"write%20a%20tune%20that%20really%20sucks.mp3","d":13},{"t":"yes","f":"yes.mp3","d":2},{"t":"yes i like music","f":"yes-i-like-music.mp3","d":3},{"t":"you can fly","f":"you%20can%20fly.mp3","d":25},{"t":"you're free to do whatever you want to","f":"youre-free-to-do-whatever-you-want-to.mp3","d":95},{"t":"youcandriveachevy.com","f":"youcandriveachevydotcom.mp3","d":7}];
+(function(){
+  "use strict";
+  var BASE = 'https://billwurtz.com/';
+  var $ = function(id){ return document.getElementById(id); };
+  var player = $('player'), curEl = null, curSong = null, view = [];
+  function fmt(s){ var m=Math.floor(s/60), x=s%60; return m+':'+(x<10?'0':'')+x; }
+  function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];}); }
+
+  function render(filter){
+    var q = (filter||'').trim().toLowerCase(), box = $('list');
+    box.innerHTML = ''; view = [];
+    SONGS.forEach(function(s){
+      if(q && s.t.toLowerCase().indexOf(q) < 0) return;
+      view.push(s);
+      var el = document.createElement('div');
+      el.className = 'song';
+      el.__song = s;
+      el.innerHTML = '<button class="pb">&#9654;</button>' +
+        '<span class="t">' + esc(s.t) + '</span>' +
+        '<span class="d">' + fmt(s.d) + '</span>' +
+        '<a class="o" href="' + BASE + s.f + '" target="_blank" rel="noopener">open &#8599;</a>';
+      el.querySelector('.pb').addEventListener('click', function(e){ e.stopPropagation(); toggle(s, el); });
+      el.querySelector('.t').addEventListener('click', function(){ toggle(s, el); });
+      box.appendChild(el);
+    });
+    $('count').textContent = view.length + (q ? ' of ' + SONGS.length : '') + ' songs';
+    curEl = null;
+    if(curSong){
+      Array.prototype.forEach.call(box.children, function(c){ if(c.__song === curSong) curEl = c; });
+      if(curEl) curEl.classList.add('cur');
+    }
+  }
+
+  function toggle(s, el){
+    if(curSong === s && !player.paused){ player.pause(); return; }
+    start(s, el);
+  }
+  function start(s, el){
+    if(!s) return;
+    if(curEl) curEl.classList.remove('cur');
+    curSong = s; curEl = el || null; if(curEl) curEl.classList.add('cur');
+    player.src = BASE + s.f;
+    var pr = player.play();
+    if(pr && pr.catch) pr.catch(function(){});
+  }
+  player.addEventListener('ended', function(){
+    if(!curSong) return;
+    var i = view.indexOf(curSong);
+    if(i >= 0 && i + 1 < view.length) start(view[i + 1], $('list').children[i + 1]);
+  });
+
+  $('q').addEventListener('input', function(){ render(this.value); });
+  render('');
+})();
+</script>
+</body>
+</html>

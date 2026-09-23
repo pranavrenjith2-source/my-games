@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YouTubers</title>
+<style>
+  html, body { margin: 0; min-height: 100%; background: radial-gradient(circle at 50% 0%, #1a0a0a 0%, #05060d 60%); color: #dfe4f2; font-family: 'Courier New', monospace; }
+  header { text-align: center; padding: 24px 16px 6px; }
+  h1 { margin: 0; color: #ff3a2b; letter-spacing: 5px; text-shadow: 0 0 18px rgba(255,58,43,0.45); font-size: 28px; }
+  header p { color: #6b7390; font-size: 13px; margin: 8px 0 0; }
+  header a { color: #ff6a5a; text-decoration: none; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 16px 20px 60px; }
+  .addrow { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  #ch { flex: 1; min-width: 240px; font-family: inherit; font-size: 14px; color: #ffd9d0; background: #120707; border: 1px solid #6b2a1f; border-radius: 6px; padding: 12px 14px; outline: none; }
+  #ch:focus { border-color: #ff3a2b; }
+  .addrow button { font-family: inherit; font-size: 13px; cursor: pointer; border-radius: 6px; padding: 12px 18px; background: #ff3a2b; color: #05060d; border: none; }
+  .addrow button:hover { background: #ff6a5a; }
+  #msg { font-size: 12px; color: #ff9a2b; margin: -6px 0 14px; min-height: 16px; }
+  #stage { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border: 2px solid #2a2f45; border-radius: 8px; overflow: hidden; margin-bottom: 22px; }
+  #stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; }
+  #stage .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #4a5068; font-size: 14px; text-align: center; padding: 20px; }
+  .cols { display: grid; grid-template-columns: 240px 1fr; gap: 22px; }
+  h2 { font-size: 13px; letter-spacing: 2px; color: #ff6a5a; border-bottom: 1px solid #2a1a1a; padding-bottom: 8px; margin: 0 0 12px; }
+  .chan { display: flex; align-items: center; gap: 8px; background: #0b0f1f; border: 1px solid #2a2f45; border-radius: 6px; padding: 9px 11px; font-size: 13px; cursor: pointer; margin-bottom: 6px; }
+  .chan:hover { border-color: #ff6a5a; }
+  .chan.active { border-color: #ff3a2b; background: #160a0a; color: #ff8a7a; }
+  .chan .n { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chan .x { color: #ff5f6d; }
+  .vids { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+  .vid { background: #0b0f1f; border: 1px solid #2a2f45; border-radius: 8px; overflow: hidden; cursor: pointer; transition: transform .12s, border-color .12s; }
+  .vid:hover { transform: translateY(-3px); border-color: #ff3a2b; }
+  .vid img { width: 100%; display: block; aspect-ratio: 16/9; object-fit: cover; background: #000; }
+  .vid .t { font-size: 12px; color: #cfe3d6; padding: 9px 10px; line-height: 1.4; }
+  .vid .d { font-size: 11px; color: #6b7390; padding: 0 10px 10px; }
+  .muted { color: #4a5068; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>YOUTUBERS</h1>
+  <p>Pick a YouTuber, then pick a video. <a href="youtube.html">plain player</a> &middot; <a href="index.html">My Games</a></p>
+</header>
+<div class="wrap">
+  <div class="addrow">
+    <input id="ch" placeholder="add a YouTuber: @handle, channel URL, or UC... id" autocomplete="off" spellcheck="false" />
+    <button id="addbtn">ADD</button>
+  </div>
+  <div id="msg"></div>
+
+  <div id="stage"><div class="empty">Select a YouTuber, then click a video to play it here.</div></div>
+
+  <div class="cols">
+    <div>
+      <h2>YOUTUBERS</h2>
+      <div id="channels"></div>
+    </div>
+    <div>
+      <h2 id="videos-head">LATEST VIDEOS</h2>
+      <div class="vids" id="videos"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  function $(id) { return document.getElementById(id); }
+  var KEY = "yt_channels";
+  var DEFAULT = [
+    { handle: "@NASA", name: "NASA" },
+    { handle: "@TED", name: "TED" },
+    { handle: "@kurzgesagt", name: "Kurzgesagt" }
+  ];
+  var channels = load();
+  var active = -1;
+
+  function load() { try { var a = JSON.parse(localStorage.getItem(KEY) || "null"); return Array.isArray(a) ? a : DEFAULT.slice(); } catch (e) { return DEFAULT.slice(); } }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(channels)); } catch (e) { } }
+  function msg(t) { $("msg").textContent = t || ""; }
+
+  function renderChannels() {
+    var host = $("channels"); host.innerHTML = "";
+    if (!channels.length) { host.innerHTML = '<div class="muted">no YouTubers yet</div>'; return; }
+    channels.forEach(function (c, i) {
+      var el = document.createElement("div");
+      el.className = "chan" + (i === active ? " active" : "");
+      el.innerHTML = '<span class="n">' + (c.name || c.handle) + '</span><span class="x">\u00D7</span>';
+      el.addEventListener("click", function (e) {
+        if (e.target.className === "x") { channels.splice(i, 1); save(); if (active === i) active = -1; renderChannels(); return; }
+        selectChannel(i);
+      });
+      host.appendChild(el);
+    });
+  }
+
+  function selectChannel(i) {
+    active = i;
+    renderChannels();
+    var c = channels[i];
+    if (!c) return;
+    $("videos-head").textContent = "LATEST \u00B7 " + (c.name || c.handle);
+    $("videos").innerHTML = '<div class="muted">loading\u2026</div>';
+    msg("");
+    fetch("/api/yt/videos?id=" + encodeURIComponent(c.id))
+      .then(function (r) { if (!r.ok) throw new Error("feed unavailable"); return r.json(); })
+      .then(function (d) {
+        if (d.title && !c.name) { c.name = d.title; save(); renderChannels(); }
+        renderVideos(d.videos || []);
+      })
+      .catch(function () { $("videos").innerHTML = '<div class="muted">couldn\'t load videos (is the local server running?)</div>'; });
+  }
+
+  function renderVideos(vids) {
+    var host = $("videos"); host.innerHTML = "";
+    if (!vids.length) { host.innerHTML = '<div class="muted">no videos found</div>'; return; }
+    vids.forEach(function (v) {
+      var el = document.createElement("div");
+      el.className = "vid";
+      var thumb = v.thumb || ("https://i.ytimg.com/vi/" + v.id + "/mqdefault.jpg");
+      var date = v.published ? new Date(v.published).toLocaleDateString() : "";
+      el.innerHTML = '<img loading="lazy" src="' + thumb + '" alt="" onerror="this.style.visibility=\'hidden\'" />' +
+        '<div class="t">' + v.title + '</div><div class="d">' + date + '</div>';
+      el.addEventListener("click", function () { play(v.id); });
+      host.appendChild(el);
+    });
+  }
+
+  function play(id) {
+    var stage = $("stage"); stage.innerHTML = "";
+    var f = document.createElement("iframe");
+    f.setAttribute("allow", "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen");
+    f.setAttribute("allowfullscreen", "");
+    f.src = "https://www.youtube.com/embed/" + encodeURIComponent(id) + "?autoplay=1&rel=0&modestbranding=1";
+    stage.appendChild(f);
+  }
+
+  $("addbtn").addEventListener("click", addChannel);
+  $("ch").addEventListener("keydown", function (e) { if (e.key === "Enter") addChannel(); });
+
+  function addChannel() {
+    var q = $("ch").value.trim();
+    if (!q) return;
+    msg("resolving " + q + "\u2026");
+    fetch("/api/yt/channel?q=" + encodeURIComponent(q))
+      .then(function (r) { if (!r.ok) throw new Error("not found"); return r.json(); })
+      .then(function (d) {
+        if (channels.some(function (c) { return c.id === d.channelId; })) { msg("already added"); return; }
+        channels.push({ id: d.channelId, name: d.title || q, handle: q });
+        save(); $("ch").value = ""; msg("added " + (d.title || q));
+        renderChannels();
+        selectChannel(channels.length - 1);
+      })
+      .catch(function () { msg("couldn't find that channel \u2014 try @handle or the channel URL (needs the local server)"); });
+  }
+
+  renderChannels();
+  if (channels.length) selectChannel(0);
+})();
+</script>
+</body>
+</html>

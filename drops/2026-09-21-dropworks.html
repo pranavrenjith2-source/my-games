@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>DROPWORKS — 2D Vehicle &amp; Machine Sandbox</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;background:#070b14;
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:#dbe7ff;user-select:none}
+  #c{display:block;width:100vw;height:100vh;touch-action:none;cursor:crosshair}
+
+  #topbar{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;
+    align-items:flex-start;gap:16px;padding:14px 18px;pointer-events:none;z-index:5}
+  #brand{max-width:min(60ch,60vw)}
+  #brand h1{margin:0;font-size:22px;letter-spacing:.32em;font-weight:800;
+    background:linear-gradient(90deg,#7ce7ff,#b388ff 60%,#ffd166);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 26px rgba(90,190,255,.25)}
+  #brand p{margin:5px 0 0;font-size:12.5px;line-height:1.45;color:#9fb4d8}
+  #brand b{color:#cfe4ff}
+  #modeTag{display:inline-block;margin-top:8px;font-size:10px;letter-spacing:.22em;
+    padding:3px 9px;border-radius:999px;font-weight:700;border:1px solid transparent}
+  .tag.build{background:rgba(76,201,240,.12);color:#7ce7ff;border-color:rgba(76,201,240,.35)}
+  .tag.play{background:rgba(6,214,160,.14);color:#4ff0c0;border-color:rgba(6,214,160,.4)}
+
+  #actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+  button{pointer-events:auto;font:inherit;font-size:12.5px;font-weight:600;color:#cfe0ff;
+    background:rgba(18,28,48,.82);border:1px solid rgba(120,180,255,.22);
+    padding:8px 13px;border-radius:10px;cursor:pointer;backdrop-filter:blur(10px);
+    transition:transform .09s ease,background .15s ease,border-color .15s ease,box-shadow .15s ease}
+  button:hover{background:rgba(30,48,78,.92);border-color:rgba(140,200,255,.45)}
+  button:active{transform:translateY(1px)}
+  button.primary{background:linear-gradient(180deg,#1c8f6a,#116b50);border-color:rgba(6,214,160,.55);color:#e6fff7}
+  button.primary:hover{background:linear-gradient(180deg,#22a87d,#14805f)}
+  button.primary.running{background:linear-gradient(180deg,#b8462f,#8a2f1f);border-color:rgba(255,120,90,.55)}
+
+  #toolbar{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:7px;
+    padding:8px;border-radius:15px;background:rgba(12,19,34,.82);backdrop-filter:blur(12px);
+    border:1px solid rgba(120,180,255,.18);box-shadow:0 12px 34px rgba(0,0,0,.5);z-index:5;
+    flex-wrap:wrap;justify-content:center;max-width:94vw}
+  #toolbar .tool{display:flex;align-items:center;gap:7px;padding:8px 12px;border-radius:10px;
+    background:rgba(255,255,255,.03);border:1px solid rgba(120,180,255,.14);color:#a9bcdc}
+  #toolbar .tool.active{background:linear-gradient(180deg,rgba(76,201,240,.28),rgba(76,201,240,.12));
+    border-color:rgba(124,231,255,.7);color:#eaf8ff;box-shadow:0 0 16px rgba(76,201,240,.28)}
+  #toolbar .tool.disabled{opacity:.32;pointer-events:none}
+  kbd{font:inherit;font-size:10px;padding:1px 5px;border-radius:5px;background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.14);color:#8fa6c8}
+  #hint{position:fixed;bottom:82px;left:50%;transform:translateX(-50%);font-size:11px;
+    color:#7e93b6;letter-spacing:.06em;pointer-events:none;z-index:5;text-align:center;
+    text-shadow:0 2px 8px #000}
+  @media (max-width:620px){
+    #brand h1{font-size:16px;letter-spacing:.2em}
+    #brand p{font-size:11px}
+    #toolbar .tool{padding:7px 9px;font-size:11px}
+    kbd{display:none}
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="topbar">
+  <div id="brand">
+    <h1>DROPWORKS</h1>
+    <p>Build vehicles &amp; machines from blocks, wheels and beams — then press <b>Space</b> to run the simulation.</p>
+    <span id="modeTag" class="tag build">BUILD</span>
+  </div>
+  <div id="actions">
+    <button id="playBtn" class="primary">Run (Space)</button>
+    <button id="resetBtn">Reset</button>
+    <button id="clearBtn">Clear</button>
+  </div>
+</div>
+
+<div id="hint">Click a wheel while running to toggle its motor &nbsp;·&nbsp; Right-click deletes</div>
+
+<div id="toolbar">
+  <button class="tool active" data-tool="block">Block <kbd>1</kbd></button>
+  <button class="tool" data-tool="wheel">Wheel <kbd>2</kbd></button>
+  <button class="tool" data-tool="beam">Beam <kbd>3</kbd></button>
+  <button class="tool" data-tool="pin">Pin <kbd>4</kbd></button>
+  <button class="tool" data-tool="move">Move <kbd>5</kbd></button>
+  <button class="tool" data-tool="delete">Delete <kbd>6</kbd></button>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+var canvas = document.getElementById('c');
+var ctx = canvas.getContext('2d');
+var TAU = Math.PI * 2;
+
+var GRAVITY = 1700;
+var ITER = 10;
+var FIXED_DT = 1 / 120;
+var MAX_SUB = 6;
+var PALETTE = ['#ffd166','#ef476f','#06d6a0','#4cc9f0','#b388ff','#ff9f1c','#8ac926'];
+
+var W = 800, H = 600, DPR = 1;
+
+var state = {
+  mode: 'build',
+  tool: 'block',
+  blocks: [],
+  wheels: [],
+  constraints: [],
+  colorIdx: 0,
+  drag: null,
+  pointer: { x: 0, y: 0 },
+  snapshot: null,
+  particles: [],
+  time: 0
+};
+
+function clamp(v, a, b){ return v < a ? a : (v > b ? b : v); }
+
+function groundY(x){
+  var base = H * 0.78;
+  return base - Math.sin(x * 0.0032) * 22 - Math.sin(x * 0.0009 + 2.1) * 38;
+}
+function groundNormal(x){
+  var e = 3;
+  var dy = groundY(x + e) - groundY(x - e);
+  var len = Math.hypot(2 * e, dy) || 1;
+  return { x: dy / len, y: -2 * e / len };
+}
+
+/* ---------------- world construction ---------------- */
+
+var nodeId = 0;
+function makeNode(x, y, mass, pinned){
+  return {
+    id: nodeId++, x: x, y: y, px: x, py: y, vx: 0, vy: 0,
+    mass: mass, invMass: pinned ? 0 : 1 / mass,
+    pinned: !!pinned, isWheel: false, wheel: null, body: null
+  };
+}
+
+function addDist(a, b, rest, stiff, hidden){
+  state.constraints.push({
+    a: a, b: b,
+    rest: (rest === undefined || rest === null) ? Math.hypot(b.x - a.x, b.y - a.y) : rest,
+    stiff: (stiff === undefined) ? 1 : stiff,
+    hidden: !!hidden
+  });
+}
+
+function pointInPoly(px, py, poly){
+  var inside = false;
+  for (var i = 0, j = poly.length - 1; i < poly.length; j = i++){
+    var xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+    if (((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+
+function createBlock(cx, cy, w, h, angle){
+  w = Math.max(8, Math.abs(w));
+  h = Math.max(8, Math.abs(h));
+  var color = PALETTE[state.colorIdx++ % PALETTE.length];
+  var body = { kind: 'block', nodes: [], color: color, aabb: null };
+  var hw = w / 2, hh = h / 2;
+  var ca = Math.cos(angle), sa = Math.sin(angle);
+  var pts = [[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]];
+  var massPer = Math.max(0.12, (w * h) * 0.0012 / 4);
+  for (var i = 0; i < 4; i++){
+    var lx = pts[i][0], ly = pts[i][1];
+    var n = makeNode(cx + lx * ca - ly * sa, cy + lx * sa + ly * ca, massPer, false);
+    n.body = body;
+    body.nodes.push(n);
+  }
+  for (var e = 0; e < 4; e++) addDist(body.nodes[e], body.nodes[(e + 1) % 4], null, 1, true);
+  addDist(body.nodes[0], body.nodes[2], null, 1, true);
+  addDist(body.nodes[1], body.nodes[3], null, 1, true);
+  state.blocks.push(body);
+  weldOverlaps(body);
+  updateAABB(body);
+  return body;
+}
+
+function weldOverlaps(body){
+  var b = body.nodes, i, a;
+  for (i = 0; i < state.blocks.length; i++){
+    var other = state.blocks[i];
+    if (other === body) continue;
+    var o = other.nodes;
+    var overlap = false;
+    for (a = 0; a < 4 && !overlap; a++) if (pointInPoly(b[a].x, b[a].y, o)) overlap = true;
+    for (a = 0; a < 4 && !overlap; a++) if (pointInPoly(o[a].x, o[a].y, b)) overlap = true;
+    if (!overlap) continue;
+
+    var pairs = [];
+    for (var p = 0; p < 4; p++) for (var q = 0; q < 4; q++){
+      pairs.push({ p: p, q: q, d: Math.hypot(b[p].x - o[q].x, b[p].y - o[q].y) });
+    }
+    pairs.sort(function(m, n2){ return m.d - n2.d; });
+    var first = pairs[0];
+    addDist(b[first.p], o[first.q], null, 1, true);
+    for (var k = 1; k < pairs.length; k++){
+      if (pairs[k].p !== first.p && pairs[k].q !== first.q){
+        addDist(b[pairs[k].p], o[pairs[k].q], null, 1, true);
+        break;
+      }
+    }
+  }
+}
+
+function nearestNodes(x, y, exclude, count, maxD){
+  var found = [];
+  var lists = [];
+  for (var i = 0; i < state.blocks.length; i++) lists.push(state.blocks[i].nodes);
+  for (var j = 0; j < state.wheels.length; j++) lists.push([state.wheels[j].node]);
+  for (var l = 0; l < lists.length; l++){
+    for (var m = 0; m < lists[l].length; m++){
+      var n = lists[l][m];
+      if (exclude && n === exclude) continue;
+      var d = Math.hypot(n.x - x, n.y - y);
+      if (d <= maxD) found.push({ n: n, d: d });
+    }
+  }
+  found.sort(function(a, b){ return a.d - b.d; });
+  return found.slice(0, count).map(function(o){ return o.n; });
+}
+
+function createWheel(x, y, r){
+  r = clamp(r, 7, 46);
+  var mass = Math.max(0.25, r * r * 0.0016);
+  var node = makeNode(x, y, mass, false);
+  node.isWheel = true;
+  var w = {
+    kind: 'wheel', node: node, r: r, angle: 0, omega: 0, motor: 0,
+    invI: 1 / (0.5 * mass * r * r)
+  };
+  node.wheel = w;
+  state.wheels.push(w);
+  var anchors = nearestNodes(x, y, node, 2, Math.max(72, r * 3.4));
+  for (var i = 0; i < anchors.length; i++) addDist(node, anchors[i], null, 1, true);
+  return w;
+}
+
+function createBeam(ax, ay, bx, by){
+  var na = nearestNodes(ax, ay, null, 1, 30)[0];
+  var nb = nearestNodes(bx, by, null, 1, 30)[0];
+  if (na && nb && na !== nb){ addDist(na, nb, null, 1, false); return true; }
+  return false;
+}
+
+function removeBlock(body){
+  var set = new Set(body.nodes);
+  state.constraints = state.constraints.filter(function(c){ return !set.has(c.a) && !set.has(c.b); });
+  state.blocks = state.blocks.filter(function(b){ return b !== body; });
+}
+function removeWheel(w){
+  var n = w.node;
+  state.constraints = state.constraints.filter(function(c){ return c.a !== n && c.b !== n; });
+  state.wheels = state.wheels.filter(function(x){ return x !== w; });
+}
+
+function hitTest(x, y){
+  for (var i = state.blocks.length - 1; i >= 0; i--){
+    var b = state.blocks[i];
+    if (pointInPoly(x, y, b.nodes)) return { kind: 'block', ref: b, nodes: b.nodes };
+  }
+  for (var k = state.wheels.length - 1; k >= 0; k--){
+    var w = state.wheels[k];
+    if (Math.hypot(x - w.node.x, y - w.node.y) <= w.r) return { kind: 'wheel', ref: w, nodes: [w.node] };
+  }
+  return null;
+}
+
+function deleteAt(x, y){
+  var hit = hitTest(x, y);
+  if (!hit){
+    var n = nearestNodes(x, y, null, 1, 22)[0];
+    if (n){
+      if (n.isWheel) removeWheel(n.wheel);
+      else if (n.body) removeBlock(n.body);
+    }
+    return;
+  }
+  if (hit.kind === 'block') removeBlock(hit.ref);
+  else removeWheel(hit.ref);
+}
+
+function allNodes(){
+  var out = [];
+  for (var i = 0; i < state.blocks.length; i++){
+    var ns = state.blocks[i].nodes;
+    for (var j = 0; j < ns.length; j++) out.push(ns[j]);
+  }
+  for (var k = 0; k < state.wheels.length; k++) out.push(state.wheels[k].node);
+  return out;
+}
+
+function updateAABB(b){
+  var ns = b.nodes, m = 10;
+  var minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+  for (var i = 0; i < ns.length; i++){
+    if (ns[i].x < minx) minx = ns[i].x;
+    if (ns[i].y < miny) miny = ns[i].y;
+    if (ns[i].x > maxx) maxx = ns[i].x;
+    if (ns[i].y > maxy) maxy = ns[i].y;
+  }
+  b.aabb = { x0: minx - m, y0: miny - m, x1: maxx + m, y1: maxy + m };
+}
+
+/* ---------------- physics ---------------- */
+
+function closestOnSeg(px, py, ax, ay, bx, by){
+  var dx = bx - ax, dy = by - ay;
+  var len2 = dx * dx + dy * dy;
+  var t = len2 > 0 ? ((px - ax) * dx + (py - ay) * dy) / len2 : 0;
+  t = clamp(t, 0, 1);
+  return { x: ax + dx * t, y: ay + dy * t };
+}
+
+function resolveCirclePoly(node, r, poly){
+  var best = null, bestD = Infinity;
+  for (var i = 0, j = poly.length - 1; i < poly.length; j = i++){
+    var c = closestOnSeg(node.x, node.y, poly[j].x, poly[j].y, poly[i].x, poly[i].y);
+    var d = Math.hypot(c.x - node.x, c.y - node.y);
+    if (d < bestD){ bestD = d; best = c; }
+  }
+  if (!best) return;
+  if (pointInPoly(node.x, node.y, poly)){
+    var dx = best.x - node.x, dy = best.y - node.y;
+    var dd = Math.hypot(dx, dy) || 0.0001;
+    var pen = dd + r;
+    node.x -= dx / dd * pen;
+    node.y -= dy / dd * pen;
+  } else if (bestD < r){
+    var ex = node.x - best.x, ey = node.y - best.y;
+    var ed = Math.hypot(ex, ey) || 0.0001;
+    var pen2 = r - ed;
+    node.x += ex / ed * pen2;
+    node.y += ey / ed * pen2;
+  }
+}
+
+function solveConstraints(){
+  var cs = state.constraints;
+  for (var i = 0; i < cs.length; i++){
+    var c = cs[i], a = c.a, b = c.b;
+    var dx = b.x - a.x, dy = b.y - a.y;
+    var d = Math.hypot(dx, dy);
+    if (d < 1e-6) d = 1e-6;
+    var diff = ((d - c.rest) / d) * c.stiff;
+    var wa = a.invMass, wb = b.invMass, ws = wa + wb;
+    if (ws === 0) continue;
+    var ka = wa / ws, kb = wb / ws;
+    a.x += dx * ka * diff; a.y += dy * ka * diff;
+    b.x -= dx * kb * diff; b.y -= dy * kb * diff;
+  }
+}
+
+function solveCollisions(nodes){
+  var i, j, n;
+
+  for (i = 0; i < nodes.length; i++){
+    n = nodes[i];
+    if (n.pinned) continue;
+    var r = n.isWheel ? n.wheel.r : 0;
+    var gy = groundY(n.x);
+    if (n.y + r > gy){
+      var pen = (n.y + r) - gy;
+      var nor = groundNormal(n.x);
+      var s = pen / Math.max(0.25, -nor.y);
+      n.x += nor.x * s;
+      n.y += nor.y * s;
+    }
+  }
+
+  for (i = 0; i < state.blocks.length; i++){
+    var A = state.blocks[i];
+    var pa = A.aabb, polyA = A.nodes;
+
+    for (var wi = 0; wi < state.wheels.length; wi++){
+      var w = state.wheels[wi];
+      if (!pa) continue;
+      if (w.node.x + w.r < pa.x0 || w.node.x - w.r > pa.x1 ||
+          w.node.y + w.r < pa.y0 || w.node.y - w.r > pa.y1) continue;
+      resolveCirclePoly(w.node, w.r, polyA);
+    }
+
+    for (j = 0; j < state.blocks.length; j++){
+      if (i === j) continue;
+      var B = state.blocks[j];
+      var pb = B.aabb;
+      if (!pa || !pb) continue;
+      if (pb.x1 < pa.x0 || pb.x0 > pa.x1 || pb.y1 < pa.y0 || pb.y0 > pa.y1) continue;
+      var bn = B.nodes;
+      for (var k = 0; k < bn.length; k++) resolveCirclePoly(bn[k], 0, polyA);
+    }
+  }
+
+  for (i = 0; i < state.wheels.length; i++){
+    for (j = i + 1; j < state.wheels.length; j++){
+      var w1 = state.wheels[i], w2 = state.wheels[j];
+      var dx = w2.node.x - w1.node.x, dy = w2.node.y - w1.node.y;
+      var d = Math.hypot(dx, dy) || 1e-6;
+      var pen = (w1.r + w2.r) - d;
+      if (pen > 0){
+        var nx = dx / d, ny = dy / d;
+        var ws = w1.node.invMass + w2.node.invMass;
+        if (ws > 0){
+          w1.node.x -= nx * pen * (w1.node.invMass / ws);
+          w1.node.y -= ny * pen * (w1.node.invMass / ws);
+          w2.node.x += nx * pen * (w2.node.invMass / ws);
+          w2.node.y += ny * pen * (w2.node.invMass / ws);
+        }
+      }
+    }
+  }
+}
+
+function applyFriction(nodes, dt){
+  var f = Math.max(0, 1 - 14 * dt);
+  for (var i = 0; i < nodes.length; i++){
+    var n = nodes[i];
+    if (n.pinned || n.isWheel) continue;
+    if (n.y >= groundY(n.x) - 0.8){
+      var nor = groundNormal(n.x);
+      var tx = -nor.y, ty = nor.x;
+      var vt = n.vx * tx + n.vy * ty;
+      var d = (vt * f) - vt;
+      n.vx += d * tx;
+      n.vy += d * ty;
+    }
+  }
+}
+
+function spawnDust(x, y, vx, vy){
+  state.particles.push({ x: x, y: y, vx: vx, vy: vy, life: 0.5, max: 0.5, r: 1.5 + Math.random() * 3 });
+  if (state.particles.length > 320) state.particles.shift();
+}
+
+function wheelContact(dt){
+  for (var i = 0; i < state.wheels.length; i++){
+    var w = state.wheels[i], n = w.node;
+    var gy = groundY(n.x);
+    if ((n.y + w.r) - gy < -2.5) continue;
+    var nor = groundNormal(n.x);
+    var tx = -nor.y, ty = nor.x;
+    var rcx = -nor.x * w.r, rcy = -nor.y * w.r;
+    var vpx = n.vx + (-w.omega * rcy);
+    var vpy = n.vy + (w.omega * rcx);
+    var slip = vpx * tx + vpy * ty;
+    var m = n.mass, I = 0.5 * m * w.r * w.r;
+    var denom = (1 / m) + (w.r * w.r) / I;
+    var J = -slip / denom;
+    var maxJ = 1.0 * m * GRAVITY * dt;
+    J = clamp(J, -maxJ, maxJ);
+    n.vx += J * tx / m;
+    n.vy += J * ty / m;
+    w.omega += -J * w.r / I;
+    if (Math.abs(slip) > 150 && Math.random() < 0.55){
+      spawnDust(n.x + nor.x * w.r, n.y + nor.y * w.r,
+        -tx * slip * 0.12 + (Math.random() - 0.5) * 50,
+        -Math.abs(slip) * 0.05 - Math.random() * 40);
+    }
+  }
+}
+
+function stepPhysics(dt){
+  var i, n;
+  var nodes = allNodes();
+
+  for (i = 0; i < state.blocks.length; i++) updateAABB(state.blocks[i]);
+
+  for (i = 0; i < state.wheels.length; i++){
+    var w = state.wheels[i];
+    if (w.motor !== 0) w.omega = clamp(w.omega + w.motor * 42 * dt, -30, 30);
+    else w.omega *= Math.pow(0.86, dt);
+  }
+
+  for (i = 0; i < nodes.length; i++){
+    n = nodes[i];
+    if (n.pinned){ n.px = n.x; n.py = n.y; n.vx = 0; n.vy = 0; continue; }
+    n.vy += GRAVITY * dt;
+    n.px = n.x; n.py = n.y;
+    n.x += n.vx * dt;
+    n.y += n.vy * dt;
+  }
+
+  for (var it = 0; it < ITER; it++){
+    solveConstraints();
+    solveCollisions(nodes);
+  }
+
+  var invDt = 1 / dt;
+  for (i = 0; i < nodes.length; i++){
+    n = nodes[i];
+    if (n.pinned){ n.vx = 0; n.vy = 0; continue; }
+    n.vx = (n.x - n.px) * invDt;
+    n.vy = (n.y - n.py) * invDt;
+    var sp = Math.hypot(n.vx, n.vy);
+    if (sp > 4000){ n.vx *= 4000 / sp; n.vy *= 4000 / sp; }
+  }
+
+  applyFriction(nodes, dt);
+  wheelContact(dt);
+
+  for (i = 0; i < state.wheels.length; i++) state.wheels[i].angle += state.wheels[i].omega * dt;
+
+  for (i = 0; i < nodes.length; i++){
+    n = nodes[i];
+    if (!n.pinned){ n.vx *= 0.9995; n.vy *= 0.9995; }
+  }
+}
+
+/* ---------------- snapshot / modes ---------------- */
+
+function takeSnapshot(){
+  var nodes = [], wheels = [], i;
+  for (i = 0; i < state.blocks.length; i++){
+    var ns = state.blocks[i].nodes;
+    for (var j = 0; j < ns.length; j++) nodes.push({ n: ns[j], x: ns[j].x, y: ns[j].y });
+  }
+  for (i = 0; i < state.wheels.length; i++){
+    var w = state.wheels[i];
+    wheels.push({ w: w, x: w.node.x, y: w.node.y, angle: w.angle, omega: w.omega, motor: w.motor });
+  }
+  return { nodes: nodes, wheels: wheels };
+}
+
+function restoreSnapshot(snap){
+  if (!snap) return;
+  for (var i = 0; i < snap.nodes.length; i++){
+    var a = snap.nodes[i];
+    a.n.x = a.x; a.n.y = a.y; a.n.px = a.x; a.n.py = a.y; a.n.vx = 0; a.n.vy = 0;
+  }
+  for (var j = 0; j < snap.wheels.length; j++){
+    var b = snap.wheels[j];
+    b.w.node.x = b.x; b.w.node.y = b.y; b.w.node.px = b.x; b.w.node.py = b.y;
+    b.w.node.vx = 0; b.w.node.vy = 0;
+    b.w.angle = b.angle; b.w.omega = 0; b.w.motor = b.motor;
+  }
+  state.particles.length = 0;
+}
+
+function setMode(m){
+  if (m === state.mode) return;
+  if (m === 'play'){
+    state.snapshot = takeSnapshot();
+    state.mode = 'play';
+  } else {
+    restoreSnapshot(state.snapshot);
+    state.snapshot = null;
+    state.mode = 'build';
+  }
+  state.drag = null;
+  updateUI();
+}
+
+function clearAll(){
+  state.blocks.length = 0;
+  state.wheels.length = 0;
+  state.constraints.length = 0;
+  state.particles.length = 0;
+  state.snapshot = null;
+  state.colorIdx = 0;
+}
+
+function resetScene(){
+  if (state.snapshot) restoreSnapshot(state.snapshot);
+  else if (state.mode === 'build'){ /* nothing */ }
+}
+
+/* ---------------- rendering ---------------- */
+
+function drawSky(){
+  var g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#0a1020');
+  g.addColorStop(0.5, '#101c31');
+  g.addColorStop(1, '#152340');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  var sx = W * 0.78, sy = H * 0.18;
+  var rg = ctx.createRadialGradient(sx, sy, 0, sx, sy, H * 0.62);
+  rg.addColorStop(0, 'rgba(96,190,255,0.20)');
+  rg.addColorStop(0.5, 'rgba(120,140,255,0.07)');
+  rg.addColorStop(1, 'rgba(96,190,255,0)');
+  ctx.fillStyle = rg;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.beginPath();
+  ctx.arc(sx, sy, 34, 0, TAU);
+  ctx.fillStyle = 'rgba(180,225,255,0.16)';
+  ctx.fill();
+}
+
+function drawHills(offset, amp, base, color){
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  for (var x = 0; x <= W; x += 12){
+    ctx.lineTo(x, base - Math.sin((x + offset) * 0.0021) * amp - Math.sin((x + offset) * 0.0007) * amp * 0.7);
+  }
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+}
+
+function drawGround(){
+  drawHills(0, 46, H * 0.72, '#0b1526');
+  drawHills(900, 30, H * 0.80, '#0d1a2d');
+
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  for (var x = 0; x <= W; x += 6) ctx.lineTo(x, groundY(x));
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  var g = ctx.createLinearGradient(0, H * 0.7, 0, H);
+  g.addColorStop(0, '#132137');
+  g.addColorStop(1, '#070c16');
+  ctx.fillStyle = g;
+  ctx.fill();
+
+  ctx.beginPath();
+  for (var x2 = 0; x2 <= W; x2 += 6){
+    var y = groundY(x2);
+    if (x2 === 0) ctx.moveTo(x2, y); else ctx.lineTo(x2, y);
+  }
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(110,220,255,0.65)';
+  ctx.shadowColor = 'rgba(80,200,255,0.85)';
+  ctx.shadowBlur = 16;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+}
+
+function drawGrid(){
+  ctx.save();
+  ctx.strokeStyle = 'rgba(110,180,255,0.055)';
+  ctx.lineWidth = 1;
+  var step = 44;
+  ctx.beginPath();
+  for (var x = 0; x < W; x += step){ ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, H); }
+  for (var y = 0; y < H; y += step){ ctx.moveTo(0, y + 0.5); ctx.lineTo(W, y + 0.5); }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawConstraints(){
+  var cs = state.constraints;
+  for (var i = 0; i < cs.length; i++){
+    var c = cs[i];
+    if (c.hidden) continue;
+    ctx.beginPath();
+    ctx.moveTo(c.a.x, c.a.y);
+    ctx.lineTo(c.b.x, c.b.y);
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'rgba(255,209,102,0.22)';
+    ctx.stroke();
+    ctx.lineWidth = 2.4;
+    ctx.strokeStyle = '#ffd166';
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(c.a.x, c.a.y, 3.2, 0, TAU);
+    ctx.arc(c.b.x, c.b.y, 3.2, 0, TAU);
+    ctx.fillStyle = '#ffe9a8';
+    ctx.fill();
+  }
+}
+
+function drawBlocks(){
+  for (var i = 0; i < state.blocks.length; i++){
+    var b = state.blocks[i], ns = b.nodes;
+    ctx.beginPath();
+    ctx.moveTo(ns[0].x, ns[0].y);
+    for (var j = 1; j < ns.length; j++) ctx.lineTo(ns[j].x, ns[j].y);
+    ctx.closePath();
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 5;
+    var g = ctx.createLinearGradient(0, ns[0].y, 0, ns[2].y);
+    g.addColorStop(0, b.color);
+    g.addColorStop(1, shade(b.color, -0.35));
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.restore();
+
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = shade(b.color, 0.45);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(ns[0].x, ns[0].y);
+    ctx.lineTo(ns[1].x, ns[1].y);
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.stroke();
+  }
+}
+
+function shade(hex, amt){
+  var h = hex.replace('#', '');
+  var r = parseInt(h.substring(0, 2), 16);
+  var g = parseInt(h.substring(2, 4), 16);
+  var b = parseInt(h.substring(4, 6), 16);
+  if (amt >= 0){
+    r = Math.round(r + (255 - r) * amt);
+    g = Math.round(g + (255 - g) * amt);
+    b = Math.round(b + (255 - b) * amt);
+  } else {
+    r = Math.round(r * (1 + amt));
+    g = Math.round(g * (1 + amt));
+    b = Math.round(b * (1 + amt));
+  }
+  return 'rgb(' + r + ',' + g + ',' + b + ')';
+}
+
+function drawWheels(){
+  for (var i = 0; i < state.wheels.length; i++){
+    var w = state.wheels[i], n = w.node;
+    ctx.save();
+    ctx.translate(n.x, n.y);
+    ctx.rotate(w.angle);
+
+    ctx.beginPath();
+    ctx.arc(0, 0, w.r, 0, TAU);
+    ctx.fillStyle = '#151d2b';
+    ctx.fill();
+
+    ctx.lineWidth = Math.max(2, w.r * 0.24);
+    ctx.strokeStyle = '#2b3a52';
+    ctx.stroke();
+
+    ctx.lineWidth = Math.max(1.5, w.r * 0.14);
+    ctx.strokeStyle = '#7ce7ff';
+    ctx.beginPath();
+    ctx.arc(0, 0, w.r * 0.66, 0, TAU);
+    ctx.stroke();
+
+    ctx.lineWidth = Math.max(1.5, w.r * 0.12);
+    ctx.strokeStyle = 'rgba(180,225,255,0.85)';
+    ctx.beginPath();
+    for (var s = 0; s < 4; s++){
+      var a = s * Math.PI / 2;
+      ctx.moveTo(Math.cos(a) * w.r * 0.14, Math.sin(a) * w.r * 0.14);
+      ctx.lineTo(Math.cos(a) * w.r * 0.64, Math.sin(a) * w.r * 0.64);
+    }
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(0, 0, w.r * 0.17, 0, TAU);
+    ctx.fillStyle = '#cfeaff';
+    ctx.fill();
+    ctx.restore();
+
+    if (w.motor !== 0){
+      ctx.save();
+      ctx.translate(n.x, n.y);
+      var dir = w.motor;
+      ctx.beginPath();
+      ctx.arc(0, 0, w.r + 7, dir > 0 ? -0.5 : 3.64, dir > 0 ? 2.6 : 6.78);
+      ctx.lineWidth = 2.4;
+      ctx.strokeStyle = 'rgba(6,214,160,0.9)';
+      ctx.shadowColor = 'rgba(6,214,160,0.9)';
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
+
+function drawPins(){
+  var nodes = allNodes();
+  for (var i = 0; i < nodes.length; i++){
+    var n = nodes[i];
+    if (!n.pinned) continue;
+    ctx.beginPath();
+    ctx.moveTo(n.x, n.y);
+    ctx.lineTo(n.x - 8, n.y + 14);
+    ctx.lineTo(n.x + 8, n.y + 14);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(239,71,111,0.85)';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, 4.5, 0, TAU);
+    ctx.fillStyle = '#ffd6e0';
+    ctx.fill();
+  }
+}
+
+function drawNodes(){
+  var nodes = allNodes();
+  for (var i = 0; i < nodes.length; i++){
+    var n = nodes[i];
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, n.pinned ? 0 : 2.1, 0, TAU);
+    ctx.fillStyle = 'rgba(190,225,255,0.55)';
+    ctx.fill();
+  }
+}
+
+function drawParticles(){
+  for (var i = 0; i < state.particles.length; i++){
+    var p = state.particles[i];
+    var a = Math.max(0, p.life / p.max);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * (0.4 + a), 0, TAU);
+    ctx.fillStyle = 'rgba(170,200,230,' + (a * 0.4).toFixed(3) + ')';
+    ctx.fill();
+  }
+}
+
+function drawPreview(){
+  var d = state.drag;
+  var p = state.pointer;
+
+  if (d && d.type === 'block'){
+    var x0 = Math.min(d.x0, d.x1), y0 = Math.min(d.y0, d.y1);
+    var w = Math.abs(d.x1 - d.x0), h = Math.abs(d.y1 - d.y0);
+    ctx.save();
+    ctx.setLineDash([7, 5]);
+    ctx.strokeStyle = 'rgba(124,231,255,0.9)';
+    ctx.lineWidth = 1.6;
+    ctx.fillStyle = 'rgba(124,231,255,0.13)';
+    ctx.fillRect(x0, y0, w, h);
+    ctx.strokeRect(x0, y0, w, h);
+    ctx.restore();
+  } else if (d && d.type === 'wheel'){
+    var r = clamp(Math.hypot(d.x1 - d.x0, d.y1 - d.y0), 7, 46);
+    ctx.save();
+    ctx.setLineDash([6, 5]);
+    ctx.strokeStyle = 'rgba(124,231,255,0.9)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(d.x0, d.y0, r, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+  } else if (d && d.type === 'beam'){
+    ctx.save();
+    ctx.setLineDash([7, 5]);
+    ctx.strokeStyle = 'rgba(255,209,102,0.9)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(d.x0, d.y0);
+    ctx.lineTo(d.x1, d.y1);
+    ctx.stroke();
+    ctx.restore();
+    highlightNear(d.x0, d.y0, 30, '#ffd166');
+    highlightNear(d.x1, d.y1, 30, '#ffd166');
+  } else if (state.mode === 'build' && (state.tool === 'pin' || state.tool === 'delete')){
+    highlightNear(p.x, p.y, 24, state.tool === 'pin' ? '#ef476f' : '#ff8fa3');
+  } else if (state.mode === 'build' && state.tool === 'move'){
+    var hit = hitTest(p.x, p.y);
+    if (hit){
+      ctx.save();
+      ctx.strokeStyle = 'rgba(124,231,255,0.8)';
+      ctx.lineWidth = 1.5;
+      if (hit.kind === 'block'){
+        var ns = hit.ref.nodes;
+        ctx.beginPath();
+        ctx.moveTo(ns[0].x, ns[0].y);
+        for (var j = 1; j < ns.length; j++) ctx.lineTo(ns[j].x, ns[j].y);
+        ctx.closePath();
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.arc(hit.ref.node.x, hit.ref.node.y, hit.ref.r + 3, 0, TAU);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+}
+
+function highlightNear(x, y, maxD, color){
+  var n = nearestNodes(x, y, null, 1, maxD)[0];
+  if (!n) return;
+  ctx.beginPath();
+  ctx.arc(n.x, n.y, 7, 0, TAU);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = color;
+  ctx.stroke();
+}
+
+function render(){
+  drawSky();
+  drawGround();
+  if (state.mode === 'build') drawGrid();
+  drawConstraints();
+  drawBlocks();
+  drawWheels();
+  drawPins();
+  drawParticles();
+  if (state.mode === 'build') drawNodes();
+  drawPreview();
+
+  ctx.save();
+  var vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(0,0,0,0.55)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+}
+
+/* ---------------- interaction ---------------- */
+
+function getPos(e){
+  var r = canvas.getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+}
+
+function onDown(e){
+  if (e.button === 2) return;
+  e.preventDefault();
+  var p = getPos(e);
+  state.pointer = p;
+
+  if (state.mode === 'play'){
+    for (var i = 0; i < state.wheels.length; i++){
+      var w = state.wheels[i];
+      if (Math.hypot(p.x - w.node.x, p.y - w.node.y) <= w.r + 8){
+        w.motor = w.motor === 0 ? 1 : (w.motor === 1 ? -1 : 0);
+        return;
+      }
+    }
+    return;
+  }
+
+  var t = state.tool;
+  if (t === 'block' || t === 'wheel' || t === 'beam'){
+    state.drag = { type: t, x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+  } else if (t === 'move'){
+    var hit = hitTest(p.x, p.y);
+    if (hit) state.drag = { type: 'move', hit: hit, ox: p.x, oy: p.y };
+  } else if (t === 'pin'){
+    var n = nearestNodes(p.x, p.y, null, 1, 26)[0];
+    if (n){
+      n.pinned = !n.pinned;
+      n.invMass = n.pinned ? 0 : 1 / n.mass;
+      if (n.pinned){ n.vx = 0; n.vy = 0; }
+    }
+  } else if (t === 'delete'){
+    deleteAt(p.x, p.y);
+  }
+}
+
+function onMove(e){
+  var p = getPos(e);
+  state.pointer = p;
+  var d = state.drag;
+  if (!d) return;
+  if (d.type === 'move'){
+    var dx = p.x - d.ox, dy = p.y - d.oy;
+    d.ox = p.x; d.oy = p.y;
+    for (var i = 0; i < d.hit.nodes.length; i++){
+      var n = d.hit.nodes[i];
+      n.x += dx; n.y += dy; n.px += dx; n.py += dy;
+    }
+  } else {
+    d.x1 = p.x; d.y1 = p.y;
+  }
+}
+
+function onUp(e){
+  var d = state.drag;
+  state.drag = null;
+  if (!d) return;
+  if (d.type === 'block'){
+    var w = Math.abs(d.x1 - d.x0), h = Math.abs(d.y1 - d.y0);
+    if (w >= 10 && h >= 10){
+      createBlock((d.x0 + d.x1) / 2, (d.y0 + d.y1) / 2, w, h, 0);
+    }
+  } else if (d.type === 'wheel'){
+    var r = Math.hypot(d.x1 - d.x0, d.y1 - d.y0);
+    createWheel(d.x0, d.y0, r > 4 ? r : 16);
+  } else if (d.type === 'beam'){
+    createBeam(d.x0, d.y0, d.x1, d.y1);
+  }
+}
+
+canvas.addEventListener('pointerdown', onDown);
+canvas.addEventListener('pointermove', onMove);
+canvas.addEventListener('pointerup', onUp);
+canvas.addEventListener('pointercancel', function(){ state.drag = null; });
+canvas.addEventListener('pointerleave', function(){ state.drag = state.drag && state.drag.type === 'move' ? state.drag : null; });
+canvas.addEventListener('contextmenu', function(e){
+  e.preventDefault();
+  if (state.mode !== 'build') return;
+  var p = getPos(e);
+  deleteAt(p.x, p.y);
+});
+
+function updateUI(){
+  var play = state.mode === 'play';
+  var pb = document.getElementById('playBtn');
+  pb.textContent = play ? 'Pause (Space)' : 'Run (Space)';
+  pb.classList.toggle('running', play);
+
+  var btns = document.querySelectorAll('#toolbar .tool');
+  for (var i = 0; i < btns.length; i++){
+    var b = btns[i];
+    b.classList.toggle('active', b.getAttribute('data-tool') === state.tool && !play);
+    b.classList.toggle('disabled', play);
+  }
+  var tag = document.getElementById('modeTag');
+  tag.textContent = play ? 'SIMULATION' : 'BUILD';
+  tag.className = play ? 'tag play' : 'tag build';
+}
+
+document.getElementById('playBtn').addEventListener('click', function(){ setMode(state.mode === 'play' ? 'build' : 'play'); });
+document.getElementById('resetBtn').addEventListener('click', function(){ resetScene(); });
+document.getElementById('clearBtn').addEventListener('click', function(){ clearAll(); });
+
+var toolBtns = document.querySelectorAll('#toolbar .tool');
+for (var ti = 0; ti < toolBtns.length; ti++){
+  (function(btn){
+    btn.addEventListener('click', function(){
+      if (state.mode === 'play') return;
+      state.tool = btn.getAttribute('data-tool');
+      updateUI();
+    });
+  })(toolBtns[ti]);
+}
+
+var TOOL_KEYS = { '1': 'block', '2': 'wheel', '3': 'beam', '4': 'pin', '5': 'move', '6': 'delete' };
+window.addEventListener('keydown', function(e){
+  if (e.code === 'Space'){
+    e.preventDefault();
+    setMode(state.mode === 'play' ? 'build' : 'play');
+    return;
+  }
+  var k = e.key.toLowerCase();
+  if (k === 'r'){ resetScene(); return; }
+  if (k === 'c'){ clearAll(); return; }
+  if (TOOL_KEYS[k] && state.mode === 'build'){
+    state.tool = TOOL_KEYS[k];
+    updateUI();
+  }
+});
+
+/* ---------------- boot ---------------- */
+
+function resize(){
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = canvas.clientWidth || window.innerWidth;
+  H = canvas.clientHeight || window.innerHeight;
+  canvas.width = Math.round(W * DPR);
+  canvas.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+  var nodes = allNodes();
+  for (var i = 0; i < nodes.length; i++){
+    var n = nodes[i];
+    var gy = groundY(n.x);
+    var r = n.isWheel ? n.wheel.r : 0;
+    if (n.y + r > gy){ n.y = gy - r - 2; n.py = n.y; }
+  }
+}
+
+function buildDemo(){
+  var cx = Math.max(180, W * 0.3);
+  var cy = groundY(cx) - 47;
+  createBlock(cx, cy, 132, 26, 0);
+  createWheel(cx - 46, cy + 13 + 16, 16);
+  createWheel(cx + 46, cy + 13 + 16, 16);
+}
+
+window.addEventListener('resize', resize);
+
+var last = performance.now();
+var acc = 0;
+
+function frame(now){
+  var dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  state.time += dt;
+
+  if (state.mode === 'play'){
+    acc += dt;
+    var steps = 0;
+    while (acc >= FIXED_DT && steps < MAX_SUB){
+      stepPhysics(FIXED_DT);
+      acc -= FIXED_DT;
+      steps++;
+    }
+    if (steps >= MAX_SUB) acc = 0;
+  } else {
+    acc = 0;
+  }
+
+  for (var i = state.particles.length - 1; i >= 0; i--){
+    var p = state.particles[i];
+    p.life -= dt;
+    if (p.life <= 0){ state.particles.splice(i, 1); continue; }
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vy += 620 * dt; p.vx *= 0.96;
+  }
+
+  render();
+  requestAnimationFrame(frame);
+}
+
+resize();
+buildDemo();
+updateUI();
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>

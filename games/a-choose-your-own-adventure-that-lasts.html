@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>30 Seconds — a choose-your-own-adventure that lasts 30 seconds</title>
+<style>
+  :root{
+    --bg:#0f0e0c;
+    --ink:#f4ede0;
+    --dim:#8a8172;
+    --line:rgba(244,237,224,.14);
+    --good:#8fd694;
+    --warn:#ffd166;
+    --crit:#ff6b5e;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:Georgia,"Times New Roman",Times,serif;
+    -webkit-font-smoothing:antialiased;
+    overflow:hidden;
+  }
+  #app{
+    height:100vh;
+    height:100dvh;
+    max-width:680px;
+    margin:0 auto;
+    padding:22px 22px 16px;
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+  }
+  header{flex:0 0 auto;}
+  h1{
+    font-size:13px;
+    letter-spacing:.42em;
+    text-transform:uppercase;
+    font-weight:400;
+    margin:0 0 12px;
+    color:var(--dim);
+  }
+  #timerWrap{
+    position:relative;
+    height:30px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    overflow:hidden;
+    background:rgba(244,237,224,.03);
+  }
+  #timerBar{
+    position:absolute;
+    inset:0 auto 0 0;
+    width:100%;
+    background:var(--good);
+    transition:width .45s cubic-bezier(.2,.7,.2,1), background-color .3s;
+  }
+  #timerBar.warn{background:var(--warn);}
+  #timerBar.crit{background:var(--crit);}
+  #timerNum{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:14px;
+    letter-spacing:.22em;
+    color:var(--bg);
+    font-weight:700;
+    mix-blend-mode:normal;
+  }
+  main{
+    flex:1 1 auto;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    gap:26px;
+    min-height:0;
+  }
+  #story{
+    font-size:clamp(19px,3.4vw,25px);
+    line-height:1.5;
+    margin:0;
+    min-height:4.5em;
+    white-space:pre-wrap;
+  }
+  #story::after{
+    content:"";
+    display:inline-block;
+    width:.5em;
+    height:1.05em;
+    margin-left:.06em;
+    background:var(--ink);
+    vertical-align:-.15em;
+    animation:blink 1s steps(1) infinite;
+    opacity:0;
+  }
+  #story.typing::after{opacity:.85;}
+  @keyframes blink{50%{opacity:0;}}
+  #choices{
+    display:flex;
+    flex-direction:column;
+    gap:9px;
+  }
+  .choice{
+    -webkit-appearance:none;
+    appearance:none;
+    font:inherit;
+    font-size:16px;
+    color:var(--ink);
+    background:rgba(244,237,224,.03);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:13px 15px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    text-align:left;
+    cursor:pointer;
+    transition:background-color .15s, border-color .15s, transform .08s;
+    animation:rise .28s both;
+  }
+  .choice:hover,.choice:focus-visible{
+    background:rgba(244,237,224,.1);
+    border-color:rgba(244,237,224,.4);
+    outline:none;
+  }
+  .choice:active{transform:scale(.99);}
+  .choice .cost{
+    color:var(--dim);
+    font-size:13px;
+    letter-spacing:.08em;
+    flex:0 0 auto;
+    font-variant-numeric:tabular-nums;
+  }
+  .choice .key{
+    display:inline-block;
+    min-width:1.35em;
+    color:var(--dim);
+    font-size:12px;
+    margin-right:10px;
+    letter-spacing:.05em;
+  }
+  @keyframes rise{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+  footer{
+    flex:0 0 auto;
+    color:var(--dim);
+    font-size:12px;
+    letter-spacing:.04em;
+    text-align:center;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:9px;
+  }
+  .rewind{
+    -webkit-appearance:none;
+    appearance:none;
+    font:inherit;
+    font-size:11px;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    color:var(--ink);
+    background:rgba(244,237,224,.04);
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:7px 17px;
+    cursor:pointer;
+    transition:background-color .15s, border-color .15s, opacity .15s, transform .08s;
+  }
+  .rewind:hover:not(:disabled){
+    background:rgba(244,237,224,.12);
+    border-color:rgba(244,237,224,.42);
+  }
+  .rewind:active:not(:disabled){transform:scale(.97);}
+  .rewind:disabled{opacity:.28; cursor:default;}
+  #app.rewinding{animation:rewindShake .5s ease-out;}
+  @keyframes rewindShake{
+    0%{filter:none;transform:translateX(0);}
+    14%{filter:invert(1) hue-rotate(160deg);transform:translateX(-7px);}
+    34%{transform:translateX(5px);}
+    54%{transform:translateX(-3px);}
+    74%{transform:translateX(2px);}
+    100%{filter:none;transform:translateX(0);}
+  }
+  #flash{
+    position:fixed;
+    left:50%;
+    top:84px;
+    transform:translateX(-50%);
+    pointer-events:none;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:4px;
+    z-index:20;
+  }
+  .flash{
+    font-size:20px;
+    font-weight:700;
+    letter-spacing:.06em;
+    animation:floatUp 1.1s ease-out forwards;
+    text-shadow:0 2px 10px rgba(0,0,0,.6);
+  }
+  .flash.bad{color:var(--crit);}
+  .flash.good{color:var(--good);}
+  @keyframes floatUp{
+    0%{opacity:0;transform:translateY(8px) scale(.9);}
+    18%{opacity:1;transform:none;}
+    100%{opacity:0;transform:translateY(-26px);}
+  }
+  #overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(9,8,7,.86);
+    -webkit-backdrop-filter:blur(7px);
+    backdrop-filter:blur(7px);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    z-index:30;
+  }
+  #overlay.show{display:flex;}
+  .card{
+    width:100%;
+    max-width:520px;
+    max-height:88vh;
+    overflow:auto;
+    border:1px solid var(--line);
+    border-radius:14px;
+    background:#141210;
+    padding:30px 26px;
+    text-align:center;
+    animation:pop .3s cubic-bezier(.2,.9,.3,1.1) both;
+  }
+  @keyframes pop{from{opacity:0;transform:translateY(12px) scale(.97);}to{opacity:1;transform:none;}}
+  .card h2{
+    font-size:clamp(24px,5vw,34px);
+    margin:6px 0 14px;
+    letter-spacing:.02em;
+  }
+  .card p{
+    font-size:16px;
+    line-height:1.55;
+    color:#dcd3c2;
+    margin:0 auto 16px;
+    max-width:42ch;
+  }
+  .card .kicker{
+    font-size:11px;
+    letter-spacing:.4em;
+    text-transform:uppercase;
+    color:var(--dim);
+    margin:0 0 4px;
+  }
+  .card .stats{
+    color:var(--dim);
+    font-size:13px;
+    letter-spacing:.06em;
+    margin:0 0 4px;
+  }
+  .card .progress{
+    color:var(--dim);
+    font-size:13px;
+    letter-spacing:.06em;
+    margin:0 0 20px;
+  }
+  .card .found{
+    color:#6f6659;
+    font-size:11px;
+    letter-spacing:.08em;
+    line-height:1.7;
+    margin:0 0 20px;
+    text-transform:uppercase;
+  }
+  .row{
+    display:flex;
+    gap:10px;
+    justify-content:center;
+    flex-wrap:wrap;
+  }
+  .btn{
+    -webkit-appearance:none;
+    appearance:none;
+    font:inherit;
+    font-size:15px;
+    letter-spacing:.04em;
+    color:var(--bg);
+    background:var(--ink);
+    border:1px solid var(--ink);
+    border-radius:999px;
+    padding:12px 26px;
+    cursor:pointer;
+    transition:transform .08s, opacity .15s;
+  }
+  .btn:hover{opacity:.88;}
+  .btn:active{transform:scale(.97);}
+  .btn.ghost{
+    background:transparent;
+    color:var(--ink);
+    border-color:var(--line);
+  }
+  .btn.ghost:hover{border-color:rgba(244,237,224,.4);opacity:1;}
+  .hint{
+    font-size:13px;
+    color:var(--dim);
+    letter-spacing:.05em;
+    margin:16px 0 0;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>30 Seconds</h1>
+    <div id="timerWrap"><div id="timerBar"></div><span id="timerNum">30s</span></div>
+  </header>
+  <main>
+    <p id="story"></p>
+    <div id="choices"></div>
+  </main>
+  <footer>
+    <span id="footerHint">Every choice costs seconds. You start with 30. Click a choice, or press 1–3.</span>
+    <button id="rewindBtn" class="rewind" type="button" disabled>Rewind · 1 left</button>
+  </footer>
+</div>
+<div id="flash"></div>
+<div id="overlay"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var START = 30;
+  var STORE_KEY = 'cyoa30.endings.v1';
+  var reduceMotion = false;
+  try {
+    reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch (e) { reduceMotion = false; }
+
+  var nodes = {
+    start: {
+      text: 'You wake up in a beige room. A voice in your head says, very calmly: \u201CYou have thirty seconds.\u201D',
+      choices: [
+        { l: 'Panic', c: 3, to: 'panic' },
+        { l: 'Look around', c: 2, to: 'look' },
+        { l: 'Say \u201Cno thank you\u201D', c: 1, to: 'refuse' }
+      ]
+    },
+    panic: {
+      text: 'You scream. The scream burns air, and air is time. You can feel yourself getting older in real time.',
+      choices: [
+        { l: 'Keep screaming', c: 3, to: 'scream' },
+        { l: 'Stop and breathe', c: 2, to: 'breathe' },
+        { l: 'Check your pockets', c: 2, to: 'pockets' }
+      ]
+    },
+    scream: {
+      text: 'You scream until the room screams back. It has a nicer voice than you do. It is singing your name.',
+      choices: [
+        { l: 'Harmonize', c: 3, to: 'harmony' },
+        { l: 'Apologize', c: 1, to: 'apologize' }
+      ]
+    },
+    harmony: {
+      ending: {
+        title: 'Barbershop',
+        text: 'You and the room sing a two-part harmony. The voice joins in. The three of you hold the final chord for exactly as long as you have left, and it is enough.'
+      }
+    },
+    apologize: {
+      onEnter: 3,
+      text: 'You apologize. The room is gracious about it and returns three seconds it wasn\u2019t using.',
+      choices: [
+        { l: 'Thank it', c: 1, to: 'thanksRoom' },
+        { l: 'Say you\u2019ll do it again', c: 2, to: 'again' }
+      ]
+    },
+    thanksRoom: {
+      ending: {
+        title: 'Good Manners',
+        text: 'The room blushes. Somewhere a door unlocks that you will never have time to open, and that is fine, because you said thank you.'
+      }
+    },
+    again: {
+      ending: {
+        title: 'Unrepentant',
+        text: 'You tell the room you would scream at it again. The room respects the honesty. The voice respects it less.'
+      }
+    },
+    breathe: {
+      onEnter: 5,
+      text: 'You breathe in. You breathe out. The voice grudgingly adds five seconds and mutters something about \u201Cwellness.\u201D',
+      choices: [
+        { l: 'Keep breathing', c: 2, to: 'breathe2' },
+        { l: 'Look around', c: 2, to: 'look' }
+      ]
+    },
+    breathe2: {
+      ending: {
+        title: 'Enlightened',
+        text: 'You achieve a small, tidy enlightenment. It fits in your pocket. You have exactly enough time left to enjoy it.'
+      }
+    },
+    pockets: {
+      text: 'Your pockets contain: one coin, one photograph, and one countdown you are certain you did not put there.',
+      choices: [
+        { l: 'Flip the coin', c: 2, to: 'coin' },
+        { l: 'Look at the photograph', c: 2, to: 'photo' },
+        { l: 'Put it all back', c: 1, to: 'look' }
+      ]
+    },
+    coin: {
+      text: 'The coin lands. You don\u2019t see which side, because the room\u2019s clock is louder than the coin. The voice says: \u201CDoes it matter?\u201D',
+      choices: [
+        { l: 'Heads', c: 1, to: 'heads' },
+        { l: 'Tails', c: 1, to: 'tails' }
+      ]
+    },
+    heads: {
+      ending: {
+        title: 'Heads',
+        text: 'It was heads. Somewhere, a stranger wins a bet and thinks about you for the rest of their life.'
+      }
+    },
+    tails: {
+      ending: {
+        title: 'Tails',
+        text: 'It was tails. Somewhere, a stranger loses a bet and blames a person they will never meet. That person is you. Congratulations.'
+      }
+    },
+    photo: {
+      ending: {
+        title: 'Portrait',
+        text: 'The photograph is of you, taken ten seconds from now. You look fantastic. You look like someone who made good choices, quickly.'
+      }
+    },
+    look: {
+      text: 'The room is beige and small. There is a door, a window, and a sandwich on a plate. The sandwich has a little paper flag in it that reads: EAT ME. YOU ARE RUNNING OUT OF TIME.',
+      choices: [
+        { l: 'Open the door', c: 3, to: 'door' },
+        { l: 'Open the window', c: 3, to: 'window' },
+        { l: 'Eat the sandwich', c: 2, to: 'sandwich' }
+      ]
+    },
+    sandwich: {
+      onEnter: 8,
+      text: 'You eat the sandwich. It tastes like every good idea you never had. Eight whole seconds appear in your chest, warm and ticking.',
+      choices: [
+        { l: 'Say thank you', c: 1, to: 'thanksSandwich' },
+        { l: 'Demand more', c: 2, to: 'demand' }
+      ]
+    },
+    thanksSandwich: {
+      ending: {
+        title: 'Grateful',
+        text: 'The voice softens. \u201CNobody ever says thank you,\u201D it says, and the room fills with a light that isn\u2019t measured in seconds.'
+      }
+    },
+    demand: {
+      ending: {
+        title: 'One More',
+        text: 'You demand more. The voice gives you a countdown to a countdown. Somewhere a second clock starts. You will never know when it ends.'
+      }
+    },
+    door: {
+      text: 'The door opens onto a hallway exactly as long as the rest of your life. There is a smell of rain and someone else\u2019s cooking.',
+      choices: [
+        { l: 'Run', c: 4, to: 'run' },
+        { l: 'Walk', c: 3, to: 'walk' },
+        { l: 'Turn back', c: 1, to: 'look' }
+      ]
+    },
+    run: {
+      ending: {
+        title: 'Marathon',
+        text: 'You run. The hallway is generous and keeps unfolding. You cross a finish line you never saw being built. Somebody hands you a glass of water and a very small trophy.'
+      }
+    },
+    walk: {
+      ending: {
+        title: 'Fl\u00E2neur',
+        text: 'You walk. You notice the wallpaper, the cooking, the rain. The voice says, \u201CYou\u2019re wasting time,\u201D and you say, \u201CI know,\u201D and keep walking, which is the whole point.'
+      }
+    },
+    window: {
+      text: 'You climb out the window. You are on the thirtieth floor. Of course you are.',
+      choices: [
+        { l: 'Jump', c: 2, to: 'jump' },
+        { l: 'Climb up', c: 3, to: 'up' },
+        { l: 'Climb back in', c: 1, to: 'look' }
+      ]
+    },
+    jump: {
+      ending: {
+        title: 'Freefall',
+        text: 'You fall. It takes about three seconds, which you had anyway. You land in a truck full of mattresses, which is statistically outrageous, and you are fine, and you are out of time, and you are laughing.'
+      }
+    },
+    up: {
+      ending: {
+        title: 'Rooftop',
+        text: 'You climb to the roof. The city is doing its evening thing. The voice says, \u201CYou have no time left.\u201D You say, \u201CI know,\u201D and watch the lights come on anyway.'
+      }
+    },
+    refuse: {
+      onEnter: 3,
+      text: 'You say \u201Cno thank you\u201D to the voice. The voice is so startled that it tips you three seconds.',
+      choices: [
+        { l: 'Negotiate for more', c: 3, to: 'negotiate' },
+        { l: 'Accept the tip', c: 1, to: 'accept' }
+      ]
+    },
+    negotiate: {
+      ending: {
+        title: 'Collective Bargaining',
+        text: 'You negotiate. The voice caves almost immediately. You get a much longer life, but it comes with meetings.'
+      }
+    },
+    accept: {
+      ending: {
+        title: 'Polite',
+        text: 'You accept the tip and say goodbye. The voice, unused to kindness, gives you a second tip. You never find out what it\u2019s for.'
+      }
+    }
+  };
+
+  var TIMEOUT_ENDING = {
+    title: 'Out of Time',
+    text: 'The voice says, gently: \u201CThat was your thirty seconds.\u201D It does not sound pleased. It does not sound sorry, either.'
+  };
+
+  var endingKeys = Object.keys(nodes).filter(function (k) { return !!nodes[k].ending; });
+  var TOTAL_ENDINGS = endingKeys.length + 1;
+
+  var storyEl = document.getElementById('story');
+  var choicesEl = document.getElementById('choices');
+  var barEl = document.getElementById('timerBar');
+  var numEl = document.getElementById('timerNum');
+  var overlay = document.getElementById('overlay');
+  var flashEl = document.getElementById('flash');
+  var appEl = document.getElementById('app');
+  var rewindBtn = document.getElementById('rewindBtn');
+
+  var state = { time: START, ended: true, typing: false, rewinds: 1 };
+  var typeTimer = null;
+  var skipFn = null;
+  var history = [];
+  var found = loadFound();
+
+  function loadFound() {
+    var out = {};
+    try {
+      var raw = window.localStorage.getItem(STORE_KEY);
+      if (raw) {
+        var arr = JSON.parse(raw);
+        if (Object.prototype.toString.call(arr) === '[object Array]') {
+          for (var i = 0; i < arr.length; i++) { out[String(arr[i])] = true; }
+        }
+      }
+    } catch (e) { out = {}; }
+    return out;
+  }
+
+  function saveFound() {
+    try {
+      window.localStorage.setItem(STORE_KEY, JSON.stringify(Object.keys(found)));
+    } catch (e) { /* storage unavailable; that's fine */ }
+  }
+
+  function foundCount() { return Object.keys(found).length; }
+
+  function updateTimer() {
+    var t = Math.max(0, state.time);
+    numEl.textContent = t + 's';
+    var pct = Math.max(0, Math.min(100, (t / START) * 100));
+    barEl.style.width = pct + '%';
+    barEl.className = t <= 8 ? 'crit' : (t <= 15 ? 'warn' : '');
+  }
+
+  function flash(msg, kind) {
+    var s = document.createElement('div');
+    s.className = 'flash ' + (kind || '');
+    s.textContent = msg;
+    flashEl.appendChild(s);
+    window.setTimeout(function () {
+      if (s.parentNode) { s.parentNode.removeChild(s); }
+    }, 1150);
+  }
+
+  var ac = null;
+  function unlockAudio() {
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      if (!ac) ac = new Ctx();
+      if (ac.state === 'suspended' && ac.resume) ac.resume();
+      return ac;
+    } catch (e) { return null; }
+  }
+  // Unlock audio on the first user gesture (autoplay policy).
+  ['pointerdown', 'keydown', 'touchstart', 'click'].forEach(function (ev) {
+    window.addEventListener(ev, function () { unlockAudio(); }, { passive: true });
+  });
+  function beep(freq, dur, type) {
+    try {
+      if (!ac) unlockAudio();
+      if (!ac) return;
+      var play = function () {
+        try {
+          var o = ac.createOscillator();
+          var g = ac.createGain();
+          o.type = type || 'sine';
+          o.frequency.value = freq;
+          g.gain.value = 0.045;
+          o.connect(g);
+          g.connect(ac.destination);
+          var now = ac.currentTime;
+          var d = dur || 0.08;
+          g.gain.exponentialRampToValueAtTime(0.0001, now + d);
+          o.start(now);
+          o.stop(now + d + 0.02);
+        } catch (e) { }
+      };
+      if (ac.state === 'suspended' && ac.resume) ac.resume().then(play).catch(function () { });
+      else play();
+    } catch (e) { /* audio is optional */ }
+  }
+
+  function sweep(f1, f2, dur, type) {
+    try {
+      if (!ac) unlockAudio();
+      if (!ac) return;
+      var play = function () {
+        try {
+          var o = ac.createOscillator();
+          var g = ac.createGain();
+          var now = ac.currentTime;
+          var d = dur || 0.3;
+          o.type = type || 'sawtooth';
+          o.frequency.setValueAtTime(Math.max(1, f1), now);
+          o.frequency.exponentialRampToValueAtTime(Math.max(1, f2), now + d);
+          g.gain.value = 0.05;
+          g.gain.exponentialRampToValueAtTime(0.0001, now + d);
+          o.connect(g);
+          g.connect(ac.destination);
+          o.start(now);
+          o.stop(now + d + 0.02);
+        } catch (e) { }
+      };
+      if (ac.state === 'suspended' && ac.resume) ac.resume().then(play).catch(function () { });
+      else play();
+    } catch (e) { /* audio is optional */ }
+  }
+
+  function typeText(str, done) {
+    if (typeTimer) { window.clearInterval(typeTimer); typeTimer = null; }
+    skipFn = null;
+    if (reduceMotion) {
+      storyEl.textContent = str;
+      storyEl.classList.remove('typing');
+      state.typing = false;
+      done();
+      return;
+    }
+    state.typing = true;
+    storyEl.textContent = '';
+    storyEl.classList.add('typing');
+    var i = 0;
+    function finish() {
+      if (typeTimer) { window.clearInterval(typeTimer); typeTimer = null; }
+      storyEl.textContent = str;
+      storyEl.classList.remove('typing');
+      state.typing = false;
+      skipFn = null;
+      done();
+    }
+    skipFn = finish;
+    typeTimer = window.setInterval(function () {
+      i += 1;
+      storyEl.textContent = str.slice(0, i);
+      if (i >= str.length) { finish(); }
+    }, 14);
+  }
+
+  function skipTyping() {
+    if (state.typing && skipFn) { skipFn(); }
+  }
+
+  function buildChoices(list) {
+    choicesEl.innerHTML = '';
+    for (var i = 0; i < list.length; i++) {
+      (function (ch, idx) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'choice';
+        b.style.animationDelay = (idx * 45) + 'ms';
+
+        var left = document.createElement('span');
+        var key = document.createElement('span');
+        key.className = 'key';
+        key.textContent = String(idx + 1);
+        var label = document.createElement('span');
+        label.textContent = ch.l;
+        left.appendChild(key);
+        left.appendChild(label);
+
+        var cost = document.createElement('span');
+        cost.className = 'cost';
+        cost.textContent = ch.c + 's';
+
+        b.appendChild(left);
+        b.appendChild(cost);
+        b.addEventListener('click', function () { choose(ch); });
+        choicesEl.appendChild(b);
+      })(list[i], i);
+    }
+  }
+
+  function choose(ch) {
+    if (state.ended || state.typing) { return; }
+    state.time -= ch.c;
+    beep(430, 0.06, 'sine');
+    updateTimer();
+    if (state.time <= 0) {
+      state.time = 0;
+      updateTimer();
+      showEnding(TIMEOUT_ENDING, 'out_of_time');
+      return;
+    }
+    goTo(ch.to);
+  }
+
+  function renderNode(id) {
+    var n = nodes[id];
+    if (!n) { return; }
+    choicesEl.innerHTML = '';
+    typeText(n.text, function () {
+      buildChoices(n.choices || []);
+      updateRewindUI();
+    });
+  }
+
+  function goTo(id, skipEnter) {
+    var n = nodes[id];
+    if (!n) { return; }
+    if (!skipEnter && typeof n.onEnter === 'number') {
+      state.time += n.onEnter;
+      updateTimer();
+      flash((n.onEnter > 0 ? '+' : '') + n.onEnter + 's', n.onEnter > 0 ? 'good' : 'bad');
+    }
+    if (n.ending) {
+      showEnding(n.ending, id);
+      return;
+    }
+    history.push({ id: id, time: state.time });
+    if (history.length > 60) { history.shift(); }
+    updateRewindUI();
+    renderNode(id);
+  }
+
+  function updateRewindUI() {
+    var avail = state.rewinds > 0 &&
+      (history.length >= 2 || (state.ended && history.length >= 1));
+    rewindBtn.disabled = !avail;
+    rewindBtn.textContent = state.rewinds > 0
+      ? ('Rewind \u00B7 ' + state.rewinds + ' left')
+      : 'Rewind \u00B7 used';
+  }
+
+  function rewindFx() {
+    if (reduceMotion) { return; }
+    appEl.classList.remove('rewinding');
+    void appEl.offsetWidth;
+    appEl.classList.add('rewinding');
+    window.setTimeout(function () { appEl.classList.remove('rewinding'); }, 540);
+  }
+
+  function rewind() {
+    if (state.typing || state.rewinds <= 0) { return; }
+    var snap;
+    if (state.ended) {
+      if (history.length < 1) { return; }
+      snap = history[history.length - 1];
+    } else {
+      if (history.length < 2) { return; }
+      history.pop();
+      snap = history[history.length - 1];
+    }
+    state.rewinds -= 1;
+    var before = state.time;
+    state.time = snap.time;
+    state.ended = false;
+    if (typeTimer) { window.clearInterval(typeTimer); typeTimer = null; }
+    skipFn = null;
+    state.typing = false;
+    overlay.classList.remove('show');
+    overlay.innerHTML = '';
+    updateTimer();
+    updateRewindUI();
+    rewindFx();
+    sweep(170, 760, 0.34, 'sawtooth');
+    var gained = state.time - before;
+    flash(gained > 0 ? ('+' + gained + 's') : 'Rewound', 'good');
+    renderNode(snap.id);
+  }
+
+  function makeBtn(label, ghost, fn) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn' + (ghost ? ' ghost' : '');
+    b.textContent = label;
+    b.addEventListener('click', fn);
+    return b;
+  }
+
+  function showEnding(ending, key) {
+    state.ended = true;
+    state.typing = false;
+    if (typeTimer) { window.clearInterval(typeTimer); typeTimer = null; }
+    skipFn = null;
+    storyEl.classList.remove('typing');
+
+    if (key) { found[key] = true; saveFound(); }
+    beep(196, 0.35, 'triangle');
+
+    overlay.innerHTML = '';
+    var card = document.createElement('div');
+    card.className = 'card';
+
+    var kicker = document.createElement('p');
+    kicker.className = 'kicker';
+    kicker.textContent = key === 'out_of_time' ? 'Time\u2019s up' : 'The End';
+
+    var h = document.createElement('h2');
+    h.textContent = ending.title;
+
+    var p = document.createElement('p');
+    p.textContent = ending.text;
+
+    var stats = document.createElement('p');
+    stats.className = 'stats';
+    stats.textContent = state.time > 0
+      ? ('You had ' + state.time + ' second' + (state.time === 1 ? '' : 's') + ' left.')
+      : 'You ran out of time.';
+
+    var prog = document.createElement('p');
+    prog.className = 'progress';
+    prog.textContent = 'Endings found: ' + foundCount() + ' / ' + TOTAL_ENDINGS;
+
+    var names = [];
+    for (var i = 0; i < endingKeys.length; i++) {
+      if (found[endingKeys[i]]) { names.push(nodes[endingKeys[i]].ending.title); }
+    }
+    if (found.out_of_time) { names.push(TIMEOUT_ENDING.title); }
+    var foundLine = document.createElement('p');
+    foundLine.className = 'found';
+    foundLine.textContent = names.length ? names.join(' \u00B7 ') : 'No endings found yet.';
+
+    var row = document.createElement('div');
+    row.className = 'row';
+    if (state.rewinds > 0 && history.length >= 1) {
+      row.appendChild(makeBtn('Rewind', true, rewind));
+    }
+    row.appendChild(makeBtn('Go again', false, start));
+    row.appendChild(makeBtn('Endings', true, showStart));
+
+    var hint = document.createElement('p');
+    hint.className = 'hint';
+    hint.textContent = state.rewinds > 0 && history.length >= 1
+      ? 'Press R to go again, or Z to rewind your last choice.'
+      : 'Press R to go again.';
+
+    card.appendChild(kicker);
+    card.appendChild(h);
+    card.appendChild(p);
+    card.appendChild(stats);
+    card.appendChild(prog);
+    card.appendChild(foundLine);
+    card.appendChild(row);
+    card.appendChild(hint);
+    overlay.appendChild(card);
+    overlay.classList.add('show');
+    updateRewindUI();
+  }
+
+  function showStart() {
+    state.ended = true;
+    if (typeTimer) { window.clearInterval(typeTimer); typeTimer = null; }
+    skipFn = null;
+    state.typing = false;
+
+    overlay.innerHTML = '';
+    var card = document.createElement('div');
+    card.className = 'card';
+
+    var kicker = document.createElement('p');
+    kicker.className = 'kicker';
+    kicker.textContent = 'A choose-your-own-adventure';
+
+    var h = document.createElement('h2');
+    h.textContent = '30 Seconds';
+
+    var p = document.createElement('p');
+    p.textContent = 'You have thirty seconds to live. Every choice you make costs seconds off the clock. Spend them well. Or don\u2019t.';
+
+    var prog = document.createElement('p');
+    prog.className = 'progress';
+    prog.textContent = 'Endings found: ' + foundCount() + ' / ' + TOTAL_ENDINGS;
+
+    var row = document.createElement('div');
+    row.className = 'row';
+    row.appendChild(makeBtn('Begin', false, start));
+
+    var hint = document.createElement('p');
+    hint.className = 'hint';
+    hint.textContent = 'Click a choice, or press 1\u20133. Space skips the typing. Z rewinds one choice.';
+
+    card.appendChild(kicker);
+    card.appendChild(h);
+    card.appendChild(p);
+    card.appendChild(prog);
+    card.appendChild(row);
+    card.appendChild(hint);
+    overlay.appendChild(card);
+    overlay.classList.add('show');
+  }
+
+  function start() {
+    state.time = START;
+    state.ended = false;
+    state.typing = false;
+    state.rewinds = 1;
+    history = [];
+    if (typeTimer) { window.clearInterval(typeTimer); typeTimer = null; }
+    skipFn = null;
+    overlay.classList.remove('show');
+    overlay.innerHTML = '';
+    choicesEl.innerHTML = '';
+    storyEl.textContent = '';
+    updateTimer();
+    updateRewindUI();
+    beep(523, 0.09, 'sine');
+    goTo('start');
+  }
+
+  rewindBtn.addEventListener('click', function () { rewind(); });
+
+  document.addEventListener('keydown', function (e) {
+    var key = e.key;
+    if (key === 'r' || key === 'R') {
+      start();
+      e.preventDefault();
+      return;
+    }
+    if (key === 'z' || key === 'Z' || key === 'Backspace') {
+      if (state.rewinds > 0 && (history.length >= 2 || (state.ended && history.length >= 1))) {
+        rewind();
+      }
+      e.preventDefault();
+      return;
+    }
+    if (key === ' ' || key === 'Spacebar' || key === 'Enter') {
+      if (state.typing) {
+        skipTyping();
+      } else if (state.ended) {
+        start();
+      }
+      e.preventDefault();
+      return;
+    }
+    if (key >= '1' && key <= '9' && !state.ended && !state.typing) {
+      var idx = parseInt(key, 10) - 1;
+      var btns = choicesEl.querySelectorAll('.choice');
+      if (btns[idx]) { btns[idx].click(); }
+    }
+  });
+
+  updateTimer();
+  updateRewindUI();
+  showStart();
+})();
+</script>
+</body>
+</html>

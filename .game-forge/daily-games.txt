@@ -1,0 +1,20 @@
+a full platformer with 15+ handcrafted levels, checkpoints and a final boss
+a roguelike dungeon crawler with random floors, items, and permadeath
+a city builder with zoning, money, population and disasters
+a 2D physics sandbox where you build vehicles and machines
+a space exploration game with planets, fuel, upgrades and discoveries
+a tower defense with a tech tree, many enemy types and endless waves
+a farming sim with seasons, crops, animals and a market
+a rhythm game that generates its own charts and judges your timing
+a card battler against AI opponents with deckbuilding
+a battle royale against 20 bots on a shrinking map
+a puzzle game with 30 handcrafted levels and a level editor
+a metroidvania-lite with abilities, secrets and a map
+a top-down racing game with several tracks and AI racers
+a tycoon game (theme park) with rides, guests and finances
+a survival game with crafting, hunger and day/night
+a turn-based tactics game on a grid with unit classes
+a detective game where you solve cases from clues
+a monster-catching RPG with battles, types and evolution
+a factory automation game with belts, machines and goals
+a god-game sandbox with terrain, followers and miracles

@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Rubber Band — a physics toy</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; overflow: hidden;
+    background: #fff7ed;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: #3b2a20;
+  }
+  #c {
+    display: block; position: fixed; inset: 0;
+    touch-action: none; cursor: default;
+  }
+  #hud {
+    position: fixed; top: 0; left: 0; right: 0;
+    padding: 18px 20px 0 20px;
+    pointer-events: none; user-select: none;
+    text-align: center;
+  }
+  #hud h1 {
+    margin: 0; font-size: clamp(24px, 5vw, 40px);
+    letter-spacing: -0.02em; font-weight: 800;
+    color: #d1392f;
+    text-shadow: 0 2px 0 rgba(255,255,255,0.7);
+  }
+  #hud p {
+    margin: 6px auto 0; max-width: 560px;
+    font-size: clamp(12px, 2.6vw, 15px); line-height: 1.35;
+    color: #7a5b4b; font-weight: 500;
+  }
+  #controls {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    display: flex; flex-wrap: wrap; gap: 8px;
+    justify-content: center; align-items: center;
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px)) 14px;
+    pointer-events: none;
+  }
+  button {
+    pointer-events: auto;
+    font: inherit; font-weight: 700; font-size: 13px;
+    color: #6b3f30;
+    background: rgba(255,255,255,0.82);
+    border: 2px solid rgba(209,57,47,0.28);
+    border-radius: 999px;
+    padding: 9px 16px;
+    cursor: pointer;
+    box-shadow: 0 3px 0 rgba(209,57,47,0.18), 0 6px 14px rgba(160,90,60,0.12);
+    transition: transform .08s ease, background .15s ease, box-shadow .08s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:hover { background: #fff; }
+  button:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(209,57,47,0.18); }
+  #hint {
+    position: fixed; left: 0; right: 0; bottom: 62px;
+    text-align: center; font-size: 11.5px; font-weight: 600;
+    color: #b08a78; pointer-events: none; user-select: none;
+    letter-spacing: 0.01em;
+  }
+  @media (max-width: 520px) {
+    #hint { display: none; }
+    #hud p { max-width: 320px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud">
+  <h1>Rubber Band</h1>
+  <p>Drag the band to pluck it and fling the balls around. Drag the pins to move the anchors.</p>
+</div>
+
+<div id="hint">tap empty space to drop a ball &middot; G gravity &middot; R reset</div>
+
+<div id="controls">
+  <button id="btnGravity" type="button">Gravity: On</button>
+  <button id="btnDrop" type="button">Drop ball</button>
+  <button id="btnReset" type="button">Reset</button>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var canvas = document.getElementById('c');
+  var ctx = canvas.getContext('2d');
+  var btnGravity = document.getElementById('btnGravity');
+  var btnReset = document.getElementById('btnReset');
+  var btnDrop = document.getElementById('btnDrop');
+
+  var DPR = 1, W = 0, H = 0;
+  var SEG = 46;
+  var ITER = 8;
+  var ROPE_R = 3.5;
+  var STIFF = 0.9;
+  var GRAV = 0.55;
+
+  var rope = [];
+  var anchors = [];
+  var balls = [];
+  var grabbed = null;
+  var pointer = { x: 0, y: 0, down: false };
+  var downAt = { x: 0, y: 0 };
+  var gravityOn = true;
+  var lastThwack = 0;
+  var pluckEnergy = 0;
+
+  /* ---------------------------------------------------------- audio */
+  var actx = null;
+  var master = null;
+
+  function ensureAudio() {
+    if (!actx) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      try {
+        actx = new AC();
+        master = actx.createGain();
+        master.gain.value = 0.45;
+        master.connect(actx.destination);
+      } catch (e) {
+        actx = null;
+        master = null;
+        return null;
+      }
+    }
+    if (actx.state === 'suspended') {
+      try { actx.resume().catch(function () {}); } catch (e) {}
+    }
+    return actx;
+  }
+
+  function tone(freq, dur, type, vol) {
+    var ac = ensureAudio();
+    if (!ac || ac.state !== 'running') return;
+    try {
+      var t = ac.currentTime;
+      var o = ac.createOscillator();
+      var g = ac.createGain();
+      o.type = type || 'sine';
+      o.frequency.setValueAtTime(freq, t);
+      o.frequency.exponentialRampToValueAtTime(Math.max(50, freq * 0.5), t + dur);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol || 0.16, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g);
+      g.connect(master);
+      o.start(t);
+      o.stop(t + dur + 0.03);
+    } catch (e) {}
+  }
+
+  function thwack(strength) {
+    var now = (window.performance && performance.now) ? performance.now() : Date.now();
+    if (now - lastThwack < 60) return;
+    lastThwack = now;
+    var v = Math.min(0.3, 0.04 + strength / 140);
+    tone(140 + Math.random() * 90, 0.13, 'triangle', v);
+  }
+
+  function pluckSound(strength) {
+    var f = 220 + Math.min(340, strength * 6);
+    tone(f, 0.22, 'sine', 0.14);
+    tone(f * 1.5, 0.12, 'triangle', 0.06);
+  }
+
+  /* ---------------------------------------------------------- layout */
+  function layout() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+
+  /* ---------------------------------------------------------- world */
+  function makeBall(x, y, r) {
+    return {
+      x: x, y: y, vx: (Math.random() - 0.5) * 2, vy: 0,
+      r: r, hue: Math.floor(Math.random() * 360)
+    };
+  }
+
+  function buildRope() {
+    rope = [];
+    var a = anchors[0], b = anchors[1];
+    var rest = Math.hypot(b.x - a.x, b.y - a.y) / SEG;
+    if (!isFinite(rest) || rest < 1) rest = 12;
+    for (var i = 0; i <= SEG; i++) {
+      var t = i / SEG;
+      var x = a.x + (b.x - a.x) * t;
+      var y = a.y + (b.y - a.y) * t;
+      rope.push({ x: x, y: y, px: x, py: y, pinned: (i === 0 || i === SEG), rest: rest });
+    }
+  }
+
+  function reset() {
+    anchors = [
+      { x: W * 0.14, y: H * 0.40 },
+      { x: W * 0.86, y: H * 0.40 }
+    ];
+    buildRope();
+    balls = [];
+    var n = Math.round(Math.min(9, Math.max(5, W / 170)));
+    for (var i = 0; i < n; i++) {
+      balls.push(makeBall(
+        W * 0.22 + Math.random() * W * 0.56,
+        H * 0.56 + Math.random() * H * 0.26,
+        9 + Math.random() * 13
+      ));
+    }
+    grabbed = null;
+    pluckEnergy = 0;
+  }
+
+  function dropBall(x, y) {
+    var b = makeBall(x, y, 10 + Math.random() * 14);
+    b.vx = 0; b.vy = 0;
+    balls.push(b);
+    if (balls.length > 40) balls.shift();
+  }
+
+  /* ---------------------------------------------------------- physics */
+  function step() {
+    var g = gravityOn ? GRAV : 0;
+    var i, p;
+
+    for (i = 0; i < rope.length; i++) {
+      p = rope[i];
+      if (p.pinned || (grabbed && grabbed.type === 'point' && grabbed.index === i)) {
+        p.px = p.x; p.py = p.y;
+        continue;
+      }
+      var vx = (p.x - p.px) * 0.985;
+      var vy = (p.y - p.py) * 0.985;
+      p.px = p.x; p.py = p.y;
+      p.x += vx;
+      p.y += vy + g;
+    }
+
+    rope[0].x = anchors[0].x; rope[0].y = anchors[0].y;
+    rope[SEG].x = anchors[1].x; rope[SEG].y = anchors[1].y;
+
+    if (grabbed && grabbed.type === 'point') {
+      p = rope[grabbed.index];
+      pluckEnergy = Math.max(pluckEnergy, Math.hypot(pointer.x - p.x, pointer.y - p.y));
+      p.x = pointer.x;
+      p.y = pointer.y;
+    }
+    if (grabbed && grabbed.type === 'anchor') {
+      var ai = grabbed.index;
+      anchors[ai].x = pointer.x;
+      anchors[ai].y = pointer.y;
+      var ri = (ai === 0) ? 0 : SEG;
+      rope[ri].x = pointer.x;
+      rope[ri].y = pointer.y;
+    }
+
+    for (i = 0; i < balls.length; i++) {
+      var o = balls[i];
+      o.vy += g;
+      o.vx *= 0.999;
+      o.vy *= 0.999;
+      o.x += o.vx;
+      o.y += o.vy;
+    }
+
+    for (var k = 0; k < ITER; k++) solveConstraints();
+
+    collideBallsRope();
+    collideBalls();
+    walls();
+  }
+
+  function solveConstraints() {
+    for (var i = 0; i < SEG; i++) {
+      var a = rope[i], b = rope[i + 1];
+      var dx = b.x - a.x, dy = b.y - a.y;
+      var d = Math.hypot(dx, dy);
+      if (d < 0.0001) continue;
+      var diff = ((d - a.rest) / d) * 0.5 * STIFF;
+      var ox = dx * diff, oy = dy * diff;
+      var aFixed = a.pinned || (grabbed && grabbed.type === 'point' && grabbed.index === i);
+      var bFixed = b.pinned || (grabbed && grabbed.type === 'point' && grabbed.index === i + 1);
+      if (!aFixed && !bFixed) {
+        a.x += ox; a.y += oy;
+        b.x -= ox; b.y -= oy;
+      } else if (!aFixed) {
+        a.x += ox * 2; a.y += oy * 2;
+      } else if (!bFixed) {
+        b.x -= ox * 2; b.y -= oy * 2;
+      }
+    }
+  }
+
+  function collideBallsRope() {
+    for (var bi = 0; bi < balls.length; bi++) {
+      var o = balls[bi];
+      for (var i = 0; i < SEG; i++) {
+        var a = rope[i], b = rope[i + 1];
+        var abx = b.x - a.x, aby = b.y - a.y;
+        var l2 = abx * abx + aby * aby;
+        var t = l2 > 0 ? ((o.x - a.x) * abx + (o.y - a.y) * aby) / l2 : 0;
+        if (t < 0) t = 0; else if (t > 1) t = 1;
+        var cx = a.x + abx * t, cy = a.y + aby * t;
+        var dx = o.x - cx, dy = o.y - cy;
+        var d = Math.hypot(dx, dy);
+        var minD = o.r + ROPE_R;
+        if (d < minD) {
+          if (d < 0.0001) { dx = 0; dy = -1; d = 0.0001; }
+          var nx = dx / d, ny = dy / d;
+          var overlap = minD - d;
+          o.x += nx * overlap;
+          o.y += ny * overlap;
+          var vn = o.vx * nx + o.vy * ny;
+          if (vn < 0) {
+            o.vx -= (1 + 0.62) * vn * nx;
+            o.vy -= (1 + 0.62) * vn * ny;
+            var push = Math.min(overlap, 14) * 0.85;
+            if (!a.pinned) { a.x -= nx * push * (1 - t); a.y -= ny * push * (1 - t); }
+            if (!b.pinned) { b.x -= nx * push * t; b.y -= ny * push * t; }
+            var impact = Math.abs(vn);
+            if (impact > 3.5) thwack(impact);
+          }
+        }
+      }
+    }
+  }
+
+  function collideBalls() {
+    for (var i = 0; i < balls.length; i++) {
+      for (var j = i + 1; j < balls.length; j++) {
+        var a = balls[i], b = balls[j];
+        var dx = b.x - a.x, dy = b.y - a.y;
+        var d = Math.hypot(dx, dy);
+        var minD = a.r + b.r;
+        if (d < minD && d > 0.0001) {
+          var nx = dx / d, ny = dy / d;
+          var overlap = (minD - d) * 0.5;
+          a.x -= nx * overlap; a.y -= ny * overlap;
+          b.x += nx * overlap; b.y += ny * overlap;
+          var rvn = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+          if (rvn < 0) {
+            var imp = -(1 + 0.35) * rvn * 0.5;
+            a.vx -= imp * nx; a.vy -= imp * ny;
+            b.vx += imp * nx; b.vy += imp * ny;
+          }
+        }
+      }
+    }
+  }
+
+  function walls() {
+    for (var i = 0; i < balls.length; i++) {
+      var o = balls[i];
+      if (o.x - o.r < 0) { o.x = o.r; o.vx = Math.abs(o.vx) * 0.62; }
+      if (o.x + o.r > W) { o.x = W - o.r; o.vx = -Math.abs(o.vx) * 0.62; }
+      if (o.y - o.r < 0) { o.y = o.r; o.vy = Math.abs(o.vy) * 0.62; }
+      if (o.y + o.r > H) { o.y = H - o.r; o.vy = -Math.abs(o.vy) * 0.5; o.vx *= 0.985; }
+      var sp = Math.hypot(o.vx, o.vy);
+      if (sp > 70) { o.vx = o.vx / sp * 70; o.vy = o.vy / sp * 70; }
+    }
+  }
+
+  /* ---------------------------------------------------------- drawing */
+  function bg() {
+    var g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#fff8ef');
+    g.addColorStop(0.55, '#ffeedd');
+    g.addColorStop(1, '#ffdfc9');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    var r = ctx.createRadialGradient(W * 0.5, H * 0.18, 0, W * 0.5, H * 0.18, Math.max(W, H) * 0.75);
+    r.addColorStop(0, 'rgba(255,255,255,0.75)');
+    r.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = r;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = 'rgba(180,110,80,0.10)';
+    var gap = 34;
+    for (var y = gap; y < H; y += gap) {
+      for (var x = gap; x < W; x += gap) {
+        ctx.beginPath();
+        ctx.arc(x, y, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  function ropePath() {
+    ctx.beginPath();
+    ctx.moveTo(rope[0].x, rope[0].y);
+    for (var i = 1; i < rope.length - 1; i++) {
+      var xc = (rope[i].x + rope[i + 1].x) * 0.5;
+      var yc = (rope[i].y + rope[i + 1].y) * 0.5;
+      ctx.quadraticCurveTo(rope[i].x, rope[i].y, xc, yc);
+    }
+    ctx.lineTo(rope[SEG].x, rope[SEG].y);
+  }
+
+  function drawRope() {
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    ctx.strokeStyle = 'rgba(150,40,30,0.16)';
+    ctx.lineWidth = 13;
+    ctx.translate(0, 3);
+    ropePath();
+    ctx.stroke();
+    ctx.translate(0, -3);
+
+    ctx.strokeStyle = '#c62f28';
+    ctx.lineWidth = 10;
+    ropePath();
+    ctx.stroke();
+
+    ctx.strokeStyle = '#ff6a5a';
+    ctx.lineWidth = 5.5;
+    ropePath();
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.lineWidth = 1.8;
+    ropePath();
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  function drawBall(o) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(o.x + 2, o.y + o.r * 0.85, o.r * 0.95, o.r * 0.4, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(150,80,60,0.13)';
+    ctx.fill();
+
+    var g = ctx.createRadialGradient(
+      o.x - o.r * 0.35, o.y - o.r * 0.4, o.r * 0.1,
+      o.x, o.y, o.r
+    );
+    g.addColorStop(0, 'hsl(' + o.hue + ',90%,74%)');
+    g.addColorStop(0.65, 'hsl(' + o.hue + ',78%,58%)');
+    g.addColorStop(1, 'hsl(' + o.hue + ',70%,44%)');
+    ctx.beginPath();
+    ctx.arc(o.x, o.y, o.r, 0, Math.PI * 2);
+    ctx.fillStyle = g;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(o.x - o.r * 0.32, o.y - o.r * 0.36, o.r * 0.26, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawPin(a, active) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(a.x + 2, a.y + 6, 11, 5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(150,80,60,0.16)';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(a.x, a.y, active ? 14 : 12, 0, Math.PI * 2);
+    ctx.fillStyle = '#3b2a20';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(a.x, a.y, active ? 8.5 : 7, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffd9a8';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(a.x - 2, a.y - 2, 2.6, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function draw() {
+    bg();
+    drawRope();
+
+    for (var i = 0; i < balls.length; i++) drawBall(balls[i]);
+
+    drawPin(anchors[0], grabbed && grabbed.type === 'anchor' && grabbed.index === 0);
+    drawPin(anchors[1], grabbed && grabbed.type === 'anchor' && grabbed.index === 1);
+
+    if (grabbed && grabbed.type === 'point') {
+      var p = rope[grabbed.index];
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 16, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(198,47,40,0.35)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  }
+
+  /* ---------------------------------------------------------- input */
+  function localPos(e) {
+    var r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  function findGrab(x, y) {
+    var best = null, i, d;
+    var bestD = 28 * 28;
+    for (i = 0; i < anchors.length; i++) {
+      d = (x - anchors[i].x) * (x - anchors[i].x) + (y - anchors[i].y) * (y - anchors[i].y);
+      if (d < bestD) { bestD = d; best = { type: 'anchor', index: i }; }
+    }
+    if (!best) {
+      bestD = 36 * 36;
+      for (i = 1; i < SEG; i++) {
+        d = (x - rope[i].x) * (x - rope[i].x) + (y - rope[i].y) * (y - rope[i].y);
+        if (d < bestD) { bestD = d; best = { type: 'point', index: i }; }
+      }
+    }
+    return best;
+  }
+
+  canvas.addEventListener('pointerdown', function (e) {
+    ensureAudio();
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    var p = localPos(e);
+    pointer.x = p.x; pointer.y = p.y;
+    pointer.down = true;
+    downAt.x = p.x; downAt.y = p.y;
+    pluckEnergy = 0;
+    grabbed = findGrab(p.x, p.y);
+    if (grabbed) {
+      tone(grabbed.type === 'anchor' ? 190 : 300, 0.07, 'sine', 0.1);
+      canvas.style.cursor = 'grabbing';
+    } else {
+      canvas.style.cursor = 'crosshair';
+    }
+    e.preventDefault();
+  });
+
+  canvas.addEventListener('pointermove', function (e) {
+    var p = localPos(e);
+    pointer.x = p.x; pointer.y = p.y;
+    if (!pointer.down) {
+      canvas.style.cursor = findGrab(p.x, p.y) ? 'grab' : 'crosshair';
+    }
+  });
+
+  function release() {
+    if (!pointer.down) return;
+    pointer.down = false;
+    if (grabbed) {
+      if (grabbed.type === 'point') pluckSound(pluckEnergy);
+      else tone(160, 0.08, 'sine', 0.09);
+      grabbed = null;
+      canvas.style.cursor = 'crosshair';
+    } else {
+      var moved = Math.hypot(pointer.x - downAt.x, pointer.y - downAt.y);
+      if (moved < 8) {
+        dropBall(pointer.x, pointer.y);
+        tone(420 + Math.random() * 120, 0.09, 'sine', 0.09);
+      }
+    }
+  }
+
+  canvas.addEventListener('pointerup', function (e) {
+    release();
+    e.preventDefault();
+  });
+  canvas.addEventListener('pointercancel', function () { release(); });
+  window.addEventListener('blur', function () { release(); });
+
+  window.addEventListener('keydown', function (e) {
+    ensureAudio();
+    var k = e.key.toLowerCase();
+    if (k === 'g') {
+      gravityOn = !gravityOn;
+      syncButtons();
+      tone(gravityOn ? 320 : 240, 0.08, 'sine', 0.1);
+    } else if (k === 'r') {
+      reset();
+      tone(200, 0.1, 'sine', 0.1);
+    } else if (k === ' ') {
+      dropBall(W * (0.3 + Math.random() * 0.4), H * 0.25);
+      e.preventDefault();
+    }
+  });
+
+  function syncButtons() {
+    btnGravity.textContent = 'Gravity: ' + (gravityOn ? 'On' : 'Off');
+  }
+
+  btnGravity.addEventListener('click', function () {
+    ensureAudio();
+    gravityOn = !gravityOn;
+    syncButtons();
+    tone(gravityOn ? 320 : 240, 0.08, 'sine', 0.1);
+  });
+  btnReset.addEventListener('click', function () {
+    ensureAudio();
+    reset();
+    tone(200, 0.1, 'sine', 0.1);
+  });
+  btnDrop.addEventListener('click', function () {
+    ensureAudio();
+    dropBall(W * (0.3 + Math.random() * 0.4), H * 0.22);
+    tone(420, 0.08, 'sine', 0.09);
+  });
+
+  var resizeTimer = null;
+  window.addEventListener('resize', function () {
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      layout();
+      reset();
+    }, 180);
+  });
+
+  /* ---------------------------------------------------------- loop */
+  function frame() {
+    step();
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  layout();
+  reset();
+  syncButtons();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
