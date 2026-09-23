@@ -80,15 +80,8 @@ const BOOT = `<script>
         throw e;
       });
   };
-  var linkBase = PUBLIC;
-  _f(LOCAL + "/api/games", { cache: "no-store" }).then(function(r){ if(r.ok) linkBase = LOCAL; }).catch(function(){});
-  document.addEventListener("click", function(e){
-    var a = e.target && e.target.closest ? e.target.closest("a[href]") : null;
-    if(!a) return;
-    var h = a.getAttribute("href") || "";
-    if(!h || /^([a-z][a-z0-9+.-]*:|\\/\\/|#)/i.test(h)) return;
-    a.setAttribute("href", linkBase + "/" + clean(h));
-  }, true);
+  window.__HUB_BASE__ = PUBLIC;
+  _f(LOCAL + "/api/games", { cache: "no-store" }).then(function(r){ if(r.ok) window.__HUB_BASE__ = LOCAL; }).catch(function(){});
 })();
 </script>`;
 

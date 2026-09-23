@@ -980,7 +980,7 @@
     var title = esc(g.title || g.name.replace(/\.html?$/i, ""));
     var desc = g.description ? esc(g.description) : (Math.round(g.size / 1024) + " KB &middot; uploaded " + new Date(g.mtime).toLocaleDateString());
     var a = document.createElement("a");
-    a.className = "card dyn-card"; a.href = g.url; a.target = "_blank";
+    a.className = "card dyn-card"; a.href = g.url;
     // Experiments/minigames show title only; uploads keep their info line.
     var body = '<div class="card-body"><h2>' + title + '</h2>' + (isForge ? '' : '<p>' + desc + '</p>') + '<span class="play">PLAY</span></div>';
     a.innerHTML = '<div class="thumb">' + gameLogo(title) + '</div>' + body;
@@ -1105,11 +1105,18 @@
     var h = a && a.querySelector('h2');
     return h ? h.textContent : src.replace(/\.html$/i, '').replace(/[-_]/g, ' ');
   }
+  function resolveUrl(u){
+    if(!u) return u;
+    if(/^([a-z][a-z0-9+.-]*:|\/\/)/i.test(u)) return u;
+    var b = window.__HUB_BASE__ || '';
+    return b ? b.replace(/\/+$/, '') + '/' + u.replace(/^\/+/, '') : u;
+  }
   function openView(src, updateHash){
     if(!src) return;
-    frame.src = src;
+    var full = resolveUrl(src);
+    frame.src = full;
     vtitle.textContent = titleOf(src);
-    vopen.href = src;
+    vopen.href = full;
     viewer.classList.add('open');
     document.body.style.overflow = 'hidden';
     if(updateHash !== false && location.hash !== '#view=' + src) location.hash = 'view=' + src;
@@ -1130,8 +1137,9 @@
     var t = e.target, a = (t && t.closest) ? t.closest('a.card') : null;
     if(!a) return;
     var href = a.getAttribute('href') || '';
+    if(!href || href.charAt(0) === '#') return;
     if(!/\.html?($|[?#])/i.test(href)) return;
-    if(/^[a-z]+:/i.test(href)) return;
+    if(/^[a-z][a-z0-9+.-]*:/i.test(href) && !/^https?:/i.test(href)) return; // allow http(s) games too
     e.preventDefault();
     openView(href, true);
   });
