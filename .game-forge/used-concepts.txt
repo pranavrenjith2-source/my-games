@@ -16,3 +16,4 @@ a rubber-band physics toy
 a screensaver that reacts to your mouse
 a shadow puppet theater
 a slider that shows the real size of things compared to a human
+a stock ticker of fake companies

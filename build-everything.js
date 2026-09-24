@@ -10,6 +10,8 @@ const ROOT = __dirname;
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 const readJSON = (p, d) => { try { return JSON.parse(read(p)); } catch (e){ return d; } };
 const exists = (p) => { try { fs.accessSync(path.join(ROOT, p)); return true; } catch (e){ return false; } };
+// JSON that is safe to inline inside a <script> block (escape "</")
+const js = (o) => JSON.stringify(o).replace(/<\//g, "<\\/");
 
 const manifest = read(".game-forge/manifest.txt").split("\n").map((s) => s.trim()).filter(Boolean);
 const desc = readJSON(".game-forge/descriptions.json", {});
@@ -36,7 +38,7 @@ add("audio-test.html", "Audio Test", "Diagnostic page.", "utility");
 
 // give the billwurtz page its data offline
 if (pages["billwurtz.html"]){
-  const inject = "<script>window.__BW_SONGS__=" + JSON.stringify(songs) + ";window.__BW_WORDS__=" + JSON.stringify(words) +
+  const inject = "<script>window.__BW_SONGS__=" + js(songs) + ";window.__BW_WORDS__=" + js(words) +
     ";(function(){var _f=window.fetch;window.fetch=function(i,init){var u=(typeof i==='string')?i:(i&&i.url)||'';" +
     "if(/billwurtz-songs\\.json/.test(u))return Promise.resolve(new Response(JSON.stringify(window.__BW_SONGS__),{headers:{'Content-Type':'application/json'}}));" +
     "if(/billwurtz-words\\.json/.test(u))return Promise.resolve(new Response(JSON.stringify(window.__BW_WORDS__),{headers:{'Content-Type':'application/json'}}));" +
@@ -65,14 +67,14 @@ const META = {};
 for (const k of Object.keys(pages)) META[k] = { title: pages[k].title, description: pages[k].description };
 
 const BOOT = "<script>\n(function(){\n" +
-  "  var PAGES = " + JSON.stringify(PAGES) + ";\n" +
-  "  var META = " + JSON.stringify(META) + ";\n" +
-  "  var GAMES = " + JSON.stringify(gamesList) + ";\n" +
-  "  var DROPS = " + JSON.stringify(drops) + ";\n" +
-  "  var BUGS = " + JSON.stringify(bugs) + ";\n" +
+  "  var PAGES = " + js(PAGES) + ";\n" +
+  "  var META = " + js(META) + ";\n" +
+  "  var GAMES = " + js(gamesList) + ";\n" +
+  "  var DROPS = " + js(drops) + ";\n" +
+  "  var BUGS = " + js(bugs) + ";\n" +
   "  var blobs = {};\n" +
   "  function blobUrl(k){ if(!blobs[k]) blobs[k] = URL.createObjectURL(new Blob([PAGES[k]], { type:'text/html' })); return blobs[k]; }\n" +
-  "  function resp(o){ return new Response(JSON.stringify(o), { status:200, headers:{ 'Content-Type':'application/json' } }); }\n" +
+  "  function resp(o){ var b=JSON.stringify(o); if(typeof Response!=='undefined') return new Response(b,{status:200,headers:{'Content-Type':'application/json'}}); return { ok:true, status:200, json:function(){ return Promise.resolve(JSON.parse(b)); }, text:function(){ return Promise.resolve(b); } }; }\n" +
   "  var _f = window.fetch ? window.fetch.bind(window) : null;\n" +
   "  if(_f){ window.fetch = function(i, init){\n" +
   "    var u = (typeof i === 'string') ? i : (i && i.url) || ''; var m = u.split('?')[0];\n" +
