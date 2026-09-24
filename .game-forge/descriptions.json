@@ -86,5 +86,9 @@
   "a-stock-ticker-of-fake-companies.html": {
     "title": "A Stock Ticker Of Fake Companies",
     "description": "a stock ticker of fake companies"
+  },
+  "a-color-palette-generator-with-accessibi.html": {
+    "title": "A Color Palette Generator With Accessibility Contrast Checks",
+    "description": "a color palette generator with accessibility contrast checks"
   }
 }

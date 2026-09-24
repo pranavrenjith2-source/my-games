@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CHROMA — Color Palette Lab</title>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --panel: #161a23;
+    --panel2: #1e2430;
+    --line: #2a3242;
+    --text: #e6ecf5;
+    --muted: #8a96ab;
+    --accent: #5eead4;
+    --accent2: #a78bfa;
+    --gold: #fbbf24;
+    --good: #34d399;
+    --bad: #f87171;
+    --warn: #fbbf24;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: radial-gradient(1200px 800px at 20% -10%, #1a2233 0%, var(--bg) 55%);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #app { position: relative; width: 100vw; height: 100vh; }
+
+  /* ---------- SCREENS ---------- */
+  .screen {
+    position: absolute; inset: 0;
+    display: none;
+    flex-direction: column;
+    padding: 22px;
+    overflow: auto;
+  }
+  .screen.active { display: flex; }
+
+  /* ---------- TITLE ---------- */
+  #title { align-items: center; justify-content: center; text-align: center; gap: 6px; }
+  .logo {
+    font-size: clamp(48px, 11vw, 104px);
+    font-weight: 900;
+    letter-spacing: -0.04em;
+    background: linear-gradient(100deg, #5eead4, #a78bfa 45%, #f472b6 80%);
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 6px 30px rgba(167,139,250,.35));
+    animation: floaty 5s ease-in-out infinite;
+  }
+  @keyframes floaty { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+  .tagline { color: var(--muted); font-size: clamp(13px, 2vw, 17px); margin-bottom: 26px; letter-spacing: .06em; text-transform: uppercase; }
+  .subtitle { max-width: 560px; color: #b9c4d6; font-size: 15px; line-height: 1.6; margin-bottom: 30px; }
+  .btn {
+    border: 1px solid var(--line);
+    background: linear-gradient(180deg, #232b3a, #1a2029);
+    color: var(--text);
+    padding: 14px 34px;
+    border-radius: 14px;
+    font-size: 17px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: .04em;
+    transition: transform .12s ease, box-shadow .2s ease, border-color .2s ease;
+    box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  }
+  .btn:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: 0 12px 30px rgba(94,234,212,.18); }
+  .btn:active { transform: translateY(0) scale(.98); }
+  .btn.primary {
+    background: linear-gradient(180deg, #5eead4, #2dd4bf);
+    color: #04211d; border-color: #7ff2e0;
+  }
+  .btn.primary:hover { box-shadow: 0 12px 34px rgba(94,234,212,.45); }
+  .btn.ghost { background: transparent; }
+  .btn.small { padding: 9px 16px; font-size: 13px; border-radius: 10px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+  /* ---------- HEADER BAR ---------- */
+  .topbar {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding-bottom: 14px; border-bottom: 1px solid var(--line); margin-bottom: 16px;
+  }
+  .mode-badge {
+    font-size: 12px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+    padding: 6px 12px; border-radius: 999px;
+    background: rgba(94,234,212,.12); color: var(--accent); border: 1px solid rgba(94,234,212,.35);
+  }
+  .stat { display: flex; flex-direction: column; gap: 2px; min-width: 74px; }
+  .stat .k { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .stat .v { font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .spacer { flex: 1; }
+  .progress-wrap { display: flex; flex-direction: column; gap: 5px; min-width: 150px; }
+  .bar { height: 8px; border-radius: 99px; background: #222a38; overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .35s cubic-bezier(.2,.8,.3,1); }
+
+  /* ---------- MAIN LAYOUT ---------- */
+  .main { display: flex; gap: 18px; flex: 1; min-height: 0; flex-wrap: wrap; }
+  .col-left { flex: 1 1 420px; display: flex; flex-direction: column; gap: 14px; min-width: 320px; }
+  .col-right { flex: 0 1 340px; display: flex; flex-direction: column; gap: 14px; min-width: 280px; }
+
+  .card {
+    background: linear-gradient(180deg, var(--panel), #131720);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  .card h3 {
+    font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
+    font-weight: 800; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+  }
+  .card h3 .dot { width: 7px; height: 7px; border-radius: 99px; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+
+  /* ---------- PALETTE GRID ---------- */
+  #palette { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  .swatch {
+    position: relative;
+    aspect-ratio: 1 / 1.15;
+    border-radius: 12px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform .15s ease, border-color .2s ease, box-shadow .2s ease;
+    display: flex; flex-direction: column; justify-content: flex-end;
+    padding: 8px;
+    overflow: hidden;
+  }
+  .swatch:hover { transform: translateY(-4px) scale(1.03); box-shadow: 0 12px 26px rgba(0,0,0,.5); }
+  .swatch.sel { border-color: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,.25), 0 12px 30px rgba(0,0,0,.5); }
+  .swatch .hex {
+    font-size: 11px; font-weight: 800; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    padding: 3px 6px; border-radius: 6px; backdrop-filter: blur(4px);
+    background: rgba(0,0,0,.28); align-self: flex-start;
+  }
+  .swatch .lock {
+    position: absolute; top: 7px; right: 7px; font-size: 13px;
+    width: 22px; height: 22px; display: grid; place-items: center;
+    border-radius: 7px; background: rgba(0,0,0,.35); opacity: 0; transition: opacity .15s;
+  }
+  .swatch:hover .lock, .swatch.locked .lock { opacity: 1; }
+  .swatch.locked { border-color: var(--gold); }
+
+  /* ---------- CONTRAST TARGET ---------- */
+  .target-box {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 14px; border-radius: 12px; background: var(--panel2);
+    border: 1px solid var(--line);
+  }
+  .target-box .label { font-size: 12px; color: var(--muted); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+  .target-box .val { font-size: 26px; font-weight: 900; font-variant-numeric: tabular-nums; }
+  .pill { padding: 5px 11px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: .06em; }
+  .pill.aa { background: rgba(52,211,153,.16); color: var(--good); border: 1px solid rgba(52,211,153,.4); }
+  .pill.aaa { background: rgba(94,234,212,.16); color: var(--accent); border: 1px solid rgba(94,234,212,.4); }
+  .pill.fail { background: rgba(248,113,113,.14); color: var(--bad); border: 1px solid rgba(248,113,113,.4); }
+
+  /* ---------- PAIR PREVIEW ---------- */
+  .preview {
+    border-radius: 12px; padding: 14px; border: 1px solid var(--line);
+    min-height: 108px; display: flex; flex-direction: column; justify-content: center; gap: 5px;
+  }
+  .preview .big { font-size: 21px; font-weight: 800; }
+  .preview .small { font-size: 12.5px; opacity: .85; line-height: 1.45; }
+  .ratio-line { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .ratio-line .num { font-size: 22px; font-weight: 900; font-variant-numeric: tabular-nums; }
+  .mini-bar { flex: 1; height: 7px; background: #222a38; border-radius: 99px; overflow: hidden; }
+  .mini-bar > i { display: block; height: 100%; width: 0; transition: width .3s ease, background .3s ease; }
+
+  /* ---------- ACTIONS ---------- */
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .actions .btn { flex: 1 1 auto; }
+
+  /* ---------- TOASTS ---------- */
+  #toasts {
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; gap: 8px; z-index: 50; pointer-events: none;
+    align-items: center;
+  }
+  .toast {
+    padding: 11px 20px; border-radius: 12px; font-weight: 800; font-size: 14px;
+    background: rgba(20,26,36,.95); border: 1px solid var(--line);
+    box-shadow: 0 12px 34px rgba(0,0,0,.5);
+    animation: toastIn .28s cubic-bezier(.2,.9,.3,1.2);
+    letter-spacing: .02em;
+  }
+  .toast.good { border-color: var(--good); color: var(--good); }
+  .toast.bad { border-color: var(--bad); color: var(--bad); }
+  .toast.gold { border-color: var(--gold); color: var(--gold); }
+  @keyframes toastIn { from { opacity: 0; transform: translateY(-14px) scale(.94); } to { opacity: 1; transform: none; } }
+
+  /* ---------- RESULTS / SUMMARY ---------- */
+  #results { align-items: center; justify-content: center; }
+  .result-card { max-width: 560px; width: 100%; text-align: center; padding: 30px; }
+  .result-card h1 { font-size: 34px; font-weight: 900; margin-bottom: 6px; }
+  .result-card .stars { font-size: 34px; letter-spacing: 6px; margin: 14px 0; }
+  .result-stats { display: flex; justify-content: center; gap: 28px; margin: 22px 0; flex-wrap: wrap; }
+  .result-stats .stat { align-items: center; }
+  .result-stats .stat .v { font-size: 30px; }
+
+  /* ---------- HELP / KEYS ---------- */
+  .keys { display: flex; gap: 8px; flex-wrap: wrap; font-size: 11px; color: var(--muted); }
+  kbd {
+    background: #222a38; border: 1px solid #313b4d; border-bottom-width: 2px;
+    border-radius: 6px; padding: 2px 7px; font-family: ui-monospace, monospace; font-size: 10.5px; color: #cfd8e6;
+  }
+
+  /* ---------- LEVEL SELECT ---------- */
+  #levels { align-items: center; justify-content: center; }
+  .level-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; max-width: 760px; width: 100%; margin-top: 20px; }
+  .level-card {
+    background: linear-gradient(180deg, var(--panel), #131720);
+    border: 1px solid var(--line); border-radius: 14px; padding: 16px;
+    cursor: pointer; transition: transform .15s, border-color .2s, box-shadow .2s;
+    text-align: left; position: relative; overflow: hidden;
+  }
+  .level-card:hover { transform: translateY(-4px); border-color: var(--accent); box-shadow: 0 14px 34px rgba(94,234,212,.15); }
+  .level-card.locked { opacity: .45; cursor: not-allowed; }
+  .level-card.locked:hover { transform: none; border-color: var(--line); box-shadow: none; }
+  .level-card .num { font-size: 11px; font-weight: 800; color: var(--muted); letter-spacing: .14em; }
+  .level-card .name { font-size: 18px; font-weight: 800; margin: 4px 0 6px; }
+  .level-card .desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .level-card .done { position: absolute; top: 10px; right: 12px; color: var(--gold); font-size: 15px; }
+  .level-card .best { margin-top: 8px; font-size: 11px; color: var(--gold); font-weight: 700; }
+
+  .scroll-hint { font-size: 12px; color: var(--muted); margin-top: 18px; }
+  .center-col { display: flex; flex-direction: column; align-items: center; text-align: center; }
+
+  @media (max-width: 760px) {
+    .screen { padding: 14px; }
+    #palette { grid-template-columns: repeat(5, 1fr); gap: 6px; }
+    .swatch { padding: 5px; border-radius: 9px; }
+    .swatch .hex { font-size: 9px; padding: 2px 4px; }
+    .col-right { flex: 1 1 100%; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ TITLE ============ -->
+  <section id="title" class="screen active">
+    <div class="logo">CHROMA</div>
+    <div class="tagline">Color Palette Laboratory</div>
+    <p class="subtitle">
+      Craft palettes that pass real accessibility standards. Tune hue, saturation and lightness,
+      then lock the colors that work. Every level demands a stricter contrast target.
+    </p>
+    <div class="row">
+      <button class="btn primary" id="btnPlay">▶ START</button>
+      <button class="btn ghost" id="btnHowTo">HOW TO PLAY</button>
+    </div>
+    <div class="scroll-hint" style="margin-top:28px">Built for keyboard &amp; mouse · Works offline</div>
+  </section>
+
+  <!-- ============ HOW TO ============ -->
+  <section id="howto" class="screen">
+    <div class="center-col" style="max-width:640px;margin:auto;">
+      <h1 style="font-size:30px;font-weight:900;margin-bottom:14px;">How to Play</h1>
+      <div class="card" style="text-align:left;line-height:1.75;font-size:14.5px;color:#c6d0e0;">
+        <p><b style="color:var(--accent)">GOAL —</b> Build a 5-color palette where every color can be used as
+        readable text on the level's <b>background</b>. Hit the required WCAG contrast ratio.</p>
+        <p style="margin-top:12px"><b style="color:var(--accent)">CONTROLS —</b> Click a swatch to select it.
+        Drag it to rotate hue. Use the sliders to fine-tune. Press <kbd>Space</kbd> to randomize unlocked
+        colors, <kbd>L</kbd> to lock/unlock, <kbd>Enter</kbd> to submit.</p>
+        <p style="margin-top:12px"><b style="color:var(--accent)">LOCKING —</b> Lock colors you like with the
+        🔒 button (or <kbd>L</kbd>). Locked colors survive randomizing and keep your progress.</p>
+        <p style="margin-top:12px"><b style="color:var(--accent)">SCORING —</b> Each color that passes earns
+        points. Higher contrast = more points. Clear the level to unlock the next, harder one.</p>
+        <p style="margin-top:12px"><b style="color:var(--gold)">TIP —</b> The contrast checker on the right
+        updates live. Aim for the target ratio shown in the header.</p>
+      </div>
+      <div class="row" style="margin-top:22px;">
+        <button class="btn primary" id="btnBackFromHow">GOT IT</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LEVEL SELECT ============ -->
+  <section id="levels" class="screen">
+    <div class="center-col" style="width:100%;">
+      <h1 style="font-size:30px;font-weight:900;">Select a Level</h1>
+      <div class="tagline" style="margin-top:6px;">Progression · 6 levels</div>
+      <div class="level-grid" id="levelGrid"></div>
+      <div class="row" style="margin-top:26px;">
+        <button class="btn ghost small" id="btnBackToTitle">← TITLE</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ GAME ============ -->
+  <section id="game" class="screen">
+    <div class="topbar">
+      <span class="mode-badge" id="modeBadge">LEVEL 1</span>
+      <div class="stat"><span class="k">Target</span><span class="v" id="statTarget">3.0</span></div>
+      <div class="stat"><span class="k">Passing</span><span class="v" id="statPass">0/5</span></div>
+      <div class="stat"><span class="k">Score</span><span class="v" id="statScore">0</span></div>
+      <div class="stat"><span class="k">Best</span><span class="v" id="statBest">—</span></div>
+      <div class="spacer"></div>
+      <div class="progress-wrap">
+        <span class="k" style="font-size:10px;letter-spacing:.14em;color:var(--muted);font-weight:700;">LEVEL PROGRESS</span>
+        <div class="bar"><i id="progBar"></i></div>
+      </div>
+      <button class="btn ghost small" id="btnQuit">✕ QUIT</button>
+    </div>
+
+    <div class="main">
+      <!-- LEFT -->
+      <div class="col-left">
+        <div class="card">
+          <h3><span class="dot"></span>Palette <span style="margin-left:auto;color:var(--muted);font-weight:600;text-transform:none;letter-spacing:0;font-size:11px;">click to select · drag to shift hue</span></h3>
+          <div id="palette"></div>
+        </div>
+
+        <div class="card">
+          <h3><span class="dot" style="background:var(--accent2);box-shadow:0 0 10px var(--accent2)"></span>Adjust Selected Color</h3>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <label style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Hue <span id="lblH" style="color:var(--text);float:right;">0°</span>
+              <input type="range" id="sldH" min="0" max="360" value="0" style="width:100%;margin-top:6px;accent-color:var(--accent);">
+            </label>
+            <label style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Saturation <span id="lblS" style="color:var(--text);float:right;">0%</span>
+              <input type="range" id="sldS" min="0" max="100" value="0" style="width:100%;margin-top:6px;accent-color:var(--accent);">
+            </label>
+            <label style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Lightness <span id="lblL" style="color:var(--text);float:right;">0%</span>
+              <input type="range" id="sldL" min="0" max="100" value="0" style="width:100%;margin-top:6px;accent-color:var(--accent);">
+            </label>
+            <div style="display:flex;gap:8px;">
+              <button class="btn ghost small" id="btnLockSel" style="flex:1">🔒 Lock / Unlock</button>
+              <button class="btn ghost small" id="btnCopy" style="flex:1">⧉ Copy Hex</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn" id="btnRandom">🎲 Randomize</button>
+          <button class="btn" id="btnHarmony">✨ Harmonize</button>
+          <button class="btn primary" id="btnSubmit">✓ SUBMIT PALETTE</button>
+        </div>
+      </div>
+
+      <!-- RIGHT -->
+      <div class="col-right">
+        <div class="card">
+          <h3><span class="dot" style="background:var(--gold);box-shadow:0 0 10px var(--gold)"></span>Contrast Target</h3>
+          <div class="target-box">
+            <div>
+              <div class="label">Background</div>
+              <div class="val" id="bgHex" style="font-family:ui-monospace,monospace;font-size:17px;">#000000</div>
+            </div>
+            <div style="text-align:right;">
+              <div class="label">Required</div>
+              <div class="val" id="targetRatio">3.0<span style="font-size:14px;color:var(--muted)">:1</span></div>
+            </div>
+          </div>
+          <div style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.5;" id="targetNote">
+            WCAG 2.1 minimum for large text.
+          </div>
+        </div>
+
+        <div class="card">
+          <h3><span class="dot" style="background:var(--good);box-shadow:0 0 10px var(--good)"></span>Live Preview</h3>
+          <div class="preview" id="preview">
+            <div class="big" id="prevBig">Aa</div>
+            <div class="small" id="prevSmall">Sample body text on the level background.</div>
+          </div>
+          <div class="ratio-line">
+            <span class="num" id="ratioNum">1.00</span>
+            <div class="mini-bar"><i id="ratioBar"></i></div>
+            <span class="pill fail" id="ratioPill">FAIL</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3><span class="dot" style="background:var(--accent2);box-shadow:0 0 10px var(--accent2)"></span>Checklist</h3>
+          <div id="checklist" style="display:flex;flex-direction:column;gap:7px;"></div>
+        </div>
+
+        <div class="card">
+          <h3><span class="dot" style="background:var(--muted);box-shadow:none"></span>Shortcuts</h3>
+          <div class="keys">
+            <kbd>Space</kbd> randomize &nbsp; <kbd>L</kbd> lock &nbsp; <kbd>Enter</kbd> submit &nbsp;
+            <kbd>←</kbd><kbd>→</kbd> select &nbsp; <kbd>↑</kbd><kbd>↓</kbd> lightness
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ RESULTS ============ -->
+  <section id="results" class="screen">
+    <div class="card result-card">
+      <h1 id="resTitle">Level Cleared!</h1>
+      <div class="tagline" id="resSub">Nice work</div>
+      <div class="stars" id="resStars">★★★</div>
+      <div class="result-stats">
+        <div class="stat"><span class="k">Score</span><span class="v" id="resScore">0</span></div>
+        <div class="stat"><span class="k">Best Ratio</span><span class="v" id="resRatio">0.0</span></div>
+        <div class="stat"><span class="k">Passing</span><span class="v" id="resPass">0/5</span></div>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="btnNext">NEXT LEVEL →</button>
+        <button class="btn" id="btnRetry">↻ RETRY</button>
+        <button class="btn ghost" id="btnResultsMenu">MENU</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="toasts"></div>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   UTIL
+   ============================================================ */
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => Math.abs ? Math.min(b, Math.max(a, v)) : Math.min(b, Math.max(a, v));
+
+function hslToRgb(h, s, l) {
+  h = ((h % 360) + 360) % 360;
+  s /= 100; l /= 100;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) { r = c; g = x; }
+  else if (h < 120) { r = x; g = c; }
+  else if (h < 180) { g = c; b = x; }
+  else if (h < 240) { g = x; b = c; }
+  else if (h < 300) { r = x; b = c; }
+  else { r = c; b = x; }
+  return [
+    Math.round((r + m) * 255),
+    Math.round((g + m) * 255),
+    Math.round((b + m) * 255)
+  ];
+}
+
+function rgbToHex(r, g, b) {
+  const to = (n) => n.toString(16).padStart(2, "0");
+  return "#" + to(r) + to(g) + to(b);
+}
+
+function hslToHex(h, s, l) {
+  const [r, g, b] = hslToRgb(h, s, l);
+  return rgbToHex(r, g, b);
+}
+
+function hexToRgb(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return [0, 0, 0];
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function luminance(r, g, b) {
+  const f = (c) => {
+    c /= 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+}
+
+function contrastRatio(hexA, hexB) {
+  const [r1, g1, b1] = hexToRgb(hexA);
+  const [r2, g2, b2] = hexToRgb(hexB);
+  const l1 = luminance(r1, g1, b1);
+  const l2 = luminance(r2, g2, b2);
+  const hi = Math.max(l1, l2);
+  const lo = Math.min(l1, l2);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/* ============================================================
+   AUDIO (lazy, guarded)
+   ============================================================ */
+let audioCtx = null;
+let audioReady = false;
+
+function initAudio() {
+  if (audioCtx) return;
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    audioCtx = new AC();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    audioCtx.onstatechange = () => { audioReady = audioCtx.state === "running"; };
+    audioReady = audioCtx.state === "running";
+  } catch (e) { audioCtx = null; }
+}
+
+function beep(freq, dur, type, vol) {
+  if (!audioCtx || audioCtx.state !== "running") return;
+  try {
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = type || "sine";
+    osc.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol || 0.08, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(g); g.connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  } catch (e) { /* ignore */ }
+}
+
+const SFX = {
+  click: () => beep(520, 0.06, "triangle", 0.05),
+  select: () => beep(660, 0.07, "sine", 0.05),
+  lock: () => beep(880, 0.09, "square", 0.045),
+  pass: () => { beep(720, 0.09, "sine", 0.06); setTimeout(() => beep(980, 0.11, "sine", 0.06), 70); },
+  win: () => { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, 0.16, "triangle", 0.07), i * 95)); },
+  fail: () => { beep(220, 0.18, "sawtooth", 0.05); setTimeout(() => beep(165, 0.22, "sawtooth", 0.05), 110); },
+  random: () => beep(430, 0.05, "triangle", 0.04)
+};
+
+/* ============================================================
+   LEVELS
+   ============================================================ */
+const LEVELS = [
+  { name: "Warm-Up",        target: 3.0,  bg: "#111318", note: "WCAG minimum for large text.",   par: 200 },
+  { name: "Body Text",      target: 4.5,  bg: "#0e1014", note: "WCAG AA for normal text.",        par: 320 },
+  { name: "High Contrast",  target: 7.0,  bg: "#0a0c10", note: "WCAG AAA for normal text.",       par: 460 },
+  { name: "Light Mode",     target: 4.5,  bg: "#f7f7f5", note: "AA on a light background.",       par: 340 },
+  { name: "Deep Space",     target: 7.0,  bg: "#05070d", note: "AAA on near-black.",              par: 520 },
+  { name: "Mastery",        target: 10.0, bg: "#000000", note: "Extreme contrast. Pure black.",   par: 700 }
+];
+
+/* ============================================================
+   STATE
+   ============================================================ */
+const state = {
+  levelIndex: 0,
+  palette: [],          // array of { h, s, l, locked }
+  selected: 0,
+  unlocked: 0,          // highest unlocked level index
+  bestScores: {},       // levelIndex -> score
+  score: 0,
+  dragging: false,
+  dragStartX: 0,
+  dragStartHue: 0,
+  dragIndex: -1,
+  submitted: false
+};
+
+function makeColor(h, s, l) {
+  return { h: h, s: s, l: l, locked: false };
+}
+
+/* ============================================================
+   SCREENS
+   ============================================================ */
+function showScreen(id) {
+  document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
+  const el = $(id);
+  if (el) el.classList.add("active");
+}
+
+/* ============================================================
+   TOASTS
+   ============================================================ */
+function toast(msg, kind) {
+  const wrap = $("toasts");
+  const t = document.createElement("div");
+  t.className = "toast" + (kind ? " " + kind : "");
+  t.textContent = msg;
+  wrap.appendChild(t);
+  setTimeout(() => {
+    t.style.transition = "opacity .3s, transform .3s";
+    t.style.opacity = "0";
+    t.style.transform = "translateY(-10px)";
+    setTimeout(() => t.remove(), 320);
+  }, 1500);
+}
+
+/* ============================================================
+   LEVEL SELECT RENDER
+   ============================================================ */
+function renderLevelGrid() {
+  const grid = $("levelGrid");
+  grid.innerHTML = "";
+  LEVELS.forEach((lv, i) => {
+    const locked = i > state.unlocked;
+    const best = state.bestScores[i];
+    const card = document.createElement("div");
+    card.className = "level-card" + (locked ? " locked" : "");
+    card.innerHTML =
+      '<div class="num">LEVEL ' + (i + 1) + (locked ? " · LOCKED" : "") + "</div>" +
+      '<div class="name">' + lv.name + "</div>" +
+      '<div class="desc">Target ' + lv.target.toFixed(1) + ":1 · bg " + lv.bg + "</div>" +
+      (best !== undefined ? '<div class="best">★ Best ' + best + "</div>" : "") +
+      (best !== undefined ? '<div class="done">✓</div>' : "");
+    if (!locked) {
+      card.addEventListener("click", () => { SFX.click(); startLevel(i); });
+    }
+    grid.appendChild(card);
+  });
+}
+
+/* ============================================================
+   GAME START
+   ============================================================ */
+function startLevel(index) {
+  state.levelIndex = index;
+  state.score = 0;
+  state.submitted = false;
+  state.selected = 0;
+
+  const lv = LEVELS[index];
+  $("modeBadge").textContent = "LEVEL " + (index + 1) + " · " + lv.name.toUpperCase();
+  $("statTarget").textContent = lv.target.toFixed(1);
+  $("targetRatio").innerHTML = lv.target.toFixed(1) + '<span style="font-size:14px;color:var(--muted)">:1</span>';
+  $("bgHex").textContent = lv.bg;
+  $("bgHex").style.color = lv.bg;
+  $("targetNote").textContent = lv.note;
+  $("statBest").textContent = state.bestScores[index] !== undefined ? state.bestScores[index] : "—";
+
+  // Generate a starting palette biased toward the background
+  state.palette = [];
+  const baseHue = Math.floor(Math.random() * 360);
+  const isLightBg = hexToRgb(lv.bg)[0] > 128;
+  for (let i = 0; i < 5; i++) {
+    const h = (baseHue + i * (360 / 5) + Math.random() * 20) % 360;
+    const s = 45 + Math.random() * 40;
+    let l;
+    if (isLightBg) l = 18 + Math.random() * 32;   // dark colors on light bg
+    else l = 55 + Math.random() * 35;              // bright colors on dark bg
+    state.palette.push(makeColor(h, s, l));
+  }
+
+  showScreen("game");
+  renderPalette();
+  syncSliders();
+  updateAll();
+}
+
+/* ============================================================
+   PALETTE RENDER
+   ============================================================ */
+function renderPalette() {
+  const wrap = $("palette");
+  wrap.innerHTML = "";
+  const lv = LEVELS[state.levelIndex];
+
+  state.palette.forEach((c, i) => {
+    const hex = hslToHex(c.h, c.s, c.l);
+    const ratio = contrastRatio(hex, lv.bg);
+    const passes = ratio >= lv.target;
+
+    const el = document.createElement("div");
+    el.className = "swatch" + (i === state.selected ? " sel" : "") + (c.locked ? " locked" : "");
+    el.style.background = hex;
+    el.dataset.index = i;
+
+    const hexEl = document.createElement("div");
+    hexEl.className = "hex";
+    hexEl.textContent = hex;
+    // text color inside hex chip based on its own bg
+    const chipText = luminance(...hexToRgb(hex)) > 0.4 ? "#111" : "#fff";
+    hexEl.style.color = chipText;
+    hexEl.style.background = chipText === "#111" ? "rgba(255,255,255,.55)" : "rgba(0,0,0,.35)";
+
+    const lockEl = document.createElement("div");
+    lockEl.className = "lock";
+    lockEl.textContent = c.locked ? "🔒" : "🔓";
+
+    el.appendChild(lockEl);
+    el.appendChild(hexEl);
+
+    if (passes) {
+      el.style.boxShadow = "inset 0 0 0 2px rgba(52,211,153,.9)";
+    }
+
+    // events
+    el.addEventListener("mousedown", (ev) => onSwatchDown(ev, i));
+    el.addEventListener("touchstart", (ev) => onSwatchDown(ev, i), { passive: true });
+    el.addEventListener("click", () => {
+      if (state.dragging) return;
+      state.selected = i;
+      SFX.select();
+      renderPalette();
+      syncSliders();
+      updateAll();
+    });
+    wrap.appendChild(el);
+  });
+}
+
+function onSwatchDown(ev, i) {
+  state.selected = i;
+  state.dragIndex = i;
+  state.dragging = false;
+  state.dragStartX = (ev.touches ? ev.touches[0].clientX : ev.clientX);
+  state.dragStartHue = state.palette[i].h;
+  syncSliders();
+  updateAll();
+
+  const move = (e) => {
+    const x = e.touches ? e.touches[0].clientX : e.clientX;
+    const dx = x - state.dragStartX;
+    if (Math.abs(dx) > 4) state.dragging = true;
+    if (state.dragging) {
+      const c = state.palette[state.dragIndex];
+      if (!c.locked) {
+        c.h = ((state.dragStartHue + dx * 0.7) % 360 + 360) % 360;
+        renderPalette();
+        syncSliders();
+        updateAll();
+      }
+    }
+  };
+  const up = () => {
+    window.removeEventListener("mousemove", move);
+    window.removeEventListener("mouseup", up);
+    window.removeEventListener("touchmove", move);
+    window.removeEventListener("touchend", up);
+    setTimeout(() => { state.dragging = false; }, 30);
+  };
+  window.addEventListener("mousemove", move);
+  window.addEventListener("mouseup", up);
+  window.addEventListener("touchmove", move, { passive: true });
+  window.addEventListener("touchend", up);
+}
+
+/* ============================================================
+   SLIDERS
+   ============================================================ */
+function syncSliders() {
+  const c = state.palette[state.selected];
+  if (!c) return;
+  $("sldH").value = Math.round(c.h);
+  $("sldS").value = Math.round(c.s);
+  $("sldL").value = Math.round(c.l);
+  $("lblH").textContent = Math.round(c.h) + "°";
+  $("lblS").textContent = Math.round(c.s) + "%";
+  $("lblL").textContent = Math.round(c.l) + "%";
+  const dis = c.locked;
+  $("sldH").disabled = dis;
+  $("sldS").disabled = dis;
+  $("sldL").disabled = dis;
+}
+
+function bindSliders() {
+  const apply = () => {
+    const c = state.palette[state.selected];
+    if (!c || c.locked) return;
+    c.h = parseFloat($("sldH").value);
+    c.s = parseFloat($("sldS").value);
+    c.l = parseFloat($("sldL").value);
+    $("lblH").textContent = Math.round(c.h) + "°";
+    $("lblS").textContent = Math.round(c.s) + "%";
+    $("lblL").textContent = Math.round(c.l) + "%";
+    renderPalette();
+    updateAll();
+  };
+  $("sldH").addEventListener("input", apply);
+  $("sldS").addEventListener("input", apply);
+  $("sldL").addEventListener("input", apply);
+}
+
+/* ============================================================
+   UPDATE / LIVE FEEDBACK
+   ============================================================ */
+function updateAll() {
+  const lv = LEVELS[state.levelIndex];
+  const sel = state.palette[state.selected];
+  if (!sel) return;
+
+  const selHex = hslToHex(sel.h, sel.s, sel.l);
+  const selRatio = contrastRatio(selHex, lv.bg);
+
+  // Preview
+  const prev = $("preview");
+  prev.style.background = lv.bg;
+  $("prevBig").style.color = selHex;
+  $("prevSmall").style.color = selHex;
+
+  // Ratio display
+  const ratioClamped = Math.min(selRatio, 21);
+  $("ratioNum").textContent = selRatio.toFixed(2);
+  const pct = Math.min(100, (ratioClamped / 21) * 100);
+  const bar = $("ratioBar");
+  bar.style.width = pct + "%";
+  let barColor = "#f87171";
+  if (selRatio >= 7) barColor = "#5eead4";
+  else if (selRatio >= 4.5) barColor = "#34d399";
+  else if (selRatio >= 3) barColor = "#fbbf24";
+  bar.style.background = barColor;
+
+  const pill = $("ratioPill");
+  if (selRatio >= lv.target) {
+    pill.className = "pill " + (selRatio >= 7 ? "aaa" : "aa");
+    pill.textContent = selRatio >= 7 ? "AAA PASS" : "AA PASS";
+  } else {
+    pill.className = "pill fail";
+    pill.textContent = "FAIL";
+  }
+
+  // Checklist + counts
+  let passCount = 0;
+  const list = $("checklist");
+  list.innerHTML = "";
+  state.palette.forEach((c, i) => {
+    const hex = hslToHex(c.h, c.s, c.l);
+    const r = contrastRatio(hex, lv.bg);
+    const ok = r >= lv.target;
+    if (ok) passCount++;
+
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;align-items:center;gap:9px;font-size:12.5px;cursor:pointer;padding:3px 5px;border-radius:7px;" +
+      (i === state.selected ? "background:rgba(94,234,212,.09);" : "");
+    row.innerHTML =
+      '<span style="width:16px;height:16px;border-radius:5px;display:inline-block;flex:none;background:' + hex +
+      ';border:1px solid rgba(255,255,255,.25);"></span>' +
+      '<span style="font-family:ui-monospace,monospace;color:#c6d0e0;flex:1;">' + hex + "</span>" +
+      '<span style="font-variant-numeric:tabular-nums;font-weight:800;color:' + (ok ? "#34d399" : "#f87171") + ';">' +
+      r.toFixed(2) + "</span>" +
+      '<span style="width:16px;text-align:center;">' + (ok ? "✓" : "✕") + "</span>";
+    row.addEventListener("click", () => {
+      state.selected = i;
+      SFX.select();
+      renderPalette();
+      syncSliders();
+      updateAll();
+    });
+    list.appendChild(row);
+  });
+
+  $("statPass").textContent = passCount + "/5";
+  $("progBar").style.width = (passCount / 5 * 100) + "%";
+  $("statScore").textContent = state.score;
+}
+
+/* ============================================================
+   ACTIONS
+   ============================================================ */
+function randomize() {
+  if (state.submitted) return;
+  const lv = LEVELS[state.levelIndex];
+  const isLightBg = hexToRgb(lv.bg)[0] > 128;
+  state.palette.forEach((c) => {
+    if (c.locked) return;
+    c.h = Math.random() * 360;
+    c.s = 35 + Math.random() * 55;
+    c.l = isLightBg ? (14 + Math.random() * 34) : (55 + Math.random() * 40);
+  });
+  SFX.random();
+  renderPalette();
+  syncSliders();
+  updateAll();
+}
+
+function harmonize() {
+  if (state.submitted) return;
+  const lv = LEVELS[state.levelIndex];
+  const isLightBg = hexToRgb(lv.bg)[0] > 128;
+  const baseHue = Math.random() * 360;
+  const scheme = Math.floor(Math.random() * 3);
+  state.palette.forEach((c, i) => {
+    if (c.locked) return;
+    let h;
+    if (scheme === 0) h = (baseHue + i * 30) % 360;           // analogous
+    else if (scheme === 1) h = (baseHue + i * 72) % 360;      // evenly spaced
+    else h = (i % 2 === 0) ? baseHue : (baseHue + 180) % 360; // complementary
+    c.h = h;
+    c.s = 40 + Math.random() * 45;
+    c.l = isLightBg ? (14 + Math.random() * 32) : (58 + Math.random() * 36);
+  });
+  SFX.random();
+  renderPalette();
+  syncSliders();
+  updateAll();
+}
+
+function toggleLockSelected() {
+  const c = state.palette[state.selected];
+  if (!c) return;
+  c.locked = !c.locked;
+  SFX.lock();
+  renderPalette();
+  syncSliders();
+  updateAll();
+}
+
+function copySelectedHex() {
+  const c = state.palette[state.selected];
+  if (!c) return;
+  const hex = hslToHex(c.h, c.s, c.l);
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(hex).then(
+        () => toast("Copied " + hex, "good"),
+        () => toast(hex + " (copy unavailable)", "")
+      );
+    } else {
+      toast(hex + " (copy unavailable)", "");
+    }
+  } catch (e) { toast(hex, ""); }
+}
+
+function submitPalette() {
+  if (state.submitted) return;
+  const lv = LEVELS[state.levelIndex];
+  let passCount = 0;
+  let totalScore = 0;
+  let bestRatio = 0;
+
+  state.palette.forEach((c) => {
+    const hex = hslToHex(c.h, c.s, c.l);
+    const r = contrastRatio(hex, lv.bg);
+    if (r > bestRatio) bestRatio = r;
+    if (r >= lv.target) {
+      passCount++;
+      // more points for higher contrast
+      totalScore += Math.round(50 + (r - lv.target) * 30);
+    }
+  });
+
+  state.score = totalScore;
+  state.submitted = true;
+
+  const cleared = passCount >= 3; // need at least 3 passing colors
+  const perfect = passCount === 5;
+
+  // Save best
+  const prevBest = state.bestScores[state.levelIndex];
+  if (prevBest === undefined || totalScore > prevBest) {
+    state.bestScores[state.levelIndex] = totalScore;
+  }
+
+  if (cleared) {
+    SFX.win();
+    if (state.levelIndex === state.unlocked && state.levelIndex < LEVELS.length - 1) {
+      state.unlocked = state.levelIndex + 1;
+    }
+    showResults(true, passCount, totalScore, bestRatio, perfect);
+  } else {
+    SFX.fail();
+    showResults(false, passCount, totalScore, bestRatio, perfect);
+  }
+}
+
+/* ============================================================
+   RESULTS
+   ============================================================ */
+function showResults(cleared, passCount, score, bestRatio, perfect) {
+  const lv = LEVELS[state.levelIndex];
+  $("resTitle").textContent = cleared ? (perfect ? "PERFECT PALETTE!" : "Level Cleared!") : "Not Quite...";
+  $("resSub").textContent = cleared
+    ? "You hit " + passCount + "/5 at the " + lv.target.toFixed(1) + ":1 target."
+    : "Only " + passCount + "/5 colors reached " + lv.target.toFixed(1) + ":1. Need at least 3.";
+  $("resScore").textContent = score;
+  $("resRatio").textContent = bestRatio.toFixed(2);
+  $("resPass").textContent = passCount + "/5";
+
+  let stars = "☆☆☆";
+  if (passCount === 5) stars = "★★★";
+  else if (passCount === 4) stars = "★★☆";
+  else if (passCount >= 3) stars = "★☆☆";
+  $("resStars").textContent = stars;
+  $("resStars").style.color = cleared ? "#fbbf24" : "#8a96ab";
+
+  const nextBtn = $("btnNext");
+  if (cleared && state.levelIndex < LEVELS.length - 1) {
+    nextBtn.style.display = "";
+    nextBtn.textContent = "NEXT LEVEL →";
+  } else if (cleared) {
+    nextBtn.style.display = "";
+    nextBtn.textContent = "🏆 ALL LEVELS CLEARED";
+  } else {
+    nextBtn.style.display = "none";
+  }
+
+  showScreen("results");
+}
+
+/* ============================================================
+   KEYBOARD
+   ============================================================ */
+function onKey(e) {
+  const gameActive = $("game").classList.contains("active");
+  if (!gameActive) return;
+
+  const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+  if (tag === "input") {
+    if (e.key === "Enter") { e.preventDefault(); submitPalette(); }
+    return;
+  }
+
+  switch (e.key) {
+    case " ":
+      e.preventDefault();
+      randomize();
+      break;
+    case "l":
+    case "L":
+      toggleLockSelected();
+      break;
+    case "Enter":
+      e.preventDefault();
+      submitPalette();
+      break;
+    case "ArrowLeft":
+      e.preventDefault();
+      state.selected = (state.selected - 1 + 5) % 5;
+      SFX.select(); renderPalette(); syncSliders(); updateAll();
+      break;
+    case "ArrowRight":
+      e.preventDefault();
+      state.selected = (state.selected + 1) % 5;
+      SFX.select(); renderPalette(); syncSliders(); updateAll();
+      break;
+    case "ArrowUp": {
+      e.preventDefault();
+      const c = state.palette[state.selected];
+      if (c && !c.locked) { c.l = Math.min(100, c.l + 2); renderPalette(); syncSliders(); updateAll(); }
+      break;
+    }
+    case "ArrowDown": {
+      e.preventDefault();
+      const c = state.palette[state.selected];
+      if (c && !c.locked) { c.l = Math.max(0, c.l - 2); renderPalette(); syncSliders(); updateAll(); }
+      break;
+    }
+    default: break;
+  }
+}
+
+/* ============================================================
+   BUTTON BINDINGS
+   ============================================================ */
+function bindButtons() {
+  $("btnPlay").addEventListener("click", () => {
+    initAudio(); SFX.click();
+    renderLevelGrid();
+    showScreen("levels");
+  });
+
+  $("btnHowTo").addEventListener("click", () => { initAudio(); SFX.click(); showScreen("howto"); });
+  $("btnBackFromHow").addEventListener("click", () => { SFX.click(); showScreen("title"); });
+  $("btnBackToTitle").addEventListener("click", () => { SFX.click(); showScreen("title"); });
+
+  $("btnRandom").addEventListener("click", () => { initAudio(); randomize(); });
+  $("btnHarmony").addEventListener("click", () => { initAudio(); harmonize(); });
+  $("btnSubmit").addEventListener("click", () => { initAudio(); submitPalette(); });
+  $("btnLockSel").addEventListener("click", () => { initAudio(); toggleLockSelected(); });
+  $("btnCopy").addEventListener("click", () => { initAudio(); copySelectedHex(); });
+  $("btnQuit").addEventListener("click", () => {
+    SFX.click();
+    renderLevelGrid();
+    showScreen("levels");
+  });
+
+  $("btnRetry").addEventListener("click", () => {
+    SFX.click();
+    startLevel(state.levelIndex);
+  });
+
+  $("btnNext").addEventListener("click", () => {
+    SFX.click();
+    const next = state.levelIndex + 1;
+    if (next < LEVELS.length) {
+      startLevel(next);
+    } else {
+      renderLevelGrid();
+      showScreen("levels");
+    }
+  });
+
+  $("btnResultsMenu").addEventListener("click", () => {
+    SFX.click();
+    renderLevelGrid();
+    showScreen("levels");
+  });
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+function init() {
+  bindButtons();
+  bindSliders();
+  window.addEventListener("keydown", onKey);
+  // unlock audio on first gesture anywhere
+  const unlock = () => { initAudio(); };
+  window.addEventListener("pointerdown", unlock, { once: true });
+  window.addEventListener("keydown", unlock, { once: true });
+  showScreen("title");
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
+}
+</script>
+</body>
+</html>

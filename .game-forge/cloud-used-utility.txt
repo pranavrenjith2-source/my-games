@@ -1,1 +1,2 @@
 a markdown editor with live preview, autosave and export
+a color palette generator with accessibility contrast checks
