@@ -89,6 +89,8 @@
   <button data-tab="table" class="on">Periodic Table</button>
   <button data-tab="tools">Chemistry Tools</button>
   <button data-tab="worksheet">Worksheet Studio</button>
+  <button data-tab="lab">3D Lab</button>
+  <button data-tab="trends">Trends</button>
   <button data-tab="cards">Flashcards</button>
 </nav>
 <main>
@@ -153,6 +155,54 @@
       </div>
       <div class="row" style="margin-top:12px"><button class="btn" id="wsGo">Generate Worksheet</button><button class="btn ghost" id="wsKey">Show Answer Key</button><button class="btn ghost" id="wsPrint">Print</button></div>
       <div class="ws" id="wsOut">Click “Generate Worksheet” to create practice problems.</div>
+    </div>
+  </section>
+
+  <!-- 3D LAB -->
+  <section class="panel" id="tab-lab">
+    <div class="card">
+      <h2>3D Molecule Lab</h2>
+      <div class="row">
+        <select id="molPreset" style="max-width:240px"></select>
+        <button class="btn ghost" id="labAuto">Auto-rotate: ON</button>
+        <button class="btn ghost" id="labReset">Reset view</button>
+        <span class="muted" id="labInfo"></span>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <span class="muted">build:</span>
+        <span id="palette" class="chips"></span>
+        <button class="btn ghost" id="modeBond">Bond mode: OFF</button>
+        <button class="btn ghost" id="modeDel">Delete mode: OFF</button>
+        <button class="btn ghost" id="labClear">Clear</button>
+      </div>
+      <canvas id="mol3d" width="960" height="520"></canvas>
+      <div class="muted" id="labHint">drag to rotate · scroll to zoom · pick an element, then click the canvas to place an atom · click two atoms in bond mode to connect them</div>
+    </div>
+    <div class="card">
+      <h2>Orbital Shapes (s · p · d)</h2>
+      <div class="row">
+        <select id="orbSel" style="max-width:180px"><option value="s">s — sphere</option><option value="p" selected>p — dumbbell</option><option value="d">d — clover</option></select>
+        <button class="btn ghost" id="orbAuto">Auto-rotate: ON</button>
+        <span class="muted">point cloud of the electron probability density</span>
+      </div>
+      <canvas id="orb3d" width="960" height="420"></canvas>
+    </div>
+  </section>
+
+  <!-- TRENDS -->
+  <section class="panel" id="tab-trends">
+    <div class="card">
+      <h2>Periodic Trends</h2>
+      <div class="row">
+        <select id="trProp" style="max-width:260px">
+          <option value="mass">Atomic mass vs atomic number</option>
+          <option value="en">Electronegativity vs atomic number</option>
+          <option value="ion">1st ionization energy vs atomic number</option>
+          <option value="shell">Electrons in outer shell vs atomic number</option>
+        </select>
+      </div>
+      <canvas id="trendCv" width="960" height="440"></canvas>
+      <div class="muted" id="trNote"></div>
     </div>
   </section>
 
@@ -493,12 +543,237 @@
   $("fcCard").addEventListener("click",function(){ this.classList.toggle("flip") });
   renderCard();
 
+  /* ---------- expose data for the 3D lab / trends ---------- */
+  window.__CHEM__ = { E: E, X: X, config: config, shells: shells };
+
   /* ---------- the door: type 9999 ---------- */
   var buf="";
   document.addEventListener("keydown",function(e){
     if(e.key>="0"&&e.key<="9"){ buf=(buf+e.key).slice(-4); if(buf==="9999"){ window.location.href="index.html"; } }
     else if(e.key.length===1){ buf=""; }
   });
+})();
+</script>
+<script>
+/* ================= 3D Molecule Lab + Orbitals + Trends ================= */
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id)};
+  var CHEM=window.__CHEM__||{E:[],X:{}};
+
+  var COLORS={H:"#e8eefb",He:"#d9ffff",Li:"#cc80ff",Be:"#c2ff00",B:"#ffb5b5",C:"#5b5b66",N:"#4a6cff",O:"#ff4d4d",F:"#8cff8c",Ne:"#b3e3f5",Na:"#ab5cf2",Mg:"#8aff00",Al:"#bfa6a6",Si:"#f0c8a0",P:"#ff8000",S:"#ffd12a",Cl:"#3ce03c",Ar:"#80d1e3",K:"#8f40d4",Ca:"#3dff00",Ti:"#bfc2c7",Cr:"#8a99c7",Mn:"#9c7ac7",Fe:"#e06633",Co:"#f090a0",Ni:"#50d050",Cu:"#c88033",Zn:"#7d80b0",Br:"#a62929",Ag:"#c0c0c0",I:"#940094",Au:"#ffd123",Hg:"#b8b8d0",Pb:"#575961",U:"#008fff"};
+  var RAD={H:0.30,He:0.28,Li:0.48,Be:0.42,B:0.40,C:0.42,N:0.40,O:0.38,F:0.34,Ne:0.36,Na:0.55,Mg:0.50,Al:0.48,Si:0.44,P:0.44,S:0.44,Cl:0.48,Ar:0.40,K:0.62,Ca:0.58,Ti:0.48,Cr:0.46,Mn:0.46,Fe:0.46,Co:0.46,Ni:0.46,Cu:0.46,Zn:0.45,Br:0.48,Ag:0.48,I:0.50,Au:0.46,Hg:0.48,Pb:0.50,U:0.50};
+  function color(sym){ return COLORS[sym]||"#9fb3d1"; }
+  function radius(sym){ return RAD[sym]||0.42; }
+
+  /* ---------- presets ---------- */
+  function ring(n,r){ var a=[],i; for(i=0;i<n;i++){ var t=i*2*Math.PI/n; a.push([Math.cos(t)*r,Math.sin(t)*r,0]); } return a; }
+  var MOL={
+    "Water — H2O": {a:[["O",0,0,0],["H",0.757,0.586,0],["H",-0.757,0.586,0]],b:[[0,1],[0,2]]},
+    "Methane — CH4": {a:[["C",0,0,0],["H",0.63,0.63,0.63],["H",-0.63,-0.63,0.63],["H",-0.63,0.63,-0.63],["H",0.63,-0.63,-0.63]],b:[[0,1],[0,2],[0,3],[0,4]]},
+    "Ammonia — NH3": {a:[["N",0,0.25,0],["H",0.94,-0.28,0],["H",-0.47,-0.28,0.81],["H",-0.47,-0.28,-0.81]],b:[[0,1],[0,2],[0,3]]},
+    "Carbon dioxide — CO2": {a:[["C",0,0,0],["O",1.16,0,0],["O",-1.16,0,0]],b:[[0,1],[0,2]]},
+    "Ethene — C2H4": {a:[["C",0.67,0,0],["C",-0.67,0,0],["H",1.24,0.93,0],["H",1.24,-0.93,0],["H",-1.24,0.93,0],["H",-1.24,-0.93,0]],b:[[0,1],[0,2],[0,3],[1,4],[1,5]]},
+    "Benzene — C6H6": {a:[].concat(ring(6,1.39).map(function(p){return ["C"].concat(p)}), ring(6,2.48).map(function(p){return ["H"].concat(p)})), b:[[0,1],[1,2],[2,3],[3,4],[4,5],[5,0],[0,6],[1,7],[2,8],[3,9],[4,10],[5,11]]},
+    "Ethanol — C2H5OH": {a:[["C",-0.8,-0.25,0],["C",0.6,0.4,0],["O",1.7,-0.4,0],["H",-1.3,-1.1,0.4],["H",-1.3,-0.5,-0.9],["H",-1.1,0.6,0.5],["H",1.1,1.2,0.3],["H",0.5,0.9,-0.9],["H",2.4,-0.1,0]],b:[[0,1],[1,2],[0,3],[0,4],[0,5],[1,6],[1,7],[2,8]]},
+    "Oxygen — O2": {a:[["O",0.6,0,0],["O",-0.6,0,0]],b:[[0,1]]},
+    "Nitrogen — N2": {a:[["N",0.55,0,0],["N",-0.55,0,0]],b:[[0,1]]},
+    "Hydrogen chloride — HCl": {a:[["H",-0.64,0,0],["Cl",0.64,0,0]],b:[[0,1]]},
+    "Sodium chloride — NaCl": {a:[["Na",0,0,0],["Cl",2.36,0,0]],b:[[0,1]]},
+    "Sulfur dioxide — SO2": {a:[["S",0,0.3,0],["O",1.2,-0.3,0],["O",-1.2,-0.3,0]],b:[[0,1],[0,2]]},
+    "Hydrogen peroxide — H2O2": {a:[["O",-0.7,0.2,0],["O",0.7,-0.2,0],["H",-1.2,0.9,0.4],["H",1.2,-0.9,-0.4]],b:[[0,1],[0,2],[1,3]]}
+  };
+
+  /* ---------- 3D engine ---------- */
+  var cv=$("mol3d"), ctx=cv.getContext("2d");
+  var rot={x:-0.45,y:0.7}, scale=95, auto=true, drag=null;
+  var atoms=[], bonds=[];           // atoms: {e:[x,y,z]}, bonds: [i,j]
+  var mode="place", pending=null;   // place | bond | del
+  var picked="O";
+
+  function rotPoint(p){
+    var cy=Math.cos(rot.y), sy=Math.sin(rot.y), cx=Math.cos(rot.x), sx=Math.sin(rot.x);
+    var x1=p[0]*cy+p[2]*sy, z1=-p[0]*sy+p[2]*cy;
+    var y1=p[1]*cx-z1*sx, z2=p[1]*sx+z1*cx;
+    var f=7/(7+z2);
+    return {x:cv.width/2+x1*f*scale, y:cv.height/2+y1*f*scale, z:z2, f:f};
+  }
+  function unproject(px,py){
+    var rx=rot.x, ry=rot.y;
+    var x2=(px-cv.width/2)/scale, y2=(py-cv.height/2)/scale;
+    var y1=y2*Math.cos(rx), z1=-y2*Math.sin(rx);
+    var x=x2*Math.cos(ry)-z1*Math.sin(ry), z=x2*Math.sin(ry)+z1*Math.cos(ry);
+    return [x,y1,z];
+  }
+  function loadMol(name){
+    var m=MOL[name]; if(!m) return;
+    atoms=m.a.map(function(a){ return {e:a[0], p:[a[1],a[2],a[3]]}; });
+    bonds=m.b.map(function(b){ return [b[0],b[1]]; });
+    pending=null;
+    updateInfo();
+  }
+  function updateInfo(){ $("labInfo").textContent = atoms.length+" atoms · "+bonds.length+" bonds"; }
+  function clearMol(){ atoms=[]; bonds=[]; pending=null; updateInfo(); }
+
+  function draw(){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    // grid backdrop
+    ctx.strokeStyle="rgba(77,208,255,.06)"; ctx.lineWidth=1;
+    for(var gx=0;gx<cv.width;gx+=40){ ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,cv.height); ctx.stroke(); }
+    for(var gy=0;gy<cv.height;gy+=40){ ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(cv.width,gy); ctx.stroke(); }
+    var P=atoms.map(function(a){ return rotPoint(a.p); });
+    // bonds
+    bonds.forEach(function(b){
+      var A=P[b[0]], B=P[b[1]]; if(!A||!B) return;
+      var depth=(A.z+B.z)/2;
+      ctx.strokeStyle="rgba(200,220,255,"+(0.28+0.5*(1-Math.min(1,Math.abs(depth)/6)))+")";
+      ctx.lineWidth=Math.max(2, 7*((A.f+B.f)/2));
+      ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
+    });
+    // atoms back-to-front
+    var order=P.map(function(p,i){ return i; }).sort(function(i,j){ return P[j].z-P[i].z; });
+    order.forEach(function(i){
+      var a=atoms[i], p=P[i], r=radius(a.e)*scale*p.f;
+      var g=ctx.createRadialGradient(p.x-r*0.35,p.y-r*0.35,r*0.1,p.x,p.y,r);
+      var c=color(a.e);
+      g.addColorStop(0,"#ffffff"); g.addColorStop(0.35,c); g.addColorStop(1,"rgba(0,0,0,.55)");
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(p.x,p.y,r,0,7); ctx.fill();
+      if(i===pending){ ctx.strokeStyle="#4dd0ff"; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(p.x,p.y,r+3,0,7); ctx.stroke(); }
+      ctx.fillStyle="#06121f"; ctx.font="bold "+Math.max(9,Math.round(r*0.85))+"px -apple-system, sans-serif";
+      ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(a.e,p.x,p.y);
+    });
+    if(auto) rot.y+=0.006;
+    requestAnimationFrame(draw);
+  }
+  function hit(px,py){
+    var P=atoms.map(function(a){ return rotPoint(a.p); });
+    var best=-1, bd=1e9;
+    for(var i=0;i<P.length;i++){ var r=Math.max(12,radius(atoms[i].e)*scale*P[i].f); var d=Math.hypot(px-P[i].x,py-P[i].y); if(d<r&&d<bd){bd=d;best=i;} }
+    return best;
+  }
+  cv.addEventListener("mousedown",function(e){ drag={x:e.offsetX,y:e.offsetY,moved:0}; });
+  cv.addEventListener("mousemove",function(e){
+    if(!drag) return;
+    var dx=e.offsetX-drag.x, dy=e.offsetY-drag.y;
+    drag.moved+=Math.abs(dx)+Math.abs(dy);
+    rot.y+=dx*0.01; rot.x+=dy*0.01;
+    rot.x=Math.max(-1.5,Math.min(1.5,rot.x));
+    drag.x=e.offsetX; drag.y=e.offsetY;
+  });
+  window.addEventListener("mouseup",function(e){
+    if(!drag) return; var moved=drag.moved; drag=null;
+    if(moved>4) return;                                  // it was a drag
+    if(e.target!==cv) return;
+    var r=cv.getBoundingClientRect(); var px=e.clientX-r.left, py=e.clientY-r.top;
+    var i=hit(px,py);
+    if(mode==="place"){ if(i<0){ atoms.push({e:picked, p:unproject(px,py)}); updateInfo(); } }
+    else if(mode==="bond"){ if(i>=0){ if(pending===null){ pending=i; } else if(pending!==i){ if(!bonds.some(function(b){return (b[0]===pending&&b[1]===i)||(b[1]===pending&&b[0]===i)})) bonds.push([pending,i]); pending=null; updateInfo(); } } }
+    else if(mode==="del"){ if(i>=0){ atoms.splice(i,1); bonds=bonds.filter(function(b){return b[0]!==i&&b[1]!==i}).map(function(b){return [b[0]>i?b[0]-1:b[0], b[1]>i?b[1]-1:b[1]]}); pending=null; updateInfo(); } }
+  });
+  cv.addEventListener("wheel",function(e){ e.preventDefault(); scale=Math.max(40,Math.min(220,scale-e.deltaY*0.06)); },{passive:false});
+
+  // palette
+  ["H","C","N","O","F","Na","Mg","P","S","Cl","K","Ca","Fe","Cu","Zn","Ag","Au","Br","I"].forEach(function(sym){
+    var c=document.createElement("span"); c.className="chip"; c.textContent=sym;
+    c.style.cursor="pointer"; c.style.borderColor=color(sym);
+    c.addEventListener("click",function(){ picked=sym; mode="place"; $("modeBond").textContent="Bond mode: OFF"; $("modeDel").textContent="Delete mode: OFF";
+      Array.prototype.forEach.call($("palette").children,function(x){x.style.background=""}); c.style.background="rgba(77,208,255,.18)"; });
+    $("palette").appendChild(c);
+  });
+  var sel=$("molPreset");
+  Object.keys(MOL).forEach(function(k){ var o=document.createElement("option"); o.value=k; o.textContent=k; sel.appendChild(o); });
+  sel.value="Water — H2O"; loadMol(sel.value);
+  sel.addEventListener("change",function(){ loadMol(this.value); });
+  $("labAuto").addEventListener("click",function(){ auto=!auto; this.textContent="Auto-rotate: "+(auto?"ON":"OFF"); });
+  $("labReset").addEventListener("click",function(){ rot={x:-0.45,y:0.7}; scale=95; });
+  $("modeBond").addEventListener("click",function(){ mode=(mode==="bond")?"place":"bond"; pending=null; this.textContent="Bond mode: "+(mode==="bond"?"ON":"OFF"); $("modeDel").textContent="Delete mode: OFF"; });
+  $("modeDel").addEventListener("click",function(){ mode=(mode==="del")?"place":"del"; pending=null; this.textContent="Delete mode: "+(mode==="del"?"ON":"OFF"); $("modeBond").textContent="Bond mode: OFF"; });
+  $("labClear").addEventListener("click",function(){ clearMol(); });
+  draw();
+
+  /* ---------- orbital viewer ---------- */
+  var oc=$("orb3d"), octx=oc.getContext("2d");
+  var orot={x:-0.5,y:0.6}, oauto=true, optype="p", pts=[];
+  function genOrbital(type){
+    pts=[];
+    var n=9000, i;
+    for(i=0;i<n;i++){
+      var u=Math.random()*2-1, th=Math.random()*2*Math.PI;
+      var rr=Math.cbrt(Math.random());
+      var x=rr*Math.sqrt(1-u*u)*Math.cos(th), y=rr*Math.sqrt(1-u*u)*Math.sin(th), z=rr*u;
+      var d;
+      if(type==="s") d=1;
+      else if(type==="p") d=Math.abs(z)*1.6;
+      else d=Math.abs(x*x-y*y)*2.2;
+      if(Math.random()<Math.min(1,d)) pts.push([x*3.1,y*3.1,z*3.1,Math.min(1,d)]);
+    }
+  }
+  function orotPoint(p){
+    var cy=Math.cos(orot.y), sy=Math.sin(orot.y), cx=Math.cos(orot.x), sx=Math.sin(orot.x);
+    var x1=p[0]*cy+p[2]*sy, z1=-p[0]*sy+p[2]*cy;
+    var y1=p[1]*cx-z1*sx, z2=p[1]*sx+z1*cx;
+    var f=9/(9+z2);
+    return {x:oc.width/2+x1*f*46, y:oc.height/2+y1*f*46, z:z2, f:f};
+  }
+  function odraw(){
+    octx.clearRect(0,0,oc.width,oc.height);
+    var P=pts.map(orotPoint);
+    P.sort(function(a,b){ return a.z-b.z; });
+    for(var i=0;i<P.length;i++){
+      var q=P[i];
+      octx.fillStyle="rgba(77,208,255,"+(0.05+0.28*q.f)+")";
+      octx.fillRect(q.x,q.y,1.6*q.f,1.6*q.f);
+    }
+    if(oauto) orot.y+=0.008;
+    requestAnimationFrame(odraw);
+  }
+  $("orbSel").addEventListener("change",function(){ optype=this.value; genOrbital(optype); });
+  $("orbAuto").addEventListener("click",function(){ oauto=!oauto; this.textContent="Auto-rotate: "+(oauto?"ON":"OFF"); });
+  oc.addEventListener("mousedown",function(){ oc.__d=1; });
+  oc.addEventListener("mousemove",function(e){ if(oc.__d){ orot.y+=e.movementX*0.01; orot.x=Math.max(-1.5,Math.min(1.5,orot.x+e.movementY*0.01)); } });
+  window.addEventListener("mouseup",function(){ oc.__d=0; });
+  genOrbital(optype); odraw();
+
+  /* ---------- trends ---------- */
+  var tc=$("trendCv"), tctx=tc.getContext("2d");
+  function drawTrends(){
+    var prop=$("trProp").value;
+    var E=CHEM.E, X=CHEM.X;
+    var data=[];
+    E.forEach(function(e){
+      var z=e[0], sym=e[1], v=null;
+      if(prop==="mass") v=e[3];
+      else if(prop==="en"){ var x=X[sym]; v=(x&&x[0]!=null)?x[0]:null; }
+      else if(prop==="ion"){ var x2=X[sym]; v=(x2&&x2[1]!=null)?x2[1]:null; }
+      else if(prop==="shell"){ v=(CHEM.shells(CHEM.config(z)).slice(-1)[0])||null; }
+      if(v!=null) data.push([z,v]);
+    });
+    var W=tc.width,H=tc.height,pad=46;
+    tctx.clearRect(0,0,W,H);
+    tctx.strokeStyle="#20304d"; tctx.lineWidth=1;
+    tctx.beginPath(); tctx.moveTo(pad,H-pad); tctx.lineTo(W-pad,H-pad); tctx.moveTo(pad,pad); tctx.lineTo(pad,H-pad); tctx.stroke();
+    if(!data.length){ tctx.fillStyle="#8fa0bd"; tctx.font="14px sans-serif"; tctx.fillText("no data for this trend",pad+10,H/2); $("trNote").textContent=""; return; }
+    var xs=data.map(function(d){return d[0]}), ys=data.map(function(d){return d[1]});
+    var x0=Math.min.apply(null,xs), x1=Math.max.apply(null,xs), y0=Math.min.apply(null,ys), y1=Math.max.apply(null,ys);
+    var X2=function(x){ return pad+(x-x0)/(x1-x0||1)*(W-2*pad); }, Y2=function(y){ return H-pad-(y-y0)/(y1-y0||1)*(H-2*pad); };
+    // axes labels
+    tctx.fillStyle="#8fa0bd"; tctx.font="11px sans-serif";
+    for(var g=0;g<=5;g++){ var yy=y0+(y1-y0)*g/5; var py=Y2(yy); tctx.fillText((Math.round(yy*100)/100).toString(),6,py+3); }
+    // line + points
+    tctx.strokeStyle="#4dd0ff"; tctx.lineWidth=2; tctx.beginPath();
+    data.forEach(function(d,i){ var px=X2(d[0]),py=Y2(d[1]); if(i===0) tctx.moveTo(px,py); else tctx.lineTo(px,py); });
+    tctx.stroke();
+    tctx.fillStyle="#7c5cff";
+    data.forEach(function(d){ tctx.beginPath(); tctx.arc(X2(d[0]),Y2(d[1]),3,0,7); tctx.fill(); });
+    var note={mass:"Atomic mass increases across the table (protons + neutrons).",
+      en:"Electronegativity generally rises across a period and falls down a group.",
+      ion:"Ionization energy rises across a period and falls down a group.",
+      shell:"Outer-shell electrons repeat every period."}[prop];
+    $("trNote").textContent=note||"";
+  }
+  $("trProp").addEventListener("change",drawTrends);
+  drawTrends();
+  window.addEventListener("resize",function(){ drawTrends(); });
 })();
 </script>
 </body>
