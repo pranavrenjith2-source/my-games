@@ -3,435 +3,499 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>StudyHub — Calculator, Converter, Periodic Table</title>
+<title>ChemLab — Interactive Periodic Table & Chemistry Tools</title>
 <style>
-  :root {
-    --bg: #f5f7fa; --card: #ffffff; --ink: #1c2430; --muted: #6b7684;
-    --line: #dde3ea; --accent: #2b6cb0; --accent-soft: #e8f1fb; --ok: #2f855a;
+  :root{
+    --bg:#070b14; --bg2:#0d1424; --panel:#111a2e; --panel2:#0c1322; --line:#20304d;
+    --ink:#e8eefb; --muted:#8fa0bd; --accent:#4dd0ff; --accent2:#7c5cff; --ok:#37d67a; --warn:#ffb020; --bad:#ff5f6d;
   }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-  header { background: var(--card); border-bottom: 1px solid var(--line); padding: 14px 20px; display: flex; align-items: center; gap: 14px; position: sticky; top: 0; z-index: 20; }
-  header h1 { margin: 0; font-size: 19px; letter-spacing: .2px; }
-  header h1 span { color: var(--accent); }
-  header .tag { font-size: 12px; color: var(--muted); margin-left: auto; }
-  nav { display: flex; gap: 6px; flex-wrap: wrap; padding: 12px 20px 0; }
-  nav button { font: inherit; font-size: 13px; cursor: pointer; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px; padding: 8px 15px; }
-  nav button:hover { border-color: var(--accent); }
-  nav button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
-  main { max-width: 1040px; margin: 0 auto; padding: 16px 20px 80px; }
-  .panel { display: none; }
-  .panel.on { display: block; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-top: 14px; }
-  h2 { font-size: 15px; margin: 0 0 12px; color: var(--accent); letter-spacing: .3px; }
-  input, select, textarea, button { font: inherit; }
-  input[type=text], input[type=number], select, textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); outline: none; }
-  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
-  .btn { cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 8px; padding: 10px 16px; }
-  .btn.ghost { background: #fff; color: var(--accent); }
-  .btn:hover { filter: brightness(1.06); }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-  @media (max-width: 720px){ .grid2, .grid3 { grid-template-columns: 1fr; } }
-  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .muted { color: var(--muted); font-size: 12px; }
-  /* calculator */
-  .calc { display: grid; grid-template-columns: 1fr; gap: 10px; }
-  #expr { font-size: 20px; padding: 14px; text-align: right; letter-spacing: 1px; }
-  #result { text-align: right; font-size: 28px; font-weight: 600; color: var(--accent); min-height: 36px; word-break: break-all; }
-  .keys { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
-  .keys button { padding: 13px 0; border: 1px solid var(--line); background: #fff; border-radius: 8px; cursor: pointer; font-size: 15px; }
-  .keys button:hover { border-color: var(--accent); background: var(--accent-soft); }
-  .keys button.fn { color: var(--accent); font-size: 13px; }
-  .keys button.eq { background: var(--accent); color: #fff; border-color: var(--accent); }
-  #hist { font-size: 12px; color: var(--muted); margin-top: 8px; max-height: 120px; overflow: auto; }
-  #hist div { padding: 3px 0; border-bottom: 1px dashed var(--line); cursor: pointer; }
-  /* periodic table */
-  .ptable { display: grid; grid-template-columns: repeat(18, minmax(0, 1fr)); gap: 3px; margin-top: 6px; overflow-x: auto; }
-  .el { border: 1px solid var(--line); border-radius: 5px; padding: 4px 2px; text-align: center; cursor: pointer; font-size: 11px; line-height: 1.15; background: #fff; }
-  .el b { display: block; font-size: 13px; }
-  .el small { color: var(--muted); font-size: 9px; }
-  .el:hover { outline: 2px solid var(--accent); }
-  .el.sel { outline: 2px solid var(--accent); background: var(--accent-soft); }
-  .cat-alkali { background: #ffe0e0; } .cat-alkaline { background: #ffeacc; }
-  .cat-transition { background: #fff6cc; } .cat-post { background: #e9f7e0; }
-  .cat-metalloid { background: #d9f2e6; } .cat-nonmetal { background: #dcecff; }
-  .cat-halogen { background: #e6e0ff; } .cat-noble { background: #f0dcff; }
-  .cat-lanthanide { background: #ffe3f2; } .cat-actinide { background: #ffe9d6; }
-  #elInfo { margin-top: 14px; }
-  #elInfo .big { font-size: 40px; font-weight: 700; color: var(--accent); }
-  .legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--muted); margin-top: 10px; }
-  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; border: 1px solid var(--line); }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:radial-gradient(1200px 600px at 50% -200px,#16224a 0%,var(--bg) 55%);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;min-height:100%}
+  a{color:var(--accent)}
+  header{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line);background:rgba(9,14,26,.7);backdrop-filter:blur(8px);position:sticky;top:0;z-index:30}
+  .logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:800;color:#06121f}
+  header h1{margin:0;font-size:18px;letter-spacing:.3px}
+  header h1 span{background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  header .sub{font-size:12px;color:var(--muted);margin-left:auto}
+  nav{display:flex;gap:6px;flex-wrap:wrap;padding:14px 20px 0;max-width:1200px;margin:0 auto}
+  nav button{font:inherit;font-size:13px;cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:999px;padding:8px 16px}
+  nav button:hover{border-color:var(--accent)}
+  nav button.on{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#06121f;border-color:transparent;font-weight:600}
+  main{max-width:1200px;margin:0 auto;padding:16px 20px 90px}
+  .panel{display:none}.panel.on{display:block}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:14px}
+  h2{font-size:14px;margin:0 0 12px;color:var(--accent);letter-spacing:.4px;text-transform:uppercase}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  input,select,textarea{font:inherit;background:#0a1120;border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:10px 12px;outline:none;width:100%}
+  input:focus,select:focus{border-color:var(--accent)}
+  .btn{cursor:pointer;border:none;border-radius:9px;padding:10px 16px;font:inherit;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#06121f;font-weight:600}
+  .btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--line)}
+  .muted{color:var(--muted);font-size:12px}
+  /* table */
+  .ptwrap{overflow-x:auto;padding-bottom:6px}
+  .ptable{display:grid;grid-template-columns:repeat(18,minmax(52px,1fr));gap:4px;min-width:900px}
+  .el{border:1px solid var(--line);border-radius:8px;padding:5px 3px;text-align:center;cursor:pointer;line-height:1.1;background:#0b1322;transition:transform .1s,border-color .1s}
+  .el:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .el.sel{border-color:var(--accent);box-shadow:0 0 0 2px rgba(77,208,255,.35) inset}
+  .el b{display:block;font-size:15px}
+  .el small{display:block;font-size:9px;color:var(--muted)}
+  .el .n{font-size:9px;color:var(--muted)}
+  .g1{grid-column:1}.g18{grid-column:18}
+  .cat-alkali{background:#2a1420}.cat-alkaline{background:#2a1a12}.cat-transition{background:#20202a}
+  .cat-post{background:#16241f}.cat-metalloid{background:#14262a}.cat-nonmetal{background:#101f33}
+  .cat-halogen{background:#1c1630}.cat-noble{background:#241640}.cat-lanthanide{background:#2a1626}.cat-actinide{background:#2a1a14}
+  .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:10px}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px;border:1px solid var(--line)}
+  /* detail */
+  .detail{display:grid;grid-template-columns:230px 1fr;gap:16px}
+  @media(max-width:760px){.detail{grid-template-columns:1fr}}
+  #atom{width:100%;max-width:230px;height:230px;background:#070d1a;border:1px solid var(--line);border-radius:12px}
+  .bigsym{font-size:34px;font-weight:800;line-height:1}
+  .props{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:10px}
+  .prop{background:#0a1120;border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+  .prop .k{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  .prop .v{font-size:14px;margin-top:2px;word-break:break-word}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .chip{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:3px 9px;background:#0a1120}
+  .good{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+  /* tools */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}}
+  .out{margin-top:10px;font-size:15px;line-height:1.6;word-break:break-word}
+  .out b{color:var(--accent)}
+  .eq{font-size:17px;letter-spacing:.5px}
+  table.t{width:100%;border-collapse:collapse;font-size:13px}
+  table.t td{padding:5px 4px;border-bottom:1px solid var(--line)}
+  table.t td:first-child{color:var(--muted);width:55%}
+  /* worksheet */
+  .ws{white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.9;background:#0a1120;border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:10px}
   /* flashcards */
-  .fc { perspective: 1000px; }
-  .fc-inner { position: relative; min-height: 150px; transition: transform .4s; transform-style: preserve-3d; cursor: pointer; }
-  .fc.flip .fc-inner { transform: rotateY(180deg); }
-  .fc-face { position: absolute; inset: 0; backface-visibility: hidden; border: 1px solid var(--line); border-radius: 12px; display: flex; align-items: center; justify-content: center; padding: 20px; text-align: center; font-size: 18px; background: #fff; }
-  .fc-back { transform: rotateY(180deg); background: var(--accent-soft); }
-  /* timer */
-  #clock { font-size: 64px; font-weight: 700; text-align: center; letter-spacing: 3px; color: var(--accent); font-variant-numeric: tabular-nums; }
-  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 8px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 50; }
-  .toast.on { opacity: 1; }
-  table.conv { width: 100%; border-collapse: collapse; font-size: 13px; }
-  table.conv td { padding: 6px 4px; border-bottom: 1px solid var(--line); }
-  table.conv td:first-child { color: var(--muted); width: 45%; }
+  .fc{perspective:1000px;margin-top:12px}
+  .fc-inner{position:relative;min-height:140px;transition:transform .45s;transform-style:preserve-3d;cursor:pointer}
+  .fc.flip .fc-inner{transform:rotateY(180deg)}
+  .fc-face{position:absolute;inset:0;backface-visibility:hidden;border:1px solid var(--line);border-radius:12px;display:flex;align-items:center;justify-content:center;padding:18px;text-align:center;font-size:17px;background:#0a1120}
+  .fc-back{transform:rotateY(180deg);background:linear-gradient(135deg,#16224a,#0a1120)}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:linear-gradient(135deg,var(--accent),var(--accent2));color:#06121f;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;opacity:0;pointer-events:none;transition:.25s;z-index:50}
+  .toast.on{opacity:1}
 </style>
 </head>
 <body>
 <header>
-  <h1>Study<span>Hub</span></h1>
-  <span class="tag">calculator · converter · periodic table · flashcards · timer</span>
+  <div class="logo">Cl</div>
+  <h1>Chem<span>Lab</span></h1>
+  <span class="sub">periodic table · atoms · tools · worksheets</span>
 </header>
-
 <nav id="nav">
-  <button data-tab="calc" class="on">Calculator</button>
-  <button data-tab="convert">Unit Converter</button>
-  <button data-tab="table">Periodic Table</button>
+  <button data-tab="table" class="on">Periodic Table</button>
+  <button data-tab="tools">Chemistry Tools</button>
+  <button data-tab="worksheet">Worksheet Studio</button>
   <button data-tab="cards">Flashcards</button>
-  <button data-tab="timer">Study Timer</button>
 </nav>
-
 <main>
-  <!-- CALCULATOR -->
-  <section class="panel on" id="tab-calc">
-    <div class="card calc">
-      <input id="expr" type="text" placeholder="type an expression, e.g. 2*sin(pi/4)+sqrt(9)" autocomplete="off" spellcheck="false" />
-      <div id="result"></div>
-      <div class="keys" id="keys"></div>
-      <div class="row">
-        <button class="btn" id="calcGo">= Evaluate</button>
-        <button class="btn ghost" id="calcClear">Clear</button>
-        <span class="muted">supports + − × ÷ ^ ( ) sin cos tan asin acos atan sqrt log ln abs exp pi e</span>
-      </div>
-      <div id="hist"></div>
-    </div>
-  </section>
-
-  <!-- CONVERTER -->
-  <section class="panel" id="tab-convert">
+  <!-- TABLE -->
+  <section class="panel on" id="tab-table">
     <div class="card">
-      <h2>Unit Converter</h2>
-      <div class="grid2">
-        <div><div class="muted">category</div><select id="cat"></select></div>
-        <div><div class="muted">amount</div><input id="amt" type="number" value="1" step="any" /></div>
+      <div class="row" style="margin-bottom:10px">
+        <input id="search" type="text" placeholder="search elements by name, symbol or number…" style="max-width:380px" />
+        <span class="muted" id="count"></span>
       </div>
-      <div class="grid2" style="margin-top:12px">
-        <div><div class="muted">from</div><select id="fromU"></select></div>
-        <div><div class="muted">to</div><select id="toU"></select></div>
-      </div>
-      <div class="card" style="margin-top:14px;background:var(--accent-soft);border-color:#cfe1f7">
-        <div id="convOut" style="font-size:26px;font-weight:600;color:var(--accent)"></div>
-        <div class="muted" id="convAll" style="margin-top:8px"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- PERIODIC TABLE -->
-  <section class="panel" id="tab-table">
-    <div class="card">
-      <h2>Periodic Table <span class="muted" style="font-weight:400">— click an element</span></h2>
-      <div class="row" style="margin-bottom:8px"><input id="elSearch" type="text" placeholder="search by name, symbol or number" /></div>
-      <div class="ptable" id="ptable"></div>
+      <div class="ptwrap"><div class="ptable" id="ptable"></div></div>
       <div class="legend">
-        <span><i class="cat-alkali"></i>alkali</span><span><i class="cat-alkaline"></i>alkaline</span>
-        <span><i class="cat-transition"></i>transition</span><span><i class="cat-post"></i>post-transition</span>
+        <span><i class="cat-alkali"></i>alkali metal</span><span><i class="cat-alkaline"></i>alkaline earth</span>
+        <span><i class="cat-transition"></i>transition metal</span><span><i class="cat-post"></i>post-transition</span>
         <span><i class="cat-metalloid"></i>metalloid</span><span><i class="cat-nonmetal"></i>nonmetal</span>
         <span><i class="cat-halogen"></i>halogen</span><span><i class="cat-noble"></i>noble gas</span>
         <span><i class="cat-lanthanide"></i>lanthanide</span><span><i class="cat-actinide"></i>actinide</span>
       </div>
-      <div id="elInfo"></div>
+    </div>
+    <div class="card" id="detailCard">
+      <h2>Element</h2>
+      <div class="detail">
+        <div>
+          <canvas id="atom" width="460" height="460"></canvas>
+          <div class="muted" style="text-align:center;margin-top:6px">electron shells</div>
+        </div>
+        <div id="elInfo"><div class="muted">click an element above to see its details, 3D-ish atom and data.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TOOLS -->
+  <section class="panel" id="tab-tools">
+    <div class="grid2">
+      <div class="card">
+        <h2>Molar Mass</h2>
+        <input id="mmInput" type="text" placeholder="formula, e.g. Ca(OH)2  or  C6H12O6" />
+        <div class="row" style="margin-top:10px"><button class="btn" id="mmGo">Calculate</button><button class="btn ghost" id="mmClear">Clear</button></div>
+        <div class="out" id="mmOut"></div>
+      </div>
+      <div class="card">
+        <h2>Equation Balancer</h2>
+        <input id="eqInput" type="text" placeholder="H2 + O2 -> H2O" />
+        <div class="row" style="margin-top:10px"><button class="btn" id="eqGo">Balance</button><button class="btn ghost" id="eqClear">Clear</button></div>
+        <div class="out eq" id="eqOut"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Element Lookup</h2>
+      <div class="row"><input id="lkInput" type="text" placeholder="symbol or name, e.g. Fe" style="max-width:300px" /><button class="btn" id="lkGo">Find</button></div>
+      <div class="out" id="lkOut"></div>
+    </div>
+  </section>
+
+  <!-- WORKSHEET -->
+  <section class="panel" id="tab-worksheet">
+    <div class="card">
+      <h2>Worksheet Studio</h2>
+      <div class="grid2">
+        <div><div class="muted">number of questions</div><select id="wsN"><option>5</option><option selected>10</option><option>15</option><option>20</option></select></div>
+        <div><div class="muted">difficulty</div><select id="wsD"><option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option></select></div>
+      </div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="wsGo">Generate Worksheet</button><button class="btn ghost" id="wsKey">Show Answer Key</button><button class="btn ghost" id="wsPrint">Print</button></div>
+      <div class="ws" id="wsOut">Click “Generate Worksheet” to create practice problems.</div>
     </div>
   </section>
 
   <!-- FLASHCARDS -->
   <section class="panel" id="tab-cards">
     <div class="card">
-      <h2>Flashcards <span class="muted" style="font-weight:400">— saved in this browser</span></h2>
+      <h2>Flashcards</h2>
       <div class="grid2">
-        <div><div class="muted">front (question)</div><input id="fcFront" type="text" placeholder="What is the capital of France?" /></div>
-        <div><div class="muted">back (answer)</div><input id="fcBack" type="text" placeholder="Paris" /></div>
+        <div><div class="muted">front</div><input id="fcFront" type="text" placeholder="What is the atomic number of carbon?" /></div>
+        <div><div class="muted">back</div><input id="fcBack" type="text" placeholder="6" /></div>
       </div>
-      <div class="row" style="margin-top:10px"><button class="btn" id="fcAdd">+ Add card</button><button class="btn ghost" id="fcReset">Reset deck</button><span class="muted" id="fcCount"></span></div>
+      <div class="row" style="margin-top:10px"><button class="btn" id="fcAdd">+ Add</button><button class="btn ghost" id="fcReset">Reset</button><span class="muted" id="fcCount"></span></div>
     </div>
     <div class="card">
       <div class="fc" id="fcCard"><div class="fc-inner">
-        <div class="fc-face" id="fcQ">no cards yet — add one above</div>
-        <div class="fc-face fc-back" id="fcA"></div>
+        <div class="fc-face" id="fcQ">no cards yet</div><div class="fc-face fc-back" id="fcA"></div>
       </div></div>
-      <div class="row" style="margin-top:12px">
-        <button class="btn ghost" id="fcPrev">‹ Prev</button>
-        <button class="btn" id="fcNext">Next ›</button>
-        <span class="muted">click the card to flip</span>
-      </div>
-    </div>
-  </section>
-
-  <!-- TIMER -->
-  <section class="panel" id="tab-timer">
-    <div class="card">
-      <h2>Study Timer</h2>
-      <div id="clock">25:00</div>
-      <div class="row" style="justify-content:center;margin-top:12px">
-        <button class="btn" id="tmStart">Start</button>
-        <button class="btn ghost" id="tmPause">Pause</button>
-        <button class="btn ghost" id="tmReset">Reset</button>
-      </div>
-      <div class="row" style="justify-content:center;margin-top:14px">
-        <span class="muted">minutes</span><input id="tmMin" type="number" value="25" min="1" max="180" style="width:90px" />
-        <span class="muted" id="tmDone"></span>
-      </div>
+      <div class="row" style="margin-top:12px"><button class="btn ghost" id="fcPrev">‹ Prev</button><button class="btn" id="fcNext">Next ›</button><span class="muted">click the card to flip</span></div>
     </div>
   </section>
 </main>
-
 <div class="toast" id="toast"></div>
 
 <script>
 (function(){
   "use strict";
-  var $ = function(id){ return document.getElementById(id); };
-  function toast(msg){ var t=$("toast"); t.textContent=msg; t.classList.add("on"); setTimeout(function(){ t.classList.remove("on"); }, 1600); }
+  var $=function(id){return document.getElementById(id)};
+  function toast(m){var t=$("toast");t.textContent=m;t.classList.add("on");setTimeout(function(){t.classList.remove("on")},1600)}
 
-  /* ---------- tabs ---------- */
-  Array.prototype.forEach.call(document.querySelectorAll("#nav button"), function(b){
-    b.addEventListener("click", function(){
-      Array.prototype.forEach.call(document.querySelectorAll("#nav button"), function(x){ x.classList.remove("on"); });
-      Array.prototype.forEach.call(document.querySelectorAll(".panel"), function(p){ p.classList.remove("on"); });
-      b.classList.add("on"); $("tab-" + b.getAttribute("data-tab")).classList.add("on");
+  /* tabs */
+  Array.prototype.forEach.call(document.querySelectorAll("#nav button"),function(b){
+    b.addEventListener("click",function(){
+      Array.prototype.forEach.call(document.querySelectorAll("#nav button"),function(x){x.classList.remove("on")});
+      Array.prototype.forEach.call(document.querySelectorAll(".panel"),function(p){p.classList.remove("on")});
+      b.classList.add("on");$("tab-"+b.getAttribute("data-tab")).classList.add("on");
     });
   });
 
-  /* ---------- calculator (safe expression parser) ---------- */
-  function tokenize(s){
-    var t=[], i=0;
-    var isD=function(c){ return c>="0"&&c<="9"||c==="."; };
-    var isL=function(c){ return c>="a"&&c<="z"; };
-    while(i<s.length){
-      var c=s[i];
-      if(c===" "||c===","){ i++; continue; }
-      if(isD(c)){ var j=i; while(j<s.length&&(isD(s[j])||s[j]==="e"&&isD(s[j+1])))j++; t.push({t:"num",v:parseFloat(s.slice(i,j))}); i=j; continue; }
-      if(isL(c)){ var k=i; while(k<s.length&&isL(s[k]))k++; t.push({t:"id",v:s.slice(i,k)}); i=k; continue; }
-      if("+-*/^()%".indexOf(c)>=0){ t.push({t:c}); i++; continue; }
-      throw new Error("unexpected character '" + c + "'");
-    }
-    return t;
-  }
-  var FN = {
-    sin:Math.sin, cos:Math.cos, tan:Math.tan, asin:Math.asin, acos:Math.acos, atan:Math.atan,
-    sqrt:Math.sqrt, log:Math.log10, ln:Math.log, abs:Math.abs, exp:Math.exp,
-    floor:Math.floor, ceil:Math.ceil, round:Math.round, sign:Math.sign
-  };
-  var CONST = { pi: Math.PI, e: Math.E };
-  function parse(tokens){
-    var pos=0;
-    function peek(){ return tokens[pos]; }
-    function eat(t){ var x=tokens[pos]; if(!x||x.t!==t) throw new Error("expected " + t); pos++; return x; }
-    function expr(){ var v=term(); while(peek()&&(peek().t==="+"||peek().t==="-")){ var op=tokens[pos++].t; var r=term(); v = op==="+" ? v+r : v-r; } return v; }
-    function term(){ var v=unary(); while(peek()&&(peek().t==="*"||peek().t==="/"||peek().t==="%")){ var op=tokens[pos++].t; var r=unary(); v = op==="*" ? v*r : op==="/" ? v/r : v%r; } return v; }
-    function unary(){ if(peek()&&(peek().t==="-"||peek().t==="+")){ var op=tokens[pos++].t; var v=unary(); return op==="-" ? -v : v; } return power(); }
-    function power(){ var base=atom(); if(peek()&&peek().t==="^"){ pos++; return Math.pow(base, unary()); } return base; }
-    function atom(){
-      var x=peek(); if(!x) throw new Error("unexpected end");
-      if(x.t==="num"){ pos++; return x.v; }
-      if(x.t==="("){ pos++; var v=expr(); eat(")"); return v; }
-      if(x.t==="id"){
-        pos++;
-        var name=x.v.toLowerCase();
-        if(peek()&&peek().t==="("){ pos++; var a=expr(); eat(")"); if(!(name in FN)) throw new Error("unknown function " + name); return FN[name](a); }
-        if(name in CONST) return CONST[name];
-        if(name in FN) throw new Error(name + " needs ( )");
-        throw new Error("unknown name " + name);
-      }
-      throw new Error("unexpected token");
-    }
-    var v=expr(); if(pos<tokens.length) throw new Error("unexpected trailing input"); return v;
-  }
-  function evaluate(s){ return parse(tokenize(String(s).replace(/×/g,"*").replace(/÷/g,"/").replace(/−/g,"-"))); }
-  function show(){
-    var s=$("expr").value;
-    try { var v=evaluate(s); $("result").textContent = (s.trim()==="" ? "" : (Math.round(v*1e12)/1e12)); }
-    catch(e){ $("result").textContent = ""; }
-  }
-  var keys=["7","8","9","/","sin","cos","4","5","6","*","tan","sqrt","1","2","3","-","log","ln","0",".","(",")","^","pi","e","+","abs","exp"];
-  keys.forEach(function(k){
-    var b=document.createElement("button");
-    b.textContent=k;
-    if(/[a-z]/i.test(k)) b.className="fn";
-    b.addEventListener("click", function(){
-      if(k==="sin"||k==="cos"||k==="tan"||k==="sqrt"||k==="log"||k==="ln"||k==="abs"||k==="exp") $("expr").value += k+"(";
-      else $("expr").value += k;
-      $("expr").focus(); show();
-    });
-    $("keys").appendChild(b);
-  });
-  $("expr").addEventListener("input", show);
-  $("expr").addEventListener("keydown", function(e){ if(e.key==="Enter"){ calcGo(); } });
-  function calcGo(){
-    var s=$("expr").value; if(!s.trim()) return;
-    try { var v=evaluate(s); var line=document.createElement("div"); line.textContent=s+" = "+(Math.round(v*1e12)/1e12);
-      line.addEventListener("click", function(){ $("expr").value=s; show(); });
-      $("hist").insertBefore(line, $("hist").firstChild); $("result").textContent=Math.round(v*1e12)/1e12; }
-    catch(e){ toast("Error: " + e.message); }
-  }
-  $("calcGo").addEventListener("click", calcGo);
-  $("calcClear").addEventListener("click", function(){ $("expr").value=""; $("result").textContent=""; $("expr").focus(); });
+  /* ---------- element data ---------- */
+  // [Z, symbol, name, mass, category]
+  var E=[
+  [1,"H","Hydrogen",1.008,"nonmetal"],[2,"He","Helium",4.0026,"noble"],[3,"Li","Lithium",6.94,"alkali"],[4,"Be","Beryllium",9.0122,"alkaline"],[5,"B","Boron",10.81,"metalloid"],[6,"C","Carbon",12.011,"nonmetal"],[7,"N","Nitrogen",14.007,"nonmetal"],[8,"O","Oxygen",15.999,"nonmetal"],[9,"F","Fluorine",18.998,"halogen"],[10,"Ne","Neon",20.180,"noble"],
+  [11,"Na","Sodium",22.990,"alkali"],[12,"Mg","Magnesium",24.305,"alkaline"],[13,"Al","Aluminium",26.982,"post"],[14,"Si","Silicon",28.085,"metalloid"],[15,"P","Phosphorus",30.974,"nonmetal"],[16,"S","Sulfur",32.06,"nonmetal"],[17,"Cl","Chlorine",35.45,"halogen"],[18,"Ar","Argon",39.948,"noble"],[19,"K","Potassium",39.098,"alkali"],[20,"Ca","Calcium",40.078,"alkaline"],
+  [21,"Sc","Scandium",44.956,"transition"],[22,"Ti","Titanium",47.867,"transition"],[23,"V","Vanadium",50.942,"transition"],[24,"Cr","Chromium",51.996,"transition"],[25,"Mn","Manganese",54.938,"transition"],[26,"Fe","Iron",55.845,"transition"],[27,"Co","Cobalt",58.933,"transition"],[28,"Ni","Nickel",58.693,"transition"],[29,"Cu","Copper",63.546,"transition"],[30,"Zn","Zinc",65.38,"transition"],
+  [31,"Ga","Gallium",69.723,"post"],[32,"Ge","Germanium",72.630,"metalloid"],[33,"As","Arsenic",74.922,"metalloid"],[34,"Se","Selenium",78.971,"nonmetal"],[35,"Br","Bromine",79.904,"halogen"],[36,"Kr","Krypton",83.798,"noble"],[37,"Rb","Rubidium",85.468,"alkali"],[38,"Sr","Strontium",87.62,"alkaline"],[39,"Y","Yttrium",88.906,"transition"],[40,"Zr","Zirconium",91.224,"transition"],
+  [41,"Nb","Niobium",92.906,"transition"],[42,"Mo","Molybdenum",95.95,"transition"],[43,"Tc","Technetium",98,"transition"],[44,"Ru","Ruthenium",101.07,"transition"],[45,"Rh","Rhodium",102.91,"transition"],[46,"Pd","Palladium",106.42,"transition"],[47,"Ag","Silver",107.87,"transition"],[48,"Cd","Cadmium",112.41,"transition"],[49,"In","Indium",114.82,"post"],[50,"Sn","Tin",118.71,"post"],
+  [51,"Sb","Antimony",121.76,"metalloid"],[52,"Te","Tellurium",127.60,"metalloid"],[53,"I","Iodine",126.90,"halogen"],[54,"Xe","Xenon",131.29,"noble"],[55,"Cs","Caesium",132.91,"alkali"],[56,"Ba","Barium",137.33,"alkaline"],[57,"La","Lanthanum",138.91,"lanthanide"],[58,"Ce","Cerium",140.12,"lanthanide"],[59,"Pr","Praseodymium",140.91,"lanthanide"],[60,"Nd","Neodymium",144.24,"lanthanide"],
+  [61,"Pm","Promethium",145,"lanthanide"],[62,"Sm","Samarium",150.36,"lanthanide"],[63,"Eu","Europium",151.96,"lanthanide"],[64,"Gd","Gadolinium",157.25,"lanthanide"],[65,"Tb","Terbium",158.93,"lanthanide"],[66,"Dy","Dysprosium",162.50,"lanthanide"],[67,"Ho","Holmium",164.93,"lanthanide"],[68,"Er","Erbium",167.26,"lanthanide"],[69,"Tm","Thulium",168.93,"lanthanide"],[70,"Yb","Ytterbium",173.05,"lanthanide"],
+  [71,"Lu","Lutetium",174.97,"lanthanide"],[72,"Hf","Hafnium",178.49,"transition"],[73,"Ta","Tantalum",180.95,"transition"],[74,"W","Tungsten",183.84,"transition"],[75,"Re","Rhenium",186.21,"transition"],[76,"Os","Osmium",190.23,"transition"],[77,"Ir","Iridium",192.22,"transition"],[78,"Pt","Platinum",195.08,"transition"],[79,"Au","Gold",196.97,"transition"],[80,"Hg","Mercury",200.59,"transition"],
+  [81,"Tl","Thallium",204.38,"post"],[82,"Pb","Lead",207.2,"post"],[83,"Bi","Bismuth",208.98,"post"],[84,"Po","Polonium",209,"post"],[85,"At","Astatine",210,"halogen"],[86,"Rn","Radon",222,"noble"],[87,"Fr","Francium",223,"alkali"],[88,"Ra","Radium",226,"alkaline"],[89,"Ac","Actinium",227,"actinide"],[90,"Th","Thorium",232.04,"actinide"],
+  [91,"Pa","Protactinium",231.04,"actinide"],[92,"U","Uranium",238.03,"actinide"],[93,"Np","Neptunium",237,"actinide"],[94,"Pu","Plutonium",244,"actinide"],[95,"Am","Americium",243,"actinide"],[96,"Cm","Curium",247,"actinide"],[97,"Bk","Berkelium",247,"actinide"],[98,"Cf","Californium",251,"actinide"],[99,"Es","Einsteinium",252,"actinide"],[100,"Fm","Fermium",257,"actinide"],
+  [101,"Md","Mendelevium",258,"actinide"],[102,"No","Nobelium",259,"actinide"],[103,"Lr","Lawrencium",266,"actinide"],[104,"Rf","Rutherfordium",267,"transition"],[105,"Db","Dubnium",268,"transition"],[106,"Sg","Seaborgium",269,"transition"],[107,"Bh","Bohrium",270,"transition"],[108,"Hs","Hassium",269,"transition"],[109,"Mt","Meitnerium",278,"transition"],[110,"Ds","Darmstadtium",281,"transition"],
+  [111,"Rg","Roentgenium",282,"transition"],[112,"Cn","Copernicium",285,"transition"],[113,"Nh","Nihonium",286,"post"],[114,"Fl","Flerovium",289,"post"],[115,"Mc","Moscovium",290,"post"],[116,"Lv","Livermorium",293,"post"],[117,"Ts","Tennessine",294,"halogen"],[118,"Og","Oganesson",294,"noble"]];
 
-  /* ---------- unit converter ---------- */
-  var UNITS = {
-    Length: { Meter:1, Kilometer:1000, Centimeter:0.01, Millimeter:0.001, Mile:1609.344, Yard:0.9144, Foot:0.3048, Inch:0.0254, "Nautical mile":1852 },
-    Mass: { Kilogram:1, Gram:0.001, Milligram:1e-6, Tonne:1000, Pound:0.45359237, Ounce:0.028349523125, Stone:6.35029318 },
-    Area: { "Square meter":1, "Square kilometer":1e6, "Square foot":0.09290304, Acre:4046.8564224, Hectare:10000 },
-    Volume: { Liter:1, Milliliter:0.001, "Cubic meter":1000, "US gallon":3.785411784, "US quart":0.946352946, "US cup":0.2365882365, "Fluid ounce":0.0295735295625 },
-    Speed: { "Meter/second":1, "Kilometer/hour":0.2777777778, "Mile/hour":0.44704, Knot:0.5144444444 },
-    Time: { Second:1, Minute:60, Hour:3600, Day:86400, Week:604800, Year:31557600 },
-    Data: { Byte:1, Kilobyte:1024, Megabyte:1048576, Gigabyte:1073741824, Terabyte:1099511627776, Bit:0.125 },
-    Energy: { Joule:1, Kilojoule:1000, Calorie:4.184, Kilocalorie:4184, "Watt-hour":3600, "Kilowatt-hour":3600000 },
-    Pressure: { Pascal:1, Kilopascal:1000, Bar:100000, Atmosphere:101325, PSI:6894.757293168 }
+  // extra curated facts for common elements: [EN, ionization kJ/mol, density g/cm3, melt C, boil C, discovered year, discoverer, ions, uses, hazards]
+  var X={
+    H:[2.20,1312,0.00009,-259,-253,1766,"Henry Cavendish","H+, H-","Fuel cells, ammonia","Flammable, explosion risk"],
+    He:[null,2372,0.00018,-272,-269,1868,"Pierre Janssen",null,"Balloons, cooling","Non-toxic, asphyxiant"],
+    Li:[0.98,520,0.534,181,1342,1817,"Johan Arfwedson","Li+","Batteries, alloys","Reacts with water, corrosive"],
+    C:[2.55,1086,2.267,3550,4027,"ancient","—","C4-, C4+","Steel, diamonds, life","Graphite dust; CO is toxic"],
+    N:[3.04,1402,0.00125,-210,-196,1772,"Daniel Rutherford","N3-","Fertilizer, inert atmosphere","Asphyxiant; NO2 toxic"],
+    O:[3.44,1314,0.00143,-218,-183,1774,"Carl Wilhelm Scheele","O2-","Breathing, steel-making","Supports combustion"],
+    Na:[0.93,496,0.971,98,883,1807,"Humphry Davy","Na+","Salt, street lights","Reacts violently with water"],
+    Mg:[1.31,738,1.738,650,1090,1755,"Joseph Black","Mg2+","Alloys, flares","Flammable; burns bright"],
+    Al:[1.61,578,2.70,660,2519,1825,"Hans Christian Oersted","Al3+","Aircraft, cans, foil","Dust can be explosive"],
+    Si:[1.90,787,2.33,1414,3265,1824,"Jons Jacob Berzelius","Si4-","Chips, glass, solar","Dust irritates lungs"],
+    P:[2.19,1012,1.823,44,280,1669,"Hennig Brand","P3-, P5+","Fertilizer, matches","White P is toxic & pyrophoric"],
+    S:[2.58,1000,2.07,115,444,"ancient","—","S2-","Acid, vulcanization","SO2 irritates lungs"],
+    Cl:[3.16,1251,0.0032,-102,-34,1774,"Carl Wilhelm Scheele","Cl-","Disinfectant, PVC","Toxic; WWI gas"],
+    Ar:[null,1521,0.0018,-189,-186,1894,"Lord Rayleigh","—","Welding, bulbs","Asphyxiant"],
+    K:[0.82,419,0.862,63,759,1807,"Humphry Davy","K+","Fertilizer, nerves","Reacts violently with water"],
+    Ca:[1.00,590,1.55,842,1484,1808,"Humphry Davy","Ca2+","Bones, cement","Reacts with water"],
+    Fe:[1.83,762,7.874,1538,2861,"ancient","—","Fe2+, Fe3+","Steel, blood (heme)","Rusts; dust can ignite"],
+    Cu:[1.90,745,8.96,1085,2562,"ancient","—","Cu+, Cu2+","Wiring, coins, alloys","Toxic in excess"],
+    Zn:[1.65,906,7.134,420,907,"ancient","—","Zn2+","Galvanizing, batteries","Fumes cause metal-fume fever"],
+    Ag:[1.93,731,10.49,962,2162,"ancient","—","Ag+","Jewelry, mirrors, electronics","Argyria (skin discoloration)"],
+    Sn:[1.96,709,7.31,232,2603,"ancient","—","Sn2+, Sn4+","Solder, tin cans","Organotins toxic"],
+    I:[2.66,1008,4.93,114,184,1811,"Bernard Courtois","I-","Antiseptic, thyroid","Vapour irritates lungs"],
+    Au:[2.54,890,19.30,1064,2856,"ancient","—","Au+, Au3+","Jewelry, electronics","Non-toxic as metal"],
+    Hg:[2.00,1007,13.534,-39,357,"ancient","—","Hg22+, Hg2+","Thermometers, lamps","Neurotoxin; bioaccumulates"],
+    Pb:[2.33,716,11.34,327,1749,"ancient","—","Pb2+, Pb4+","Batteries, radiation shielding","Neurotoxin; bioaccumulates"],
+    U:[1.38,597,19.05,1132,4131,1789,"Martin Klaproth","U3+, U4+, U6+","Nuclear fuel","Radioactive & chemically toxic"]
   };
-  var TEMPS = ["Celsius","Fahrenheit","Kelvin"];
-  function tempToC(v,u){ return u==="Celsius"?v : u==="Fahrenheit"?(v-32)*5/9 : v-273.15; }
-  function cToTemp(c,u){ return u==="Celsius"?c : u==="Fahrenheit"?c*9/5+32 : c+273.15; }
-  var catSel=$("cat");
-  Object.keys(UNITS).forEach(function(c){ var o=document.createElement("option"); o.value=c; o.textContent=c; catSel.appendChild(o); });
-  var o2=document.createElement("option"); o2.value="Temperature"; o2.textContent="Temperature"; catSel.appendChild(o2);
-  function fillUnits(){
-    var cat=catSel.value, from=$("fromU"), to=$("toU");
-    from.innerHTML=""; to.innerHTML="";
-    var list = cat==="Temperature" ? TEMPS : Object.keys(UNITS[cat]);
-    list.forEach(function(u){ from.appendChild(new Option(u,u)); to.appendChild(new Option(u,u)); });
-    to.selectedIndex = Math.min(1, list.length-1);
-    convert();
-  }
-  function convert(){
-    var cat=catSel.value, v=parseFloat($("amt").value)||0, f=$("fromU").value, t=$("toU").value, out;
-    if(cat==="Temperature"){ out = cToTemp(tempToC(v,f), t); }
-    else { out = v * UNITS[cat][f] / UNITS[cat][t]; }
-    $("convOut").textContent = (Math.round(out*1e8)/1e8) + " " + t;
-    if(cat==="Temperature"){
-      $("convAll").textContent = TEMPS.map(function(u){ return (Math.round(cToTemp(tempToC(v,f),u)*100)/100) + " " + u; }).join("  ·  ");
-    } else {
-      $("convAll").textContent = Object.keys(UNITS[cat]).map(function(u){ return (Math.round(v*UNITS[cat][f]/UNITS[cat][u]*1e6)/1e6) + " " + u; }).join("  ·  ");
+  var CATNAME={alkali:"Alkali metal",alkaline:"Alkaline earth",transition:"Transition metal",post:"Post-transition",metalloid:"Metalloid",nonmetal:"Nonmetal",halogen:"Halogen",noble:"Noble gas",lanthanide:"Lanthanide",actinide:"Actinide"};
+  var AUFBAU=["1s","2s","2p","3s","3p","4s","3d","4p","5s","4d","5p","6s","4f","5d","6p","7s","5f","6d","7p"];
+  var CAP={s:2,p:6,d:10,f:14};
+  function config(z){
+    var left=z, out=[];
+    for(var i=0;i<AUFBAU.length && left>0;i++){
+      var sub=AUFBAU[i], n=+sub[0], t=sub[1], cap=CAP[t], take=Math.min(cap,left);
+      out.push(sub+take); left-=take;
     }
+    return out;
   }
-  catSel.addEventListener("change", fillUnits);
-  ["fromU","toU"].forEach(function(id){ $(id).addEventListener("change", convert); });
-  $("amt").addEventListener("input", convert);
-  fillUnits();
-
-  /* ---------- periodic table ---------- */
-  var ELEMENTS = [
-    [1,"H","Hydrogen",1.008,"nonmetal"],[2,"He","Helium",4.0026,"noble"],[3,"Li","Lithium",6.94,"alkali"],[4,"Be","Beryllium",9.0122,"alkaline"],
-    [5,"B","Boron",10.81,"metalloid"],[6,"C","Carbon",12.011,"nonmetal"],[7,"N","Nitrogen",14.007,"nonmetal"],[8,"O","Oxygen",15.999,"nonmetal"],
-    [9,"F","Fluorine",18.998,"halogen"],[10,"Ne","Neon",20.180,"noble"],[11,"Na","Sodium",22.990,"alkali"],[12,"Mg","Magnesium",24.305,"alkaline"],
-    [13,"Al","Aluminium",26.982,"post"],[14,"Si","Silicon",28.085,"metalloid"],[15,"P","Phosphorus",30.974,"nonmetal"],[16,"S","Sulfur",32.06,"nonmetal"],
-    [17,"Cl","Chlorine",35.45,"halogen"],[18,"Ar","Argon",39.948,"noble"],[19,"K","Potassium",39.098,"alkali"],[20,"Ca","Calcium",40.078,"alkaline"],
-    [21,"Sc","Scandium",44.956,"transition"],[22,"Ti","Titanium",47.867,"transition"],[23,"V","Vanadium",50.942,"transition"],[24,"Cr","Chromium",51.996,"transition"],
-    [25,"Mn","Manganese",54.938,"transition"],[26,"Fe","Iron",55.845,"transition"],[27,"Co","Cobalt",58.933,"transition"],[28,"Ni","Nickel",58.693,"transition"],
-    [29,"Cu","Copper",63.546,"transition"],[30,"Zn","Zinc",65.38,"transition"],[31,"Ga","Gallium",69.723,"post"],[32,"Ge","Germanium",72.630,"metalloid"],
-    [33,"As","Arsenic",74.922,"metalloid"],[34,"Se","Selenium",78.971,"nonmetal"],[35,"Br","Bromine",79.904,"halogen"],[36,"Kr","Krypton",83.798,"noble"],
-    [37,"Rb","Rubidium",85.468,"alkali"],[38,"Sr","Strontium",87.62,"alkaline"],[39,"Y","Yttrium",88.906,"transition"],[40,"Zr","Zirconium",91.224,"transition"],
-    [41,"Nb","Niobium",92.906,"transition"],[42,"Mo","Molybdenum",95.95,"transition"],[43,"Tc","Technetium",98,"transition"],[44,"Ru","Ruthenium",101.07,"transition"],
-    [45,"Rh","Rhodium",102.91,"transition"],[46,"Pd","Palladium",106.42,"transition"],[47,"Ag","Silver",107.87,"transition"],[48,"Cd","Cadmium",112.41,"transition"],
-    [49,"In","Indium",114.82,"post"],[50,"Sn","Tin",118.71,"post"],[51,"Sb","Antimony",121.76,"metalloid"],[52,"Te","Tellurium",127.60,"metalloid"],
-    [53,"I","Iodine",126.90,"halogen"],[54,"Xe","Xenon",131.29,"noble"],[55,"Cs","Caesium",132.91,"alkali"],[56,"Ba","Barium",137.33,"alkaline"],
-    [57,"La","Lanthanum",138.91,"lanthanide"],[58,"Ce","Cerium",140.12,"lanthanide"],[59,"Pr","Praseodymium",140.91,"lanthanide"],[60,"Nd","Neodymium",144.24,"lanthanide"],
-    [61,"Pm","Promethium",145,"lanthanide"],[62,"Sm","Samarium",150.36,"lanthanide"],[63,"Eu","Europium",151.96,"lanthanide"],[64,"Gd","Gadolinium",157.25,"lanthanide"],
-    [65,"Tb","Terbium",158.93,"lanthanide"],[66,"Dy","Dysprosium",162.50,"lanthanide"],[67,"Ho","Holmium",164.93,"lanthanide"],[68,"Er","Erbium",167.26,"lanthanide"],
-    [69,"Tm","Thulium",168.93,"lanthanide"],[70,"Yb","Ytterbium",173.05,"lanthanide"],[71,"Lu","Lutetium",174.97,"lanthanide"],[72,"Hf","Hafnium",178.49,"transition"],
-    [73,"Ta","Tantalum",180.95,"transition"],[74,"W","Tungsten",183.84,"transition"],[75,"Re","Rhenium",186.21,"transition"],[76,"Os","Osmium",190.23,"transition"],
-    [77,"Ir","Iridium",192.22,"transition"],[78,"Pt","Platinum",195.08,"transition"],[79,"Au","Gold",196.97,"transition"],[80,"Hg","Mercury",200.59,"transition"],
-    [81,"Tl","Thallium",204.38,"post"],[82,"Pb","Lead",207.2,"post"],[83,"Bi","Bismuth",208.98,"post"],[84,"Po","Polonium",209,"post"],
-    [85,"At","Astatine",210,"halogen"],[86,"Rn","Radon",222,"noble"],[87,"Fr","Francium",223,"alkali"],[88,"Ra","Radium",226,"alkaline"],
-    [89,"Ac","Actinium",227,"actinide"],[90,"Th","Thorium",232.04,"actinide"],[91,"Pa","Protactinium",231.04,"actinide"],[92,"U","Uranium",238.03,"actinide"],
-    [93,"Np","Neptunium",237,"actinide"],[94,"Pu","Plutonium",244,"actinide"],[95,"Am","Americium",243,"actinide"],[96,"Cm","Curium",247,"actinide"],
-    [97,"Bk","Berkelium",247,"actinide"],[98,"Cf","Californium",251,"actinide"],[99,"Es","Einsteinium",252,"actinide"],[100,"Fm","Fermium",257,"actinide"],
-    [101,"Md","Mendelevium",258,"actinide"],[102,"No","Nobelium",259,"actinide"],[103,"Lr","Lawrencium",266,"actinide"],[104,"Rf","Rutherfordium",267,"transition"],
-    [105,"Db","Dubnium",268,"transition"],[106,"Sg","Seaborgium",269,"transition"],[107,"Bh","Bohrium",270,"transition"],[108,"Hs","Hassium",269,"transition"],
-    [109,"Mt","Meitnerium",278,"transition"],[110,"Ds","Darmstadtium",281,"transition"],[111,"Rg","Roentgenium",282,"transition"],[112,"Cn","Copernicium",285,"transition"],
-    [113,"Nh","Nihonium",286,"post"],[114,"Fl","Flerovium",289,"post"],[115,"Mc","Moscovium",290,"post"],[116,"Lv","Livermorium",293,"post"],
-    [117,"Ts","Tennessine",294,"halogen"],[118,"Og","Oganesson",294,"noble"]
-  ];
-  // grid positions (col,row) on the 18-column layout
+  function shells(cfg){ var s={}; cfg.forEach(function(p){ var n=+p[0], e=+p.replace(/[^0-9]/g,"").slice(1)||+p.match(/\d+$/)[0]; s[n]=(s[n]||0)+(+p.match(/\d+$/)[0]); }); return Object.keys(s).map(function(k){return s[k]}); }
   function pos(z){
-    if(z===1) return [1,1]; if(z===2) return [18,1];
-    if(z<=4) return [z-2+1,2]; if(z<=10) return [z-10+13,2];
-    if(z<=12) return [z-12+1,3]; if(z<=18) return [z-18+13,3];
-    if(z<=36){ var r=Math.floor((z-19)/18)+4, c=(z-19)%18+1; return [c,r]; }
-    if(z<=54){ var r2=Math.floor((z-37)/18)+5, c2=(z-37)%18+1; return [c2,r2]; }
-    if(z<=56) return [z-55+1,6];
-    if(z<=71) return [z-57+4,9];
-    if(z<=86){ var r3=Math.floor((z-72)/18)+6, c3=(z-72)%18+1; return [c3,r3]; }
-    if(z<=88) return [z-87+1,7];
-    if(z<=103) return [z-89+4,10];
-    var r4=Math.floor((z-104)/18)+7, c4=(z-104)%18+1; return [c4,r4];
+    if(z===1)return[1,1]; if(z===2)return[18,1];
+    if(z<=4)return[z-2+1,2]; if(z<=10)return[z-10+13,2];
+    if(z<=12)return[z-12+1,3]; if(z<=18)return[z-18+13,3];
+    if(z<=36){var r=Math.floor((z-19)/18)+4,c=(z-19)%18+1;return[c,r]}
+    if(z<=54){var r2=Math.floor((z-37)/18)+5,c2=(z-37)%18+1;return[c2,r2]}
+    if(z<=56)return[z-55+1,6];
+    if(z<=71)return[z-57+4,9];
+    if(z<=86){var r3=Math.floor((z-72)/18)+6,c3=(z-72)%18+1;return[c3,r3]}
+    if(z<=88)return[z-87+1,7];
+    if(z<=103)return[z-89+4,10];
+    var r4=Math.floor((z-104)/18)+7,c4=(z-104)%18+1;return[c4,r4];
   }
-  var pt=$("ptable"), tiles={};
-  ELEMENTS.forEach(function(e){
+  var GASES={H:1,He:1,N:1,O:1,F:1,Ne:1,Cl:1,Ar:1,Kr:1,Xe:1,Rn:1};
+  var LIQ={Br:1,Hg:1};
+
+  var byZ={}, tiles={};
+  E.forEach(function(e){ byZ[e[0]]=e; });
+
+  /* ---------- build table ---------- */
+  var pt=$("ptable");
+  E.forEach(function(e){
     var p=pos(e[0]);
     var d=document.createElement("div");
     d.className="el cat-"+e[4];
     d.style.gridColumn=p[0]; d.style.gridRow=p[1];
-    d.innerHTML="<small>"+e[0]+"</small><b>"+e[1]+"</b><small>"+e[2]+"</small>";
-    d.addEventListener("click", function(){ selectEl(e[0]); });
+    d.innerHTML='<span class="n">'+e[0]+'</span><b>'+e[1]+'</b><small>'+e[3]+'</small>';
+    d.title=e[2];
+    d.addEventListener("click",function(){ select(e[0]); });
     pt.appendChild(d); tiles[e[0]]=d;
   });
-  function selectEl(z){
-    var e=null; for(var i=0;i<ELEMENTS.length;i++) if(ELEMENTS[i][0]===z) e=ELEMENTS[i];
-    if(!e) return;
-    Object.keys(tiles).forEach(function(k){ tiles[k].classList.remove("sel"); });
-    tiles[z].classList.add("sel");
-    $("elInfo").innerHTML = '<div class="big">'+e[1]+'</div><div style="font-size:18px;font-weight:600">'+e[2]+'</div>' +
-      '<table class="conv"><tr><td>Atomic number</td><td>'+e[0]+'</td></tr>' +
-      '<tr><td>Atomic mass</td><td>'+e[3]+' u</td></tr>' +
-      '<tr><td>Category</td><td>'+e[4]+'</td></tr></table>';
+  $("count").textContent=E.length+" elements";
+
+  /* ---------- atom canvas ---------- */
+  var cv=$("atom"), cx=cv.getContext("2d"), animId=null, curShells=[], t0=0;
+  function drawAtom(ts){
+    if(!t0) t0=ts;
+    var w=cv.width,h=cv.height,cxx=w/2,cyy=h/2;
+    cx.clearRect(0,0,w,h);
+    var maxR=Math.min(w,h)/2-14, n=curShells.length||1;
+    // nucleus
+    var g=cx.createRadialGradient(cxx,cyy,2,cxx,cyy,26);
+    g.addColorStop(0,"#7c5cff"); g.addColorStop(1,"rgba(124,92,255,.15)");
+    cx.fillStyle=g; cx.beginPath(); cx.arc(cxx,cyy,20,0,7); cx.fill();
+    for(var i=0;i<n;i++){
+      var r=maxR*(i+1)/n;
+      cx.strokeStyle="rgba(77,208,255,.28)"; cx.lineWidth=1.2;
+      cx.beginPath(); cx.arc(cxx,cyy,r,0,7); cx.stroke();
+      var ecount=curShells[i], speed=0.0005+0.00035*(n-i);
+      for(var k=0;k<ecount;k++){
+        var a=ts*speed+k*(2*Math.PI/ecount)+i;
+        var x=cxx+Math.cos(a)*r, y=cyy+Math.sin(a)*r;
+        cx.fillStyle="#4dd0ff"; cx.beginPath(); cx.arc(x,y,3.1,0,7); cx.fill();
+      }
+    }
+    animId=requestAnimationFrame(drawAtom);
   }
-  $("elSearch").addEventListener("input", function(){
+  function setAtom(z){
+    curShells=shells(config(z)); t0=0;
+    if(animId) cancelAnimationFrame(animId);
+    animId=requestAnimationFrame(drawAtom);
+  }
+
+  /* ---------- select ---------- */
+  function select(z){
+    var e=byZ[z]; if(!e) return;
+    Object.keys(tiles).forEach(function(k){tiles[k].classList.remove("sel")});
+    tiles[z].classList.add("sel");
+    setAtom(z);
+    var cfg=config(z), sh=shells(cfg), p=pos(z);
+    var group=(p[1]===9||p[1]===10)?"—":p[0], period=p[1]>8?p[1]-2:p[1];
+    var block=cfg[cfg.length-1][1];
+    var phase=GASES[e[1]]?"Gas":LIQ[e[1]]?"Liquid":"Solid";
+    var x=X[e[1]]||[];
+    function prop(k,v){ return '<div class="prop"><div class="k">'+k+'</div><div class="v">'+(v==null||v===""?"—":v)+'</div></div>'; }
+    var html='<div class="row" style="align-items:flex-end;gap:14px"><div class="bigsym">'+e[1]+'</div>'+
+      '<div><div style="font-size:18px;font-weight:600">'+e[2]+'</div><div class="muted">'+CATNAME[e[4]]+' · Z='+z+'</div></div></div>'+
+      '<div class="props">'+
+        prop("Atomic mass",e[3]+" u")+
+        prop("Electron config",cfg.join(" "))+
+        prop("Shells",sh.join(", "))+
+        prop("Group / Period",group+" / "+period)+
+        prop("Block",block+"-block")+
+        prop("Phase @ STP",phase)+
+        prop("Electronegativity",x[0]!=null?x[0]+" (Pauling)":null)+
+        prop("1st ionization",x[1]!=null?x[1]+" kJ/mol":null)+
+        prop("Density",x[2]!=null?x[2]+" g/cm³":null)+
+        prop("Melting point",x[3]!=null?x[3]+" °C":null)+
+        prop("Boiling point",x[4]!=null?x[4]+" °C":null)+
+        prop("Discovered",x[5]!=null?(x[5]+(x[6]&&x[6]!=="—"?" · "+x[6]:"")):null)+
+      '</div>'+
+      (x[7]?'<div class="muted" style="margin-top:10px">Common ions</div><div class="chips">'+x[7].split(",").map(function(s){return '<span class="chip">'+s.trim()+'</span>'}).join("")+'</div>':"")+
+      (x[8]?'<div class="muted" style="margin-top:10px">Common uses</div><div>'+x[8]+'</div>':"")+
+      (x[9]?'<div class="muted" style="margin-top:10px">Hazards</div><div class="warn">'+x[9]+'</div>':"");
+    $("elInfo").innerHTML=html;
+  }
+  select(6); // carbon by default
+
+  $("search").addEventListener("input",function(){
     var q=this.value.trim().toLowerCase(); if(!q) return;
-    var hit=null; ELEMENTS.forEach(function(e){ if(!hit && (e[1].toLowerCase()===q || e[2].toLowerCase().indexOf(q)===0 || String(e[0])===q)) hit=e; });
-    if(hit) selectEl(hit[0]);
+    var hit=null;
+    E.forEach(function(e){ if(!hit&&(e[1].toLowerCase()===q||e[2].toLowerCase().indexOf(q)===0||String(e[0])===q)) hit=e; });
+    if(hit) select(hit[0]);
   });
+
+  /* ---------- formula parser + molar mass ---------- */
+  function parseFormula(f){
+    f=String(f).replace(/\s+/g,"");
+    if(!f) throw new Error("empty");
+    var i=0;
+    function parseGroup(){
+      var counts={};
+      while(i<f.length){
+        var c=f[i];
+        if(c==="("){ i++; var sub=parseGroup(); if(f[i]!==")") throw new Error("missing )"); i++; addCounts(counts,sub,readNum()); }
+        else if(c===")"){ return counts; }
+        else if(/[A-Z]/.test(c)){ var sym=c; i++; if(f[i]&&/[a-z]/.test(f[i])){ sym+=f[i]; i++; } if(!symByName(sym)) throw new Error("unknown element "+sym); addCounts(counts,{[sym]:1},readNum()); }
+        else throw new Error("unexpected '"+c+"'");
+      }
+      return counts;
+    }
+    function readNum(){ var s=""; while(i<f.length&&/[0-9]/.test(f[i])){ s+=f[i]; i++; } return s?parseInt(s,10):1; }
+    function addCounts(dst,src,mult){ for(var k in src) dst[k]=(dst[k]||0)+src[k]*mult; }
+    var out=parseGroup(); if(i!==f.length) throw new Error("bad formula");
+    return out;
+  }
+  function symByName(s){ for(var i=0;i<E.length;i++) if(E[i][1]===s) return E[i]; return null; }
+  function massOf(sym){ var e=symByName(sym); return e?e[3]:0; }
+  $("mmGo").addEventListener("click",function(){
+    try{
+      var counts=parseFormula($("mmInput").value), total=0, rows="";
+      Object.keys(counts).forEach(function(s){ var m=counts[s]*massOf(s); total+=m; rows+="<tr><td>"+s+" × "+counts[s]+"</td><td>"+m.toFixed(3)+" g/mol</td></tr>"; });
+      $("mmOut").innerHTML="<b>"+total.toFixed(3)+" g/mol</b><table class='t' style='margin-top:8px'>"+rows+"</table>";
+    }catch(e){ $("mmOut").innerHTML='<span class="bad">Error: '+e.message+'</span>'; }
+  });
+  $("mmClear").addEventListener("click",function(){ $("mmInput").value=""; $("mmOut").innerHTML=""; });
+
+  /* ---------- equation balancer (exact rational null space) ---------- */
+  function gcd(a,b){a=Math.abs(a);b=Math.abs(b);while(b){var t=b;b=a%b;a=t}return a||1}
+  function fr(n,d){d=d==null?1:d;if(d<0){n=-n;d=-d}var g=gcd(n,d);return{n:n/g,d:d/g}}
+  function fadd(a,b){return fr(a.n*b.d+b.n*a.d,a.d*b.d)}
+  function fsub(a,b){return fr(a.n*b.d-b.n*a.d,a.d*b.d)}
+  function fmul(a,b){return fr(a.n*b.n,a.d*b.d)}
+  function fdiv(a,b){return fr(a.n*b.d,a.d*b.n)}
+  function balance(sides){
+    var species=sides.left.concat(sides.right);
+    var elems={}; species.forEach(function(s){ Object.keys(parseFormula(s)).forEach(function(k){elems[k]=1}) });
+    var ekeys=Object.keys(elems);
+    var A=ekeys.map(function(el){ return species.map(function(s,idx){ var c=(parseFormula(s)[el]||0); return fr(idx<sides.left.length?c:-c,1); }); });
+    // RREF
+    var m=A.length, n=species.length, piv=[], r=0;
+    for(var col=0;col<n&&r<m;col++){
+      var sel=-1; for(var rr=r;rr<m;rr++) if(A[rr][col].n!==0){sel=rr;break}
+      if(sel<0) continue;
+      var tmp=A[r];A[r]=A[sel];A[sel]=tmp;
+      var pv=A[r][col]; for(var cc=0;cc<n;cc++) A[r][cc]=fdiv(A[r][cc],pv);
+      for(var rr2=0;rr2<m;rr2++){ if(rr2!==r&&A[rr2][col].n!==0){ var f=A[rr2][col]; for(var cc2=0;cc2<n;cc2++) A[rr2][cc2]=fsub(A[rr2][cc2],fmul(f,A[r][cc2])); } }
+      piv.push(col); r++;
+    }
+    var free=[]; for(var c2=0;c2<n;c2++) if(piv.indexOf(c2)<0) free.push(c2);
+    if(!free.length) return null;
+    var fv=free[0], x=new Array(n);
+    x[fv]=fr(1,1);
+    for(var pi=0;pi<piv.length;pi++){ var pc=piv[pi]; x[pc]=fr(-A[pi][fv].n,A[pi][fv].d); }
+    var lcm=1; x.forEach(function(v){ if(v) lcm=lcm*v.d/gcd(lcm,v.d) });
+    var ints=x.map(function(v){ return v?Math.round(v.n*(lcm/v.d)):0 });
+    var g=0; ints.forEach(function(v){g=gcd(g,v)}); if(g) ints=ints.map(function(v){return v/g});
+    if(ints.some(function(v){return v<0})) ints=ints.map(function(v){return -v});
+    return ints;
+  }
+  function fmtSide(species,coefs,off){
+    return species.map(function(s,i){ var c=coefs[off+i]; return (c===1?"":c)+s; }).join(" + ");
+  }
+  $("eqGo").addEventListener("click",function(){
+    try{
+      var raw=$("eqInput").value;
+      var parts=raw.split(/->|=>|=|→/);
+      if(parts.length!==2) throw new Error("use  A + B -> C + D");
+      var left=parts[0].split("+").map(function(s){return s.trim()}).filter(Boolean);
+      var right=parts[1].split("+").map(function(s){return s.trim()}).filter(Boolean);
+      if(!left.length||!right.length) throw new Error("both sides need species");
+      var coefs=balance({left:left,right:right});
+      if(!coefs) throw new Error("could not balance (is it a valid reaction?)");
+      $("eqOut").innerHTML="<b>"+fmtSide(left,coefs,0)+" → "+fmtSide(right,coefs,left.length)+"</b>";
+    }catch(e){ $("eqOut").innerHTML='<span class="bad">Error: '+e.message+'</span>'; }
+  });
+  $("eqClear").addEventListener("click",function(){ $("eqInput").value=""; $("eqOut").innerHTML=""; });
+
+  /* element lookup */
+  $("lkGo").addEventListener("click",function(){
+    var q=$("lkInput").value.trim().toLowerCase(); if(!q){ return; }
+    var hit=null; E.forEach(function(e){ if(!hit&&(e[1].toLowerCase()===q||e[2].toLowerCase()===q)) hit=e; });
+    if(!hit){ $("lkOut").innerHTML='<span class="bad">not found</span>'; return; }
+    select(hit[0]);
+    document.querySelector('#nav button[data-tab="table"]').click();
+    $("lkOut").innerHTML="showing <b>"+hit[2]+"</b> in the table.";
+  });
+
+  /* ---------- worksheet ---------- */
+  var REACTIONS=[
+    {eq:"H2 + O2 -> H2O",d:"easy"},{eq:"Na + Cl2 -> NaCl",d:"easy"},{eq:"Mg + O2 -> MgO",d:"easy"},
+    {eq:"KClO3 -> KCl + O2",d:"medium"},{eq:"Fe + O2 -> Fe2O3",d:"medium"},{eq:"CaCO3 -> CaO + CO2",d:"easy"},
+    {eq:"Al + HCl -> AlCl3 + H2",d:"medium"},{eq:"CH4 + O2 -> CO2 + H2O",d:"medium"},{eq:"Na + H2O -> NaOH + H2",d:"medium"},
+    {eq:"C3H8 + O2 -> CO2 + H2O",d:"hard"},{eq:"Fe2O3 + CO -> Fe + CO2",d:"hard"},{eq:"KMnO4 + HCl -> KCl + MnCl2 + H2O + Cl2",d:"hard"},
+    {eq:"NH3 + O2 -> NO + H2O",d:"hard"},{eq:"Pb(NO3)2 + KI -> PbI2 + KNO3",d:"medium"},{eq:"Zn + HCl -> ZnCl2 + H2",d:"easy"},
+    {eq:"AgNO3 + NaCl -> AgCl + NaNO3",d:"easy"},{eq:"Cu + AgNO3 -> Cu(NO3)2 + Ag",d:"medium"},{eq:"H2SO4 + NaOH -> Na2SO4 + H2O",d:"medium"},
+    {eq:"C2H6 + O2 -> CO2 + H2O",d:"hard"},{eq:"BaCl2 + Na2SO4 -> BaSO4 + NaCl",d:"easy"}
+  ];
+  var lastWs=null;
+  function balanceEq(str){
+    var parts=str.split("->"); var left=parts[0].split("+").map(function(s){return s.trim()});
+    var right=parts[1].split("+").map(function(s){return s.trim()});
+    var c=balance({left:left,right:right}); if(!c) return null;
+    return fmtSide(left,c,0)+" → "+fmtSide(right,c,left.length);
+  }
+  $("wsGo").addEventListener("click",function(){
+    var n=parseInt($("wsN").value,10), diff=$("wsD").value;
+    var pool=REACTIONS.filter(function(r){ return diff==="easy"?r.d==="easy":diff==="medium"?r.d!=="hard":true; });
+    var pick=[]; for(var i=0;i<n;i++) pick.push(pool[Math.floor(Math.random()*pool.length)]);
+    lastWs=pick;
+    var out="NAME: ______________________     DATE: ____________\n\nBalance each equation:\n\n";
+    pick.forEach(function(r,i){ out+=(i+1)+".   "+r.eq+"\n\n"; });
+    $("wsOut").textContent=out;
+  });
+  $("wsKey").addEventListener("click",function(){
+    if(!lastWs){ toast("generate a worksheet first"); return; }
+    var out="ANSWER KEY\n\n";
+    lastWs.forEach(function(r,i){ out+=(i+1)+".   "+(balanceEq(r.eq)||r.eq+"  (?)")+"\n"; });
+    $("wsOut").textContent=out;
+  });
+  $("wsPrint").addEventListener("click",function(){ window.print(); });
 
   /* ---------- flashcards ---------- */
-  var DECK="studyhub_deck";
-  var deck=[]; try{ deck=JSON.parse(localStorage.getItem(DECK)||"[]"); }catch(e){ deck=[]; }
+  var DECK="chemlab_deck", deck=[]; try{deck=JSON.parse(localStorage.getItem(DECK)||"[]")}catch(e){deck=[]}
   var idx=0;
-  function saveDeck(){ try{ localStorage.setItem(DECK, JSON.stringify(deck)); }catch(e){} }
-  function renderCard(){
-    $("fcCount").textContent = deck.length ? (idx+1)+" / "+deck.length : "0 cards";
-    var c=deck[idx]||{f:"no cards yet — add one above", b:""};
-    $("fcQ").textContent=c.f; $("fcA").textContent=c.b;
-    $("fcCard").classList.remove("flip");
-  }
-  $("fcAdd").addEventListener("click", function(){
-    var f=$("fcFront").value.trim(), b=$("fcBack").value.trim();
-    if(!f||!b){ toast("fill both sides"); return; }
-    deck.push({f:f,b:b}); saveDeck(); idx=deck.length-1; renderCard(); $("fcFront").value=""; $("fcBack").value="";
-  });
-  $("fcReset").addEventListener("click", function(){ if(confirm("Clear all flashcards?")){ deck=[]; idx=0; saveDeck(); renderCard(); } });
-  $("fcNext").addEventListener("click", function(){ if(deck.length){ idx=(idx+1)%deck.length; renderCard(); } });
-  $("fcPrev").addEventListener("click", function(){ if(deck.length){ idx=(idx-1+deck.length)%deck.length; renderCard(); } });
-  $("fcCard").addEventListener("click", function(){ this.classList.toggle("flip"); });
+  function saveDeck(){ try{localStorage.setItem(DECK,JSON.stringify(deck))}catch(e){} }
+  function renderCard(){ $("fcCount").textContent=deck.length?(idx+1)+" / "+deck.length:"0 cards";
+    var c=deck[idx]||{f:"no cards yet",b:""}; $("fcQ").textContent=c.f; $("fcA").textContent=c.b; $("fcCard").classList.remove("flip"); }
+  $("fcAdd").addEventListener("click",function(){ var f=$("fcFront").value.trim(),b=$("fcBack").value.trim(); if(!f||!b){toast("fill both sides");return} deck.push({f:f,b:b}); saveDeck(); idx=deck.length-1; renderCard(); $("fcFront").value=""; $("fcBack").value=""; });
+  $("fcReset").addEventListener("click",function(){ if(confirm("Clear all cards?")){deck=[];idx=0;saveDeck();renderCard()} });
+  $("fcNext").addEventListener("click",function(){ if(deck.length){idx=(idx+1)%deck.length;renderCard()} });
+  $("fcPrev").addEventListener("click",function(){ if(deck.length){idx=(idx-1+deck.length)%deck.length;renderCard()} });
+  $("fcCard").addEventListener("click",function(){ this.classList.toggle("flip") });
   renderCard();
-
-  /* ---------- study timer ---------- */
-  var tLeft=25*60, tTimer=null;
-  function fmt(n){ var m=Math.floor(n/60), s=n%60; return (m<10?"0":"")+m+":"+(s<10?"0":"")+s; }
-  function renderClock(){ $("clock").textContent=fmt(tLeft); }
-  $("tmStart").addEventListener("click", function(){
-    if(tTimer) return;
-    tLeft = (parseInt($("tmMin").value,10)||25)*60;
-    tTimer=setInterval(function(){
-      tLeft--; renderClock();
-      if(tLeft<=0){ clearInterval(tTimer); tTimer=null; $("tmDone").textContent="session complete!"; toast("Time's up — take a break."); }
-    },1000);
-  });
-  $("tmPause").addEventListener("click", function(){ if(tTimer){ clearInterval(tTimer); tTimer=null; } });
-  $("tmReset").addEventListener("click", function(){ if(tTimer){ clearInterval(tTimer); tTimer=null; } tLeft=(parseInt($("tmMin").value,10)||25)*60; $("tmDone").textContent=""; renderClock(); });
-  renderClock();
 
   /* ---------- the door: type 9999 ---------- */
   var buf="";
-  document.addEventListener("keydown", function(e){
+  document.addEventListener("keydown",function(e){
     if(e.key>="0"&&e.key<="9"){ buf=(buf+e.key).slice(-4); if(buf==="9999"){ window.location.href="index.html"; } }
     else if(e.key.length===1){ buf=""; }
   });
