@@ -176,6 +176,11 @@
         <button class="btn ghost" id="labClear">Clear</button>
       </div>
       <canvas id="mol3d" width="960" height="520"></canvas>
+      <div class="row" style="margin-top:12px">
+        <input id="genInput" type="text" placeholder="generate any molecule — e.g. CH3-CH2-OH   ·   C6H6   ·   C2H6O   ·   H2SO4" style="max-width:460px" />
+        <button class="btn" id="genGo">&#9881; Generate 3D</button>
+        <span class="muted" id="genMsg"></span>
+      </div>
       <div class="muted" id="labHint">drag to rotate · scroll to zoom · pick an element, then click the canvas to place an atom · click two atoms in bond mode to connect them</div>
     </div>
     <div class="card">
@@ -689,6 +694,105 @@
   $("modeBond").addEventListener("click",function(){ mode=(mode==="bond")?"place":"bond"; pending=null; this.textContent="Bond mode: "+(mode==="bond"?"ON":"OFF"); $("modeDel").textContent="Delete mode: OFF"; });
   $("modeDel").addEventListener("click",function(){ mode=(mode==="del")?"place":"del"; pending=null; this.textContent="Delete mode: "+(mode==="del"?"ON":"OFF"); $("modeBond").textContent="Bond mode: OFF"; });
   $("labClear").addEventListener("click",function(){ clearMol(); });
+
+  /* ---------- molecule generator: structure / formula -> 3D ---------- */
+  var VAL={H:1,B:3,C:4,N:3,O:2,F:1,Cl:1,Br:1,I:1,S:2,P:3,Na:1,Mg:2,K:1,Ca:2,Li:1,Be:2,Al:3,Si:4,He:0,Ne:0,Ar:0};
+  function valenceOf(sym){ return VAL[sym]!=null?VAL[sym]:2; }
+  function elemCounts(str){
+    var out=[], i=0;
+    while(i<str.length){
+      var m=str.slice(i).match(/^([A-Z][a-z]?)(\d*)/);
+      if(!m) break;
+      out.push([m[1], m[2]?parseInt(m[2],10):1]);
+      i+=m[0].length;
+    }
+    return out;
+  }
+  function buildFromStructure(str){
+    var atoms=[], bonds=[], prevHead=null, order=1;
+    str.replace(/\s+/g,"").split(/(-|=|#)/).forEach(function(tok){
+      if(tok==="") return;
+      if(tok==="-"||tok==="="||tok==="#"){ order = tok==="-" ? 1 : (tok==="=" ? 2 : 3); return; }
+      var parts=elemCounts(tok); if(!parts.length) return;
+      var hi=0; for(var k=0;k<parts.length;k++){ if(parts[k][0]!=="H"){ hi=k; break; } }
+      var headIdx=atoms.length;
+      for(var c=0;c<parts[hi][1];c++) atoms.push({e:parts[hi][0], v:valenceOf(parts[hi][0])});
+      for(var x=1;x<parts[hi][1];x++) bonds.push([headIdx, headIdx+x, 1]);
+      for(var p=0;p<parts.length;p++){
+        if(p===hi) continue;
+        for(var n=0;n<parts[p][1];n++){ var idx=atoms.length; atoms.push({e:parts[p][0], v:valenceOf(parts[p][0])}); bonds.push([headIdx, idx, 1]); }
+      }
+      if(prevHead!==null) bonds.push([prevHead, headIdx, order]);
+      prevHead=headIdx;
+    });
+    return {atoms:atoms, bonds:bonds};
+  }
+  function buildFromFormula(f){
+    var counts={}; elemCounts(f).forEach(function(p){ counts[p[0]]=(counts[p[0]]||0)+p[1]; });
+    var heavy=[];
+    Object.keys(counts).forEach(function(e){ if(e==="H") return; for(var i=0;i<counts[e];i++) heavy.push(e); });
+    heavy.sort(function(a,b){ return (a==="C"?0:1)-(b==="C"?0:1); });
+    var atoms=[], bonds=[], i;
+    for(i=0;i<heavy.length;i++) atoms.push({e:heavy[i], v:valenceOf(heavy[i])});
+    for(i=1;i<heavy.length;i++) bonds.push([i-1,i,1]);
+    var hN=counts.H||0;
+    for(i=0;i<hN;i++) atoms.push({e:"H", v:1});
+    var hptr=atoms.length-hN;
+    function degree(a){ var d=0; bonds.forEach(function(b){ if(b[0]===a||b[1]===a) d+=b[2]; }); return d; }
+    for(var a2=0; a2<atoms.length-hN && hptr<atoms.length; a2++){
+      var need=atoms[a2].v-degree(a2);
+      while(need>0 && hptr<atoms.length){ bonds.push([a2,hptr,1]); hptr++; need--; }
+    }
+    while(hptr<atoms.length){ bonds.push([0,hptr,1]); hptr++; }
+    return {atoms:atoms, bonds:bonds};
+  }
+  function embed3D(g){
+    var n=g.atoms.length, pos=[], i, k;
+    for(i=0;i<n;i++) pos.push([(Math.random()-0.5)*2.5,(Math.random()-0.5)*2.5,(Math.random()-0.5)*2.5]);
+    for(var step=0; step<900; step++){
+      var force=[]; for(i=0;i<n;i++) force.push([0,0,0]);
+      g.bonds.forEach(function(b){
+        var a=b[0],c=b[1];
+        var dx=pos[a][0]-pos[c][0], dy=pos[a][1]-pos[c][1], dz=pos[a][2]-pos[c][2];
+        var d=Math.sqrt(dx*dx+dy*dy+dz*dz)||0.01;
+        var target=(b[2]===2?1.32:(b[2]===3?1.18:1.5));
+        var f=(d-target)*0.55;
+        force[a][0]-=dx/d*f; force[a][1]-=dy/d*f; force[a][2]-=dz/d*f;
+        force[c][0]+=dx/d*f; force[c][1]+=dy/d*f; force[c][2]+=dz/d*f;
+      });
+      for(i=0;i<n;i++) for(var j=i+1;j<n;j++){
+        var ex=pos[i][0]-pos[j][0], ey=pos[i][1]-pos[j][1], ez=pos[i][2]-pos[j][2];
+        var e2=ex*ex+ey*ey+ez*ez+0.05, ed=Math.sqrt(e2), ef=1.4/e2;
+        force[i][0]+=ex/ed*ef; force[i][1]+=ey/ed*ef; force[i][2]+=ez/ed*ef;
+        force[j][0]-=ex/ed*ef; force[j][1]-=ey/ed*ef; force[j][2]-=ez/ed*ef;
+      }
+      for(i=0;i<n;i++) for(k=0;k<3;k++) pos[i][k]+=force[i][k]*0.05;
+    }
+    // centre
+    var cx=0,cy=0,cz=0; pos.forEach(function(p){cx+=p[0];cy+=p[1];cz+=p[2]}); cx/=n;cy/=n;cz/=n;
+    pos.forEach(function(p){p[0]-=cx;p[1]-=cy;p[2]-=cz});
+    return pos;
+  }
+  $("genGo").addEventListener("click",function(){
+    var raw=$("genInput").value.trim();
+    if(!raw){ $("genMsg").textContent="type something first"; return; }
+    try{
+      var g = /[-=#]/.test(raw) ? buildFromStructure(raw) : buildFromFormula(raw);
+      if(!g.atoms.length){ $("genMsg").textContent="couldn't parse that"; return; }
+      if(g.atoms.length>60){ $("genMsg").textContent="too many atoms ("+g.atoms.length+")"; return; }
+      var pos=embed3D(g);
+      atoms=g.atoms.map(function(a,i){ return {e:a.e, p:pos[i]}; });
+      bonds=g.bonds.map(function(b){ return [b[0],b[1]]; });
+      pending=null;
+      // fit zoom to size
+      var mx=0; pos.forEach(function(p){ mx=Math.max(mx,Math.abs(p[0]),Math.abs(p[1]),Math.abs(p[2])); });
+      scale=Math.max(45, Math.min(150, 190/(mx+1.4)));
+      updateInfo();
+      $("genMsg").textContent="built "+g.atoms.length+" atoms, "+g.bonds.length+" bonds";
+    }catch(e){ $("genMsg").textContent="error: "+e.message; }
+  });
+  $("genInput").addEventListener("keydown",function(e){ if(e.key==="Enter") $("genGo").click(); });
+
   draw();
 
   /* ---------- orbital viewer ---------- */
