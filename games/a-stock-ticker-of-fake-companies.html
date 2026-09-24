@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title> Fake Stock Ticker </title>
+    <style>
+        body { font-family: monospace; background: #0f0f0f; color: #00ffcc; text-align: center; padding: 20px; }
+        #ticker { white-space: nowrap; overflow: hidden; height: 30px; margin: 20px auto; }
+        .company { display: inline-block; margin-right: 10px; }
+        .company span { font-weight: bold; }
+        .company .price { color: #00ff00; }
+    </style>
+</head>
+<body>
+    <h1> 📈 Fake Stock Ticker </h1>
+    <p> Hover to see price changes! </p>
+    <div id="ticker"></div>
+
+    <script>
+        const ticker = document.getElementById('ticker');
+        const companies = Array.from({length: 20}, (_, i) => ({
+            name: `BumbleBee ${i+1} Inc.`,
+            price: (Math.random() * 100).toFixed(2)
+        }));
+
+        function updatePrices() {
+            companies.forEach(c => {
+                c.price = (parseFloat(c.price) + (Math.random() - 0.5) * 2).toFixed(2);
+                c.price = Math.max(0, Math.min(200, parseFloat(c.price)));
+            });
+        }
+
+        function renderTicker() {
+            ticker.innerHTML = companies.map(c => 
+                `<div class="company">
+                    <span>${c.name}</span>
+                    <span class="price">$${c.price}</span>
+                </div>`
+            ).join('');
+        }
+
+        // Initial render
+        renderTicker();
+        setInterval(() => {
+            updatePrices();
+            renderTicker();
+        }, 1000);
+
+        // Optional sound
+        let audioCtx;
+        function playSound() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                audioCtx.resume();
+            }
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.frequency.value = 440; // A note
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.5);
+            gainNode.gain.value = 0.1;
+        }
+
+        // User interaction
+        document.addEventListener('pointerdown', playSound);
+        document.addEventListener('keydown', playSound);
+    </script>
+</body>
+</html>
