@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Build everything.html</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; background: radial-gradient(circle at 50% 0%, #101528 0%, #05060d 60%); color: #dfe4f2; font-family: 'Courier New', monospace; }
+  header { text-align: center; padding: 40px 20px 10px; }
+  h1 { margin: 0; font-size: 30px; letter-spacing: 4px; color: #2ecc40; text-shadow: 0 0 18px rgba(46,204,64,.45); }
+  header p { color: #6b7390; font-size: 13px; margin: 10px 0 0; }
+  a.back { color: #2ecc40; text-decoration: none; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 16px 20px 80px; }
+  .bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+  button { font-family: inherit; font-size: 13px; cursor: pointer; border-radius: 6px; padding: 12px 18px; border: 1px solid #1f5f2a; background: transparent; color: #2ecc40; }
+  button.primary { background: #2ecc40; color: #05060d; border: none; }
+  button.primary:hover { background: #4de355; }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { margin-top: 14px; font-size: 13px; color: #9aa0b0; }
+  label { margin-right: 16px; }
+  .log { margin-top: 18px; background: #08100a; border: 1px solid #1e3320; border-radius: 8px; padding: 12px; font-size: 12px; color: #9fe6a8; max-height: 340px; overflow: auto; white-space: pre-wrap; }
+  .note { font-size: 12px; color: #6b7390; margin-top: 18px; line-height: 1.7; }
+  a.dl { display: inline-block; margin-top: 14px; padding: 12px 20px; border-radius: 6px; background: #2ecc40; color: #05060d; text-decoration: none; font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>BUILD EVERYTHING.HTML</h1>
+  <p>Pack the whole site &mdash; every page, game and drop &mdash; into ONE offline file. <a class="back" href="index.html">back</a></p>
+</header>
+<div class="wrap">
+  <div class="bar">
+    <button id="go" class="primary">&#9881; BUILD</button>
+    <button id="stop" disabled>&#9632; STOP</button>
+  </div>
+  <div class="row">
+    <label><input type="checkbox" id="incBuiltins" checked /> built-in pages</label>
+    <label><input type="checkbox" id="incGames" checked /> forge games + uploads</label>
+    <label><input type="checkbox" id="incDrops" checked /> daily drops</label>
+    <label><input type="checkbox" id="incBW" checked /> bill wurtz data</label>
+  </div>
+  <div class="log" id="log">ready. press BUILD.</div>
+  <div id="result"></div>
+  <div class="note">
+    This runs entirely in your browser: it fetches each page from this site (the local server, or the published
+    site) and stitches them into a single self-contained <b>everything.html</b> you can save and open anywhere,
+    offline. Nothing is uploaded.
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+  var LOG = $("log"), stopped = false;
+
+  function log(s){ LOG.textContent += "\n" + s; LOG.scrollTop = LOG.scrollHeight; }
+  function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
+  function js(o){ return JSON.stringify(o).replace(/<\//g, "<\\/"); }
+  function size(n){ return n < 1048576 ? (n/1024).toFixed(0) + " KB" : (n/1048576).toFixed(2) + " MB"; }
+
+  async function getText(url){
+    var r = await fetch(url, { cache: "no-store" });
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    return await r.text();
+  }
+  async function getJSON(url, fallback){
+    try { return JSON.parse(await getText(url)); } catch(e){ return fallback; }
+  }
+
+  var BUILTINS = [
+    ["gloop-escape.html", "Gloop's Great Escape", "Help Gloop the slime escape the enemy horde."],
+    ["bot-arena.html", "Bot Arena", "Fighting bots with a real ML layer."],
+    ["browser.html", "Browser", "A proxy browser with an ad blocker (needs the local server)."],
+    ["youtube.html", "YouTube Player", "Plays a video/playlist (needs the local server)."],
+    ["youtubers.html", "YouTubers", "Browse channels' latest uploads (needs the local server)."],
+    ["billwurtz.html", "Bill Wurtz Sentence Machine", "Type a sentence, hear it stitched from bill wurtz clips."],
+    ["billwurtz-portal.html", "Bill Wurtz Portal", "Every bill wurtz section plus his whole song list."],
+    ["audio-test.html", "Audio Test", "Diagnostic page."]
+  ];
+
+  function boot(pages, meta, games, drops, bugs){
+    return "<script>\n(function(){\n" +
+      "  var PAGES = " + js(pages) + ";\n" +
+      "  var META = " + js(meta) + ";\n" +
+      "  var GAMES = " + js(games) + ";\n" +
+      "  var DROPS = " + js(drops) + ";\n" +
+      "  var BUGS = " + js(bugs) + ";\n" +
+      "  var blobs = {};\n" +
+      "  function blobUrl(k){ if(!blobs[k]) blobs[k] = URL.createObjectURL(new Blob([PAGES[k]], { type:'text/html' })); return blobs[k]; }\n" +
+      "  function resp(o){ var b=JSON.stringify(o); if(typeof Response!=='undefined') return new Response(b,{status:200,headers:{'Content-Type':'application/json'}}); return { ok:true, status:200, json:function(){ return Promise.resolve(JSON.parse(b)); }, text:function(){ return Promise.resolve(b); } }; }\n" +
+      "  var _f = window.fetch ? window.fetch.bind(window) : null;\n" +
+      "  if(_f){ window.fetch = function(i, init){\n" +
+      "    var u = (typeof i === 'string') ? i : (i && i.url) || ''; var m = u.split('?')[0];\n" +
+      "    if(/\\/api\\/games$|games-index\\.json$/.test(m)) return Promise.resolve(resp({ games: GAMES }));\n" +
+      "    if(/drops\\.json$/.test(m)) return Promise.resolve(resp(DROPS));\n" +
+      "    if(/bugs\\.json$/.test(m)) return Promise.resolve(resp(BUGS));\n" +
+      "    return _f(i, init);\n" +
+      "  }; }\n" +
+      "  function openPage(k){\n" +
+      "    if(!PAGES[k]) return;\n" +
+      "    var v=document.getElementById('viewer'), f=document.getElementById('frame'), t=document.getElementById('vtitle'), o=document.getElementById('vopen');\n" +
+      "    var u=blobUrl(k);\n" +
+      "    f.src=u; t.textContent=(META[k]&&META[k].title)||k; o.href=u;\n" +
+      "    v.classList.add('open'); document.body.style.overflow='hidden';\n" +
+      "  }\n" +
+      "  document.addEventListener('click', function(e){\n" +
+      "    var a = e.target && e.target.closest ? e.target.closest('a.card') : null; if(!a) return;\n" +
+      "    var h = a.getAttribute('href') || ''; var k = h.replace(/^\\.\\//,'');\n" +
+      "    if(PAGES[k]){ e.preventDefault(); e.stopPropagation(); openPage(k); }\n" +
+      "  }, true);\n" +
+      "})();\n<\/script>";
+  }
+
+  async function build(){
+    stopped = false;
+    $("go").disabled = true; $("stop").disabled = false; $("result").innerHTML = "";
+    LOG.textContent = "building…";
+    var pages = {}, meta = {}, games = [], drops = [], bugs = [];
+    try {
+      LOG.textContent = "fetching the site shell (index.html)…";
+      var shell = await getText("index.html");
+
+      if($("incGames").checked){
+        var list = await getJSON("/api/games", null);
+        if(!list) list = await getJSON("games-index.json", { games: [] });
+        var arr = (list && list.games) || [];
+        for(var i=0;i<arr.length;i++){
+          if(stopped) break;
+          var g = arr[i];
+          try {
+            var html = await getText(g.url);
+            pages[g.url] = html;
+            meta[g.url] = { title: g.title, description: g.description || "" };
+            games.push({ name: g.name, url: g.url, source: g.source, title: g.title, description: g.description || "" });
+            log("+ " + g.url + " (" + size(html.length) + ")");
+          } catch(e){ log("! skipped " + g.url + ": " + e.message); }
+        }
+      }
+
+      if($("incBuiltins").checked){
+        for(var b=0;b<BUILTINS.length;b++){
+          if(stopped) break;
+          var u = BUILTINS[b][0];
+          try {
+            var h = await getText(u);
+            pages[u] = h;
+            meta[u] = { title: BUILTINS[b][1], description: BUILTINS[b][2] };
+            log("+ " + u + " (" + size(h.length) + ")");
+          } catch(e){ log("! skipped " + u + ": " + e.message); }
+        }
+      }
+
+      if($("incDrops").checked){
+        drops = await getJSON("drops.json", []);
+        for(var d=0; d<drops.length; d++){
+          if(stopped) break;
+          try {
+            var dh = await getText(drops[d].file);
+            pages[drops[d].file] = dh;
+            meta[drops[d].file] = { title: drops[d].title, description: drops[d].description || "" };
+            log("+ " + drops[d].file + " (" + size(dh.length) + ")");
+          } catch(e){ log("! skipped " + drops[d].file + ": " + e.message); }
+        }
+      }
+      bugs = await getJSON("bugs.json", []);
+
+      if($("incBW").checked && pages["billwurtz.html"]){
+        var songs = await getJSON("billwurtz-songs.json", []);
+        var words = await getJSON("billwurtz-words.json", []);
+        var inject = "<script>window.__BW_SONGS__=" + js(songs) + ";window.__BW_WORDS__=" + js(words) +
+          ";(function(){var _f=window.fetch;window.fetch=function(i,init){var u=(typeof i==='string')?i:(i&&i.url)||'';" +
+          "if(/billwurtz-songs\\.json/.test(u))return Promise.resolve(new Response(JSON.stringify(window.__BW_SONGS__),{headers:{'Content-Type':'application/json'}}));" +
+          "if(/billwurtz-words\\.json/.test(u))return Promise.resolve(new Response(JSON.stringify(window.__BW_WORDS__),{headers:{'Content-Type':'application/json'}}));" +
+          "return _f.apply(window,arguments);};})();<\/script>";
+        pages["billwurtz.html"] = pages["billwurtz.html"].replace(/<body([^>]*)>/i, function(m){ return m + inject; });
+        log("+ embedded bill wurtz data");
+      }
+
+      if(stopped){ log("stopped."); $("go").disabled=false; $("stop").disabled=true; return; }
+
+      var out = shell
+        .replace(/<body([^>]*)>/i, function(m){ return m + "\n" + boot(pages, meta, games, drops, bugs); })
+        .replace(/<title>([\s\S]*?)<\/title>/i, "<title>My Games — everything (single file)</title>");
+
+      var blob = new Blob([out], { type: "text/html" });
+      var url = URL.createObjectURL(blob);
+      $("result").innerHTML = '<a class="dl" download="everything.html" href="' + url + '">&#11015; DOWNLOAD everything.html (' + size(blob.size) + ')</a>';
+      log("\ndone: " + Object.keys(pages).length + " pages, " + games.length + " games, " + drops.length + " drops → " + size(blob.size));
+      log("click the download button above.");
+    } catch(e){
+      log("ERROR: " + e.message);
+    }
+    $("go").disabled = false; $("stop").disabled = true;
+  }
+
+  $("go").addEventListener("click", build);
+  $("stop").addEventListener("click", function(){ stopped = true; });
+})();
+</script>
+</body>
+</html>
