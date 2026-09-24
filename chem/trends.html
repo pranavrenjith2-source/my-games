@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Periodic Trends — ChemLab</title>
+<link rel="stylesheet" href="chem.css">
+</head>
+<body>
+<div id="shell"></div>
+<main>
+  <div class="card">
+    <h2>Periodic Trends</h2>
+    <div class="row">
+      <select id="trProp" style="max-width:280px">
+        <option value="mass">Atomic mass vs atomic number</option>
+        <option value="en">Electronegativity vs atomic number</option>
+        <option value="ion">1st ionization energy vs atomic number</option>
+        <option value="shell">Outer-shell electrons vs atomic number</option>
+      </select>
+    </div>
+    <canvas id="trendCv" width="960" height="440"></canvas>
+    <div class="muted" id="trNote"></div>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+<script src="chem.js"></script>
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id)};
+  var tc=$("trendCv"), tctx=tc.getContext("2d");
+  function drawTrends(){
+    var prop=$("trProp").value, data=[];
+    CHEM.E.forEach(function(e){
+      var z=e[0], sym=e[1], v=null;
+      if(prop==="mass") v=e[3];
+      else if(prop==="en"){ var x=CHEM.X[sym]; v=(x&&x[0]!=null)?x[0]:null; }
+      else if(prop==="ion"){ var x2=CHEM.X[sym]; v=(x2&&x2[1]!=null)?x2[1]:null; }
+      else if(prop==="shell"){ v=CHEM.shells(CHEM.config(z)).slice(-1)[0]||null; }
+      if(v!=null) data.push([z,v]);
+    });
+    var W=tc.width,H=tc.height,pad=46;
+    tctx.clearRect(0,0,W,H);
+    tctx.strokeStyle="#20304d"; tctx.lineWidth=1;
+    tctx.beginPath(); tctx.moveTo(pad,H-pad); tctx.lineTo(W-pad,H-pad); tctx.moveTo(pad,pad); tctx.lineTo(pad,H-pad); tctx.stroke();
+    if(!data.length){ tctx.fillStyle="#8fa0bd"; tctx.font="14px sans-serif"; tctx.fillText("no data",pad+10,H/2); $("trNote").textContent=""; return; }
+    var xs=data.map(function(d){return d[0]}), ys=data.map(function(d){return d[1]});
+    var x0=Math.min.apply(null,xs), x1=Math.max.apply(null,xs), y0=Math.min.apply(null,ys), y1=Math.max.apply(null,ys);
+    var X2=function(x){ return pad+(x-x0)/(x1-x0||1)*(W-2*pad); }, Y2=function(y){ return H-pad-(y-y0)/(y1-y0||1)*(H-2*pad); };
+    tctx.fillStyle="#8fa0bd"; tctx.font="11px sans-serif";
+    for(var g=0;g<=5;g++){ var yy=y0+(y1-y0)*g/5; tctx.fillText((Math.round(yy*100)/100).toString(),6,Y2(yy)+3); }
+    tctx.strokeStyle="#4dd0ff"; tctx.lineWidth=2; tctx.beginPath();
+    data.forEach(function(d,i){ var px=X2(d[0]),py=Y2(d[1]); if(i===0) tctx.moveTo(px,py); else tctx.lineTo(px,py); });
+    tctx.stroke();
+    tctx.fillStyle="#7c5cff";
+    data.forEach(function(d){ tctx.beginPath(); tctx.arc(X2(d[0]),Y2(d[1]),3,0,7); tctx.fill(); });
+    $("trNote").textContent={mass:"Atomic mass increases across the table (protons + neutrons).",
+      en:"Electronegativity generally rises across a period and falls down a group.",
+      ion:"Ionization energy rises across a period and falls down a group.",
+      shell:"Outer-shell electrons repeat every period."}[prop]||"";
+  }
+  $("trProp").addEventListener("change",drawTrends);
+  drawTrends();
+  window.addEventListener("resize",drawTrends);
+  CHEM.mount("trends");
+})();
+</script>
+</body>
+</html>

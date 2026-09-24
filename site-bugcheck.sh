@@ -33,6 +33,10 @@ done
 for f in drops/*.html; do
   [ -f "$f" ] && FILES+=("$f")
 done
+# the ChemLab subsite
+for f in chem/*.html; do
+  [ -f "$f" ] && FILES+=("$f")
+done
 # forge-created games ONLY (uploads are deliberately excluded)
 if [ -f "$MANIFEST" ]; then
   while IFS= read -r name; do

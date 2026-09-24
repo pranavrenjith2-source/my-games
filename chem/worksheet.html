@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Worksheet Studio — ChemLab</title>
+<link rel="stylesheet" href="chem.css">
+</head>
+<body>
+<div id="shell"></div>
+<main>
+  <div class="card">
+    <h2>Worksheet Studio</h2>
+    <div class="grid2">
+      <div><div class="muted">number of questions</div><select id="wsN"><option>5</option><option selected>10</option><option>15</option><option>20</option></select></div>
+      <div><div class="muted">difficulty</div><select id="wsD"><option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option></select></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn" id="wsGo">Generate Worksheet</button>
+      <button class="btn ghost" id="wsKey">Show Answer Key</button>
+      <button class="btn ghost" id="wsPrint">Print</button>
+    </div>
+    <div class="ws" id="wsOut">Click “Generate Worksheet” to create practice problems.</div>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+<script src="chem.js"></script>
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id)};
+  var last=null;
+  $("wsGo").addEventListener("click",function(){
+    var n=parseInt($("wsN").value,10), diff=$("wsD").value;
+    var pool=CHEM.REACTIONS.filter(function(r){ return diff==="easy"?r.d==="easy":diff==="medium"?r.d!=="hard":true; });
+    var pick=[]; for(var i=0;i<n;i++) pick.push(pool[Math.floor(Math.random()*pool.length)]);
+    last=pick;
+    var out="NAME: ______________________     DATE: ____________\n\nBalance each equation:\n\n";
+    pick.forEach(function(r,i){ out+=(i+1)+".   "+r.eq+"\n\n"; });
+    $("wsOut").textContent=out;
+  });
+  $("wsKey").addEventListener("click",function(){
+    if(!last){ CHEM.toast("generate a worksheet first"); return; }
+    var out="ANSWER KEY\n\n";
+    last.forEach(function(r,i){ out+=(i+1)+".   "+(CHEM.balanceEq(r.eq)||r.eq+"  (?)")+"\n"; });
+    $("wsOut").textContent=out;
+  });
+  $("wsPrint").addEventListener("click",function(){ window.print(); });
+  CHEM.mount("worksheet");
+})();
+</script>
+</body>
+</html>

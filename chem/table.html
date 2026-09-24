@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Periodic Table — ChemLab</title>
+<link rel="stylesheet" href="chem.css">
+</head>
+<body>
+<div id="shell"></div>
+<main>
+  <div class="card">
+    <div class="row" style="margin-bottom:10px">
+      <input id="search" type="text" placeholder="search by name, symbol or number…" style="max-width:380px" />
+      <span class="muted" id="count"></span>
+    </div>
+    <div class="ptwrap"><div class="ptable" id="ptable"></div></div>
+    <div class="legend">
+      <span><i class="cat-alkali"></i>alkali metal</span><span><i class="cat-alkaline"></i>alkaline earth</span>
+      <span><i class="cat-transition"></i>transition metal</span><span><i class="cat-post"></i>post-transition</span>
+      <span><i class="cat-metalloid"></i>metalloid</span><span><i class="cat-nonmetal"></i>nonmetal</span>
+      <span><i class="cat-halogen"></i>halogen</span><span><i class="cat-noble"></i>noble gas</span>
+      <span><i class="cat-lanthanide"></i>lanthanide</span><span><i class="cat-actinide"></i>actinide</span>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Element</h2>
+    <div class="detail">
+      <div><canvas id="atom" width="460" height="460"></canvas><div class="muted" style="text-align:center;margin-top:6px">electron shells</div></div>
+      <div id="elInfo"><div class="muted">click an element above.</div></div>
+    </div>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+<script src="chem.js"></script>
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id)};
+  var E=CHEM.E, X=CHEM.X, tiles={};
+  var pt=$("ptable");
+  E.forEach(function(e){
+    var p=CHEM.pos(e[0]);
+    var d=document.createElement("div");
+    d.className="el cat-"+e[4];
+    d.style.gridColumn=p[0]; d.style.gridRow=p[1];
+    d.innerHTML='<span class="n">'+e[0]+'</span><b>'+e[1]+'</b><small>'+e[3]+'</small>';
+    d.title=e[2];
+    d.addEventListener("click",function(){ select(e[0]); });
+    pt.appendChild(d); tiles[e[0]]=d;
+  });
+  $("count").textContent=E.length+" elements";
+
+  var cv=$("atom"), cx=cv.getContext("2d"), animId=null, curShells=[], t0=0;
+  function drawAtom(ts){
+    if(!t0) t0=ts;
+    var w=cv.width,h=cv.height,cxx=w/2,cyy=h/2;
+    cx.clearRect(0,0,w,h);
+    var maxR=Math.min(w,h)/2-14, n=curShells.length||1;
+    var g=cx.createRadialGradient(cxx,cyy,2,cxx,cyy,26);
+    g.addColorStop(0,"#7c5cff"); g.addColorStop(1,"rgba(124,92,255,.15)");
+    cx.fillStyle=g; cx.beginPath(); cx.arc(cxx,cyy,20,0,7); cx.fill();
+    for(var i=0;i<n;i++){
+      var r=maxR*(i+1)/n;
+      cx.strokeStyle="rgba(77,208,255,.28)"; cx.lineWidth=1.2;
+      cx.beginPath(); cx.arc(cxx,cyy,r,0,7); cx.stroke();
+      var ec=curShells[i], sp=0.0005+0.00035*(n-i);
+      for(var k=0;k<ec;k++){ var a=ts*sp+k*(2*Math.PI/ec)+i; cx.fillStyle="#4dd0ff"; cx.beginPath(); cx.arc(cxx+Math.cos(a)*r,cyy+Math.sin(a)*r,3.1,0,7); cx.fill(); }
+    }
+    animId=requestAnimationFrame(drawAtom);
+  }
+  function setAtom(z){ curShells=CHEM.shells(CHEM.config(z)); t0=0; if(animId) cancelAnimationFrame(animId); animId=requestAnimationFrame(drawAtom); }
+
+  function select(z){
+    var e=CHEM.byZ(z); if(!e) return;
+    Object.keys(tiles).forEach(function(k){tiles[k].classList.remove("sel")});
+    tiles[z].classList.add("sel");
+    setAtom(z);
+    var cfg=CHEM.config(z), sh=CHEM.shells(cfg), p=CHEM.pos(z);
+    var group=(p[1]===9||p[1]===10)?"—":p[0], period=p[1]>8?p[1]-2:p[1];
+    var x=X[e[1]]||[];
+    function prop(k,v){ return '<div class="prop"><div class="k">'+k+'</div><div class="v">'+(v==null||v===""?"—":v)+'</div></div>'; }
+    $("elInfo").innerHTML='<div class="row" style="align-items:flex-end;gap:14px"><div class="bigsym">'+e[1]+'</div>'+
+      '<div><div style="font-size:18px;font-weight:600">'+e[2]+'</div><div class="muted">'+CHEM.CATNAME[e[4]]+' · Z='+z+'</div></div></div>'+
+      '<div class="props">'+
+      prop("Atomic mass",e[3]+" u")+prop("Electron config",cfg.join(" "))+prop("Shells",sh.join(", "))+
+      prop("Group / Period",group+" / "+period)+prop("Block",cfg[cfg.length-1][1]+"-block")+prop("Phase @ STP",CHEM.phase(e[1]))+
+      prop("Electronegativity",x[0]!=null?x[0]+" (Pauling)":null)+prop("1st ionization",x[1]!=null?x[1]+" kJ/mol":null)+
+      prop("Density",x[2]!=null?x[2]+" g/cm³":null)+prop("Melting point",x[3]!=null?x[3]+" °C":null)+
+      prop("Boiling point",x[4]!=null?x[4]+" °C":null)+prop("Discovered",x[5]!=null?(x[5]+(x[6]&&x[6]!=="—"?" · "+x[6]:"")):null)+
+      '</div>'+
+      (x[7]?'<div class="muted" style="margin-top:10px">Common ions</div><div class="chips">'+x[7].split(",").map(function(s){return '<span class="chip">'+s.trim()+'</span>'}).join("")+'</div>':"")+
+      (x[8]?'<div class="muted" style="margin-top:10px">Common uses</div><div>'+x[8]+'</div>':"")+
+      (x[9]?'<div class="muted" style="margin-top:10px">Hazards</div><div class="warn">'+x[9]+'</div>':"");
+  }
+  select(6);
+  $("search").addEventListener("input",function(){
+    var q=this.value.trim().toLowerCase(); if(!q) return;
+    var hit=null; E.forEach(function(e){ if(!hit&&(e[1].toLowerCase()===q||e[2].toLowerCase().indexOf(q)===0||String(e[0])===q)) hit=e; });
+    if(hit) select(hit[0]);
+  });
+  CHEM.mount("table");
+})();
+</script>
+</body>
+</html>

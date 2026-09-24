@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Lab — ChemLab</title>
+<link rel="stylesheet" href="chem.css">
+</head>
+<body>
+<div id="shell"></div>
+<main>
+  <div class="card">
+    <h2>3D Molecule Lab</h2>
+    <div class="row">
+      <select id="molPreset" style="max-width:240px"></select>
+      <button class="btn ghost" id="labAuto">Auto-rotate: ON</button>
+      <button class="btn ghost" id="labReset">Reset view</button>
+      <span class="muted" id="labInfo"></span>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <span class="muted">build:</span><span id="palette" class="chips"></span>
+      <button class="btn ghost" id="modeBond">Bond mode: OFF</button>
+      <button class="btn ghost" id="modeDel">Delete mode: OFF</button>
+      <button class="btn ghost" id="labClear">Clear</button>
+    </div>
+    <canvas id="mol3d" width="960" height="520"></canvas>
+    <div class="row" style="margin-top:12px">
+      <input id="genInput" type="text" placeholder="generate any molecule — CH3-CH2-OH · C6H6 · C2H6O · H2SO4" style="max-width:460px" />
+      <button class="btn" id="genGo">&#9881; Generate 3D</button>
+      <span class="muted" id="genMsg"></span>
+    </div>
+    <div class="muted">drag to rotate · scroll to zoom · pick an element then click to place · click two atoms in bond mode to connect them</div>
+  </div>
+  <div class="card">
+    <h2>Orbital Shapes (s · p · d)</h2>
+    <div class="row">
+      <select id="orbSel" style="max-width:180px"><option value="s">s — sphere</option><option value="p" selected>p — dumbbell</option><option value="d">d — clover</option></select>
+      <button class="btn ghost" id="orbAuto">Auto-rotate: ON</button>
+      <span class="muted">point cloud of the electron probability density</span>
+    </div>
+    <canvas id="orb3d" width="960" height="420"></canvas>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+<script src="chem.js"></script>
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id)};
+  var COLORS={H:"#e8eefb",He:"#d9ffff",Li:"#cc80ff",Be:"#c2ff00",B:"#ffb5b5",C:"#5b5b66",N:"#4a6cff",O:"#ff4d4d",F:"#8cff8c",Ne:"#b3e3f5",Na:"#ab5cf2",Mg:"#8aff00",Al:"#bfa6a6",Si:"#f0c8a0",P:"#ff8000",S:"#ffd12a",Cl:"#3ce03c",Ar:"#80d1e3",K:"#8f40d4",Ca:"#3dff00",Ti:"#bfc2c7",Cr:"#8a99c7",Mn:"#9c7ac7",Fe:"#e06633",Co:"#f090a0",Ni:"#50d050",Cu:"#c88033",Zn:"#7d80b0",Br:"#a62929",Ag:"#c0c0c0",I:"#940094",Au:"#ffd123",Hg:"#b8b8d0",Pb:"#575961",U:"#008fff"};
+  var RAD={H:0.30,He:0.28,Li:0.48,Be:0.42,B:0.40,C:0.42,N:0.40,O:0.38,F:0.34,Ne:0.36,Na:0.55,Mg:0.50,Al:0.48,Si:0.44,P:0.44,S:0.44,Cl:0.48,Ar:0.40,K:0.62,Ca:0.58,Ti:0.48,Cr:0.46,Mn:0.46,Fe:0.46,Co:0.46,Ni:0.46,Cu:0.46,Zn:0.45,Br:0.48,Ag:0.48,I:0.50,Au:0.46,Hg:0.48,Pb:0.50,U:0.50};
+  function color(s){ return COLORS[s]||"#9fb3d1"; } function radius(s){ return RAD[s]||0.42; }
+
+  var cv=$("mol3d"), ctx=cv.getContext("2d");
+  var rot={x:-0.45,y:0.7}, scale=95, auto=true, drag=null;
+  var atoms=[], bonds=[], mode="place", pending=null, picked="O";
+  function rotPoint(p){
+    var cy=Math.cos(rot.y),sy=Math.sin(rot.y),cx=Math.cos(rot.x),sx=Math.sin(rot.x);
+    var x1=p[0]*cy+p[2]*sy, z1=-p[0]*sy+p[2]*cy;
+    var y1=p[1]*cx-z1*sx, z2=p[1]*sx+z1*cx, f=7/(7+z2);
+    return {x:cv.width/2+x1*f*scale, y:cv.height/2+y1*f*scale, z:z2, f:f};
+  }
+  function unproject(px,py){
+    var rx=rot.x,ry=rot.y;
+    var x2=(px-cv.width/2)/scale, y2=(py-cv.height/2)/scale;
+    var y1=y2*Math.cos(rx), z1=-y2*Math.sin(rx);
+    return [x2*Math.cos(ry)-z1*Math.sin(ry), y1, x2*Math.sin(ry)+z1*Math.cos(ry)];
+  }
+  function loadMol(name){ var m=CHEM.MOL[name]; if(!m) return; atoms=m.a.map(function(a){return {e:a[0],p:[a[1],a[2],a[3]]}}); bonds=m.b.map(function(b){return [b[0],b[1]]}); pending=null; info(); }
+  function info(){ $("labInfo").textContent=atoms.length+" atoms · "+bonds.length+" bonds"; }
+  function draw(){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    ctx.strokeStyle="rgba(77,208,255,.06)"; ctx.lineWidth=1;
+    for(var gx=0;gx<cv.width;gx+=40){ ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,cv.height); ctx.stroke(); }
+    for(var gy=0;gy<cv.height;gy+=40){ ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(cv.width,gy); ctx.stroke(); }
+    var P=atoms.map(function(a){ return rotPoint(a.p); });
+    bonds.forEach(function(b){
+      var A=P[b[0]],B=P[b[1]]; if(!A||!B) return;
+      var depth=(A.z+B.z)/2;
+      ctx.strokeStyle="rgba(200,220,255,"+(0.28+0.5*(1-Math.min(1,Math.abs(depth)/6)))+")";
+      ctx.lineWidth=Math.max(2,7*((A.f+B.f)/2));
+      ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
+    });
+    P.map(function(p,i){return i}).sort(function(i,j){return P[j].z-P[i].z}).forEach(function(i){
+      var a=atoms[i],p=P[i],r=radius(a.e)*scale*p.f;
+      var g=ctx.createRadialGradient(p.x-r*0.35,p.y-r*0.35,r*0.1,p.x,p.y,r), c=color(a.e);
+      g.addColorStop(0,"#ffffff"); g.addColorStop(0.35,c); g.addColorStop(1,"rgba(0,0,0,.55)");
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(p.x,p.y,r,0,7); ctx.fill();
+      if(i===pending){ ctx.strokeStyle="#4dd0ff"; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(p.x,p.y,r+3,0,7); ctx.stroke(); }
+      ctx.fillStyle="#06121f"; ctx.font="bold "+Math.max(9,Math.round(r*0.85))+"px -apple-system,sans-serif";
+      ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(a.e,p.x,p.y);
+    });
+    if(auto) rot.y+=0.006;
+    requestAnimationFrame(draw);
+  }
+  function hit(px,py){
+    var P=atoms.map(function(a){return rotPoint(a.p)}), best=-1, bd=1e9;
+    for(var i=0;i<P.length;i++){ var r=Math.max(12,radius(atoms[i].e)*scale*P[i].f), d=Math.hypot(px-P[i].x,py-P[i].y); if(d<r&&d<bd){bd=d;best=i} }
+    return best;
+  }
+  cv.addEventListener("mousedown",function(e){ drag={x:e.offsetX,y:e.offsetY,moved:0}; });
+  cv.addEventListener("mousemove",function(e){
+    if(!drag) return;
+    var dx=e.offsetX-drag.x, dy=e.offsetY-drag.y;
+    drag.moved+=Math.abs(dx)+Math.abs(dy);
+    rot.y+=dx*0.01; rot.x=Math.max(-1.5,Math.min(1.5,rot.x+dy*0.01));
+    drag.x=e.offsetX; drag.y=e.offsetY;
+  });
+  window.addEventListener("mouseup",function(e){
+    if(!drag) return; var moved=drag.moved; drag=null;
+    if(moved>4||e.target!==cv) return;
+    var r=cv.getBoundingClientRect(), px=e.clientX-r.left, py=e.clientY-r.top, i=hit(px,py);
+    if(mode==="place"){ if(i<0){ atoms.push({e:picked,p:unproject(px,py)}); info(); } }
+    else if(mode==="bond"){ if(i>=0){ if(pending===null) pending=i; else if(pending!==i){ if(!bonds.some(function(b){return (b[0]===pending&&b[1]===i)||(b[1]===pending&&b[0]===i)})) bonds.push([pending,i]); pending=null; info(); } } }
+    else if(mode==="del"){ if(i>=0){ atoms.splice(i,1); bonds=bonds.filter(function(b){return b[0]!==i&&b[1]!==i}).map(function(b){return [b[0]>i?b[0]-1:b[0],b[1]>i?b[1]-1:b[1]]}); pending=null; info(); } }
+  });
+  cv.addEventListener("wheel",function(e){ e.preventDefault(); scale=Math.max(40,Math.min(220,scale-e.deltaY*0.06)); },{passive:false});
+
+  ["H","C","N","O","F","Na","Mg","P","S","Cl","K","Ca","Fe","Cu","Zn","Ag","Au","Br","I"].forEach(function(sym){
+    var c=document.createElement("span"); c.className="chip"; c.textContent=sym; c.style.borderColor=color(sym);
+    c.addEventListener("click",function(){ picked=sym; mode="place"; $("modeBond").textContent="Bond mode: OFF"; $("modeDel").textContent="Delete mode: OFF";
+      Array.prototype.forEach.call($("palette").children,function(x){x.style.background=""}); c.style.background="rgba(77,208,255,.18)"; });
+    $("palette").appendChild(c);
+  });
+  var sel=$("molPreset");
+  Object.keys(CHEM.MOL).forEach(function(k){ var o=document.createElement("option"); o.value=k; o.textContent=k; sel.appendChild(o); });
+  sel.value="Water — H2O"; loadMol(sel.value);
+  sel.addEventListener("change",function(){ loadMol(this.value); });
+  $("labAuto").addEventListener("click",function(){ auto=!auto; this.textContent="Auto-rotate: "+(auto?"ON":"OFF"); });
+  $("labReset").addEventListener("click",function(){ rot={x:-0.45,y:0.7}; scale=95; });
+  $("modeBond").addEventListener("click",function(){ mode=(mode==="bond")?"place":"bond"; pending=null; this.textContent="Bond mode: "+(mode==="bond"?"ON":"OFF"); $("modeDel").textContent="Delete mode: OFF"; });
+  $("modeDel").addEventListener("click",function(){ mode=(mode==="del")?"place":"del"; pending=null; this.textContent="Delete mode: "+(mode==="del"?"ON":"OFF"); $("modeBond").textContent="Bond mode: OFF"; });
+  $("labClear").addEventListener("click",function(){ atoms=[]; bonds=[]; pending=null; info(); });
+
+  /* generator */
+  var VAL={H:1,B:3,C:4,N:3,O:2,F:1,Cl:1,Br:1,I:1,S:2,P:3,Na:1,Mg:2,K:1,Ca:2,Li:1,Be:2,Al:3,Si:4,He:0,Ne:0,Ar:0};
+  function valOf(s){ return VAL[s]!=null?VAL[s]:2; }
+  function elemCounts(str){ var out=[],i=0; while(i<str.length){ var m=str.slice(i).match(/^([A-Z][a-z]?)(\d*)/); if(!m) break; out.push([m[1],m[2]?parseInt(m[2],10):1]); i+=m[0].length; } return out; }
+  function buildFromStructure(str){
+    var atoms=[],bonds=[],prevHead=null,order=1;
+    str.replace(/\s+/g,"").split(/(-|=|#)/).forEach(function(tok){
+      if(tok==="") return;
+      if(tok==="-"||tok==="="||tok==="#"){ order=tok==="-" ? 1 : (tok==="=" ? 2 : 3); return; }
+      var parts=elemCounts(tok); if(!parts.length) return;
+      var hi=0; for(var k=0;k<parts.length;k++){ if(parts[k][0]!=="H"){ hi=k; break; } }
+      var head=atoms.length;
+      for(var c=0;c<parts[hi][1];c++) atoms.push({e:parts[hi][0],v:valOf(parts[hi][0])});
+      for(var x=1;x<parts[hi][1];x++) bonds.push([head,head+x,1]);
+      for(var p=0;p<parts.length;p++){ if(p===hi) continue; for(var n=0;n<parts[p][1];n++){ var idx=atoms.length; atoms.push({e:parts[p][0],v:valOf(parts[p][0])}); bonds.push([head,idx,1]); } }
+      if(prevHead!==null) bonds.push([prevHead,head,order]);
+      prevHead=head;
+    });
+    return {atoms:atoms,bonds:bonds};
+  }
+  function buildFromFormula(f){
+    var counts={}; elemCounts(f).forEach(function(p){ counts[p[0]]=(counts[p[0]]||0)+p[1]; });
+    var heavy=[]; Object.keys(counts).forEach(function(e){ if(e==="H") return; for(var i=0;i<counts[e];i++) heavy.push(e); });
+    heavy.sort(function(a,b){ return (a==="C"?0:1)-(b==="C"?0:1); });
+    var atoms=[],bonds=[],i;
+    for(i=0;i<heavy.length;i++) atoms.push({e:heavy[i],v:valOf(heavy[i])});
+    for(i=1;i<heavy.length;i++) bonds.push([i-1,i,1]);
+    var hN=counts.H||0; for(i=0;i<hN;i++) atoms.push({e:"H",v:1});
+    var hptr=atoms.length-hN;
+    function deg(a){ var d=0; bonds.forEach(function(b){ if(b[0]===a||b[1]===a) d+=b[2]; }); return d; }
+    for(var a2=0;a2<atoms.length-hN&&hptr<atoms.length;a2++){ var need=atoms[a2].v-deg(a2); while(need>0&&hptr<atoms.length){ bonds.push([a2,hptr,1]); hptr++; need--; } }
+    while(hptr<atoms.length){ bonds.push([0,hptr,1]); hptr++; }
+    return {atoms:atoms,bonds:bonds};
+  }
+  function embed3D(g){
+    var n=g.atoms.length,pos=[],i,k;
+    for(i=0;i<n;i++) pos.push([(Math.random()-0.5)*2.5,(Math.random()-0.5)*2.5,(Math.random()-0.5)*2.5]);
+    for(var step=0;step<900;step++){
+      var force=[]; for(i=0;i<n;i++) force.push([0,0,0]);
+      g.bonds.forEach(function(b){
+        var a=b[0],c=b[1], dx=pos[a][0]-pos[c][0], dy=pos[a][1]-pos[c][1], dz=pos[a][2]-pos[c][2];
+        var d=Math.sqrt(dx*dx+dy*dy+dz*dz)||0.01, target=(b[2]===2?1.32:(b[2]===3?1.18:1.5)), f=(d-target)*0.55;
+        force[a][0]-=dx/d*f; force[a][1]-=dy/d*f; force[a][2]-=dz/d*f;
+        force[c][0]+=dx/d*f; force[c][1]+=dy/d*f; force[c][2]+=dz/d*f;
+      });
+      for(i=0;i<n;i++) for(var j=i+1;j<n;j++){
+        var ex=pos[i][0]-pos[j][0],ey=pos[i][1]-pos[j][1],ez=pos[i][2]-pos[j][2];
+        var e2=ex*ex+ey*ey+ez*ez+0.05, ed=Math.sqrt(e2), ef=1.4/e2;
+        force[i][0]+=ex/ed*ef; force[i][1]+=ey/ed*ef; force[i][2]+=ez/ed*ef;
+        force[j][0]-=ex/ed*ef; force[j][1]-=ey/ed*ef; force[j][2]-=ez/ed*ef;
+      }
+      for(i=0;i<n;i++) for(k=0;k<3;k++) pos[i][k]+=force[i][k]*0.05;
+    }
+    var cx=0,cy=0,cz=0; pos.forEach(function(p){cx+=p[0];cy+=p[1];cz+=p[2]}); cx/=n;cy/=n;cz/=n;
+    pos.forEach(function(p){p[0]-=cx;p[1]-=cy;p[2]-=cz}); return pos;
+  }
+  $("genGo").addEventListener("click",function(){
+    var raw=$("genInput").value.trim(); if(!raw){ $("genMsg").textContent="type something first"; return; }
+    try{
+      var g=/[-=#]/.test(raw)?buildFromStructure(raw):buildFromFormula(raw);
+      if(!g.atoms.length){ $("genMsg").textContent="couldn't parse that"; return; }
+      if(g.atoms.length>60){ $("genMsg").textContent="too many atoms ("+g.atoms.length+")"; return; }
+      var pos=embed3D(g);
+      atoms=g.atoms.map(function(a,i){ return {e:a.e,p:pos[i]}; });
+      bonds=g.bonds.map(function(b){ return [b[0],b[1]]; });
+      pending=null;
+      var mx=0; pos.forEach(function(p){ mx=Math.max(mx,Math.abs(p[0]),Math.abs(p[1]),Math.abs(p[2])); });
+      scale=Math.max(45,Math.min(150,190/(mx+1.4)));
+      info(); $("genMsg").textContent="built "+g.atoms.length+" atoms, "+g.bonds.length+" bonds";
+    }catch(e){ $("genMsg").textContent="error: "+e.message; }
+  });
+  $("genInput").addEventListener("keydown",function(e){ if(e.key==="Enter") $("genGo").click(); });
+  draw();
+
+  /* orbitals */
+  var oc=$("orb3d"), octx=oc.getContext("2d");
+  var orot={x:-0.5,y:0.6}, oauto=true, optype="p", pts=[];
+  function genOrbital(type){
+    pts=[]; var n=9000;
+    for(var i=0;i<n;i++){
+      var u=Math.random()*2-1, th=Math.random()*2*Math.PI, rr=Math.cbrt(Math.random());
+      var x=rr*Math.sqrt(1-u*u)*Math.cos(th), y=rr*Math.sqrt(1-u*u)*Math.sin(th), z=rr*u, d;
+      if(type==="s") d=1; else if(type==="p") d=Math.abs(z)*1.6; else d=Math.abs(x*x-y*y)*2.2;
+      if(Math.random()<Math.min(1,d)) pts.push([x*3.1,y*3.1,z*3.1]);
+    }
+  }
+  function opoint(p){
+    var cy=Math.cos(orot.y),sy=Math.sin(orot.y),cx=Math.cos(orot.x),sx=Math.sin(orot.x);
+    var x1=p[0]*cy+p[2]*sy, z1=-p[0]*sy+p[2]*cy;
+    var y1=p[1]*cx-z1*sx, z2=p[1]*sx+z1*cx, f=9/(9+z2);
+    return {x:oc.width/2+x1*f*46, y:oc.height/2+y1*f*46, z:z2, f:f};
+  }
+  function odraw(){
+    octx.clearRect(0,0,oc.width,oc.height);
+    var P=pts.map(opoint); P.sort(function(a,b){return a.z-b.z});
+    for(var i=0;i<P.length;i++){ var q=P[i]; octx.fillStyle="rgba(77,208,255,"+(0.05+0.28*q.f)+")"; octx.fillRect(q.x,q.y,1.6*q.f,1.6*q.f); }
+    if(oauto) orot.y+=0.008;
+    requestAnimationFrame(odraw);
+  }
+  $("orbSel").addEventListener("change",function(){ optype=this.value; genOrbital(optype); });
+  $("orbAuto").addEventListener("click",function(){ oauto=!oauto; this.textContent="Auto-rotate: "+(oauto?"ON":"OFF"); });
+  oc.addEventListener("mousedown",function(){ oc.__d=1; });
+  oc.addEventListener("mousemove",function(e){ if(oc.__d){ orot.y+=e.movementX*0.01; orot.x=Math.max(-1.5,Math.min(1.5,orot.x+e.movementY*0.01)); } });
+  window.addEventListener("mouseup",function(){ oc.__d=0; });
+  genOrbital(optype); odraw();
+
+  CHEM.mount("lab");
+})();
+</script>
+</body>
+</html>

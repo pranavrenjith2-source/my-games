@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flashcards — ChemLab</title>
+<link rel="stylesheet" href="chem.css">
+</head>
+<body>
+<div id="shell"></div>
+<main>
+  <div class="card">
+    <h2>Flashcards</h2>
+    <div class="grid2">
+      <div><div class="muted">front</div><input id="fcFront" type="text" placeholder="What is the atomic number of carbon?" /></div>
+      <div><div class="muted">back</div><input id="fcBack" type="text" placeholder="6" /></div>
+    </div>
+    <div class="row" style="margin-top:10px"><button class="btn" id="fcAdd">+ Add</button><button class="btn ghost" id="fcReset">Reset</button><span class="muted" id="fcCount"></span></div>
+  </div>
+  <div class="card">
+    <div class="fc" id="fcCard"><div class="fc-inner">
+      <div class="fc-face" id="fcQ">no cards yet</div><div class="fc-face fc-back" id="fcA"></div>
+    </div></div>
+    <div class="row" style="margin-top:12px"><button class="btn ghost" id="fcPrev">‹ Prev</button><button class="btn" id="fcNext">Next ›</button><span class="muted">click the card to flip</span></div>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+<script src="chem.js"></script>
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id)};
+  var DECK="chemlab_deck", deck=[]; try{ deck=JSON.parse(localStorage.getItem(DECK)||"[]"); }catch(e){ deck=[]; }
+  var idx=0;
+  function save(){ try{ localStorage.setItem(DECK,JSON.stringify(deck)); }catch(e){} }
+  function render(){ $("fcCount").textContent=deck.length?(idx+1)+" / "+deck.length:"0 cards";
+    var c=deck[idx]||{f:"no cards yet",b:""}; $("fcQ").textContent=c.f; $("fcA").textContent=c.b; $("fcCard").classList.remove("flip"); }
+  $("fcAdd").addEventListener("click",function(){ var f=$("fcFront").value.trim(),b=$("fcBack").value.trim(); if(!f||!b){CHEM.toast("fill both sides");return} deck.push({f:f,b:b}); save(); idx=deck.length-1; render(); $("fcFront").value=""; $("fcBack").value=""; });
+  $("fcReset").addEventListener("click",function(){ if(confirm("Clear all cards?")){ deck=[]; idx=0; save(); render(); } });
+  $("fcNext").addEventListener("click",function(){ if(deck.length){ idx=(idx+1)%deck.length; render(); } });
+  $("fcPrev").addEventListener("click",function(){ if(deck.length){ idx=(idx-1+deck.length)%deck.length; render(); } });
+  $("fcCard").addEventListener("click",function(){ this.classList.toggle("flip"); });
+  render();
+  CHEM.mount("flashcards");
+})();
+</script>
+</body>
+</html>

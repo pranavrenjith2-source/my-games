@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chemistry Tools — ChemLab</title>
+<link rel="stylesheet" href="chem.css">
+</head>
+<body>
+<div id="shell"></div>
+<main>
+  <div class="grid2">
+    <div class="card">
+      <h2>Molar Mass</h2>
+      <input id="mmInput" type="text" placeholder="formula, e.g. Ca(OH)2  or  C6H12O6" />
+      <div class="row" style="margin-top:10px"><button class="btn" id="mmGo">Calculate</button><button class="btn ghost" id="mmClear">Clear</button></div>
+      <div class="out" id="mmOut"></div>
+    </div>
+    <div class="card">
+      <h2>Equation Balancer</h2>
+      <input id="eqInput" type="text" placeholder="H2 + O2 -> H2O" />
+      <div class="row" style="margin-top:10px"><button class="btn" id="eqGo">Balance</button><button class="btn ghost" id="eqClear">Clear</button></div>
+      <div class="out eq" id="eqOut"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Element Lookup</h2>
+    <div class="row"><input id="lkInput" type="text" placeholder="symbol or name, e.g. Fe" style="max-width:300px" /><button class="btn" id="lkGo">Find</button></div>
+    <div class="out" id="lkOut"></div>
+  </div>
+  <div class="card">
+    <h2>Quick Reference</h2>
+    <div class="muted">Constants &amp; handy values</div>
+    <div class="props" id="consts"></div>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+<script src="chem.js"></script>
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id)};
+  $("mmGo").addEventListener("click",function(){
+    try{ var r=CHEM.molarMass($("mmInput").value);
+      $("mmOut").innerHTML="<b>"+r.total.toFixed(3)+" g/mol</b><table class='t' style='margin-top:8px'>"+
+        r.parts.map(function(p){ return "<tr><td>"+p.el+" × "+p.n+"</td><td>"+p.mass.toFixed(3)+" g/mol</td></tr>"; }).join("")+"</table>";
+    }catch(e){ $("mmOut").innerHTML='<span class="bad">Error: '+e.message+'</span>'; }
+  });
+  $("mmClear").addEventListener("click",function(){ $("mmInput").value=""; $("mmOut").innerHTML=""; });
+  $("eqGo").addEventListener("click",function(){
+    var out=CHEM.balanceEq($("eqInput").value);
+    $("eqOut").innerHTML = out ? "<b>"+out+"</b>" : '<span class="bad">could not balance — check the reaction</span>';
+  });
+  $("eqClear").addEventListener("click",function(){ $("eqInput").value=""; $("eqOut").innerHTML=""; });
+  $("lkGo").addEventListener("click",function(){
+    var q=$("lkInput").value.trim().toLowerCase(); if(!q) return;
+    var e=CHEM.bySym(q)||null;
+    if(!e) CHEMPICK: { for(var i=0;i<CHEM.E.length;i++){ if(CHEM.E[i][2].toLowerCase()===q){ e=CHEM.E[i]; break CHEMPICK; } } }
+    if(!e){ $("lkOut").innerHTML='<span class="bad">not found</span>'; return; }
+    var x=CHEM.X[e[1]]||[];
+    $("lkOut").innerHTML="<b>"+e[1]+" — "+e[2]+"</b> · Z="+e[0]+" · "+e[3]+" u · "+CHEM.CATNAME[e[4]]+
+      (x[0]!=null?" · EN "+x[0]: "")+(x[7]?" · ions "+x[7]:"");
+  });
+  [["mmInput","mmGo"],["eqInput","eqGo"],["lkInput","lkGo"]].forEach(function(p){
+    $(p[0]).addEventListener("keydown",function(e){ if(e.key==="Enter") $(p[1]).click(); });
+  });
+  var CONST=[["Avogadro","6.022×10²³ /mol"],["Gas constant","8.314 J/mol·K"],["Ideal gas","PV = nRT"],["STP volume","22.4 L/mol"],
+    ["Speed of light","3.00×10⁸ m/s"],["Planck","6.626×10⁻³⁴ J·s"],["Water density","1.00 g/mL"],["1 mol","6.022×10²³ particles"]];
+  $("consts").innerHTML=CONST.map(function(c){ return '<div class="prop"><div class="k">'+c[0]+'</div><div class="v">'+c[1]+'</div></div>'; }).join("");
+  CHEM.mount("tools");
+})();
+</script>
+</body>
+</html>

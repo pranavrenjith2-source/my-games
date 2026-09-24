@@ -58,6 +58,16 @@ function duplicateIds(html){
   let m; while ((m = re.exec(html))) seen.set(m[1], (seen.get(m[1]) || 0) + 1);
   return [...seen.entries()].filter(([, n]) => n > 1).map(([id, n]) => "duplicate id \"" + id + "\" appears " + n + "x");
 }
+// Inline local <script src> files so pages with shared JS run self-contained in jsdom.
+function inlineLocalScripts(html, dir){
+  return html.replace(/<script\b([^>]*?)\bsrc\s*=\s*["']([^"']+)["']([^>]*?)>\s*<\/script>/gi, (m, pre, src, post) => {
+    if (/^(https?:|\/\/|data:)/i.test(src)) return m;
+    try {
+      const code = fs.readFileSync(path.resolve(dir, src.split("?")[0]), "utf8");
+      return "<script>" + code.split("</script").join("<\\/script") + "</scr" + "ipt>";
+    } catch (e){ return m; }
+  });
+}
 function brokenLinks(html, dir){
   const bad = [];
   const re = /(?:href|src)\s*=\s*["']([^"']+)["']/gi;
@@ -121,7 +131,8 @@ function audit(file){
     })();</script>`;
 
     let dom;
-    try { dom = new JSDOM(prelude + html, { runScripts: "dangerously", pretendToBeVisual: true, virtualConsole: vc, url: "http://localhost/" }); }
+    const runtimeHtml = inlineLocalScripts(html, dir);
+    try { dom = new JSDOM(prelude + runtimeHtml, { runScripts: "dangerously", pretendToBeVisual: true, virtualConsole: vc, url: "http://localhost/" }); }
     catch (e){ return resolve({ file, title, ok: false, errors: errors.concat("load failed: " + e.message), warnings }); }
 
     const w = dom.window, d = w.document;

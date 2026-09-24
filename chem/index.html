@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChemLab — Interactive Chemistry Workspace</title>
+<link rel="stylesheet" href="chem.css">
+</head>
+<body>
+<div id="shell"></div>
+<main>
+  <div class="hero">
+    <h1>Chemistry <span>you can see.</span></h1>
+    <p>A free chemistry workspace: the periodic table, 3D atoms and molecules, tools and worksheets.</p>
+  </div>
+  <div class="features">
+    <a class="fcard" href="table.html"><div class="ico">&#9878;</div><h3>Periodic Table</h3><p>All 118 elements, colour-coded, with a live animated atom and full data.</p></a>
+    <a class="fcard" href="tools.html"><div class="ico">&#9881;</div><h3>Chemistry Tools</h3><p>Molar mass, an exact equation balancer, and element lookup.</p></a>
+    <a class="fcard" href="lab.html"><div class="ico">&#128300;</div><h3>3D Lab</h3><p>Rotate molecules, build your own, generate any molecule from a formula, and explore orbital shapes.</p></a>
+    <a class="fcard" href="trends.html"><div class="ico">&#128200;</div><h3>Periodic Trends</h3><p>See how mass, electronegativity and ionization change across the table.</p></a>
+    <a class="fcard" href="worksheet.html"><div class="ico">&#128221;</div><h3>Worksheet Studio</h3><p>Print-ready balancing practice with an answer key computed on the spot.</p></a>
+    <a class="fcard" href="flashcards.html"><div class="ico">&#127183;</div><h3>Flashcards</h3><p>Make your own cards and flip through them — saved in your browser.</p></a>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+<script src="chem.js"></script>
+<script>CHEM.mount("home");</script>
+</body>
+</html>
