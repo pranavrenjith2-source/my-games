@@ -47,3 +47,7 @@
 2026-09-22 23:46 | a-shadow-puppet-theater.html | bug fix
 2026-09-23 01:32 | games/a-markdown-editor-with-live-preview-auto.html | bug fix
 2026-09-23 22:14 | a-stock-ticker-of-fake-companies | a stock ticker of fake companies
+2026-09-23 22:25 | a-fake-daily-horoscope-generator-with-.html | update
+2026-09-24 00:16 | a-time-lapse-of-a-city-growing | a time-lapse of a city growing
+2026-09-24 07:37 | an-endless-runner-where-you-are-a-rain | an endless runner where you are a raindrop
+2026-09-24 08:54 | a-screensaver-that-reacts-to-your-mous.html | update

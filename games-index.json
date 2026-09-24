@@ -1,17 +1,9 @@
 {
   "games": [
     {
-      "name": "a-mini-stock-market-you-can-crash.html",
-      "url": "games/a-mini-stock-market-you-can-crash.html",
-      "mtime": 1790259474629.6262,
-      "source": "forge",
-      "title": "A Mini Stock Market You Can Crash",
-      "description": "a mini stock market you can crash"
-    },
-    {
       "name": "a-minimalist-tower-defense-on-a-grid.html",
       "url": "games/a-minimalist-tower-defense-on-a-grid.html",
-      "mtime": 1790259474629.6262,
+      "mtime": 1790173085940.4202,
       "source": "forge",
       "title": "A Minimalist Tower Defense On A Grid",
       "description": "a minimalist tower defense on a grid"
@@ -19,7 +11,7 @@
     {
       "name": "a-one-key-rhythm-game.html",
       "url": "games/a-one-key-rhythm-game.html",
-      "mtime": 1790259474629.6262,
+      "mtime": 1790173085940.4202,
       "source": "forge",
       "title": "A One-Key Rhythm Game",
       "description": "a one-key rhythm game"
@@ -27,7 +19,7 @@
     {
       "name": "a-password-strength-meter-that-judges-.html",
       "url": "games/a-password-strength-meter-that-judges-.html",
-      "mtime": 1790259474629.6262,
+      "mtime": 1790173085940.4202,
       "source": "forge",
       "title": "A Password Strength Meter That Judges You Harshly",
       "description": "a password strength meter that judges you harshly"
@@ -35,7 +27,7 @@
     {
       "name": "a-petri-dish-where-bacteria-evolve-on-.html",
       "url": "games/a-petri-dish-where-bacteria-evolve-on-.html",
-      "mtime": 1790259474629.6262,
+      "mtime": 1790173085940.4202,
       "source": "forge",
       "title": "A Petri Dish Where Bacteria Evolve On Their Own",
       "description": "a petri dish where bacteria evolve on their own"
@@ -43,7 +35,7 @@
     {
       "name": "a-pixel-art-painter-with-8-colors.html",
       "url": "games/a-pixel-art-painter-with-8-colors.html",
-      "mtime": 1790259474629.6262,
+      "mtime": 1790173085940.4202,
       "source": "forge",
       "title": "A Pixel-Art Painter With 8 Colors",
       "description": "a pixel-art painter with 8 colors"
@@ -51,7 +43,7 @@
     {
       "name": "a-rubber-band-physics-toy.html",
       "url": "games/a-rubber-band-physics-toy.html",
-      "mtime": 1790259474629.6262,
+      "mtime": 1790173085940.4202,
       "source": "forge",
       "title": "A Rubber-Band Physics Toy",
       "description": "a rubber-band physics toy"
@@ -59,7 +51,7 @@
     {
       "name": "a-screensaver-that-reacts-to-your-mous.html",
       "url": "games/a-screensaver-that-reacts-to-your-mous.html",
-      "mtime": 1790259474629.6262,
+      "mtime": 1790173085940.4202,
       "source": "forge",
       "title": "A Screensaver That Reacts To Your Mouse",
       "description": "a screensaver that reacts to your mouse"
@@ -67,7 +59,7 @@
     {
       "name": "a-shadow-puppet-theater.html",
       "url": "games/a-shadow-puppet-theater.html",
-      "mtime": 1790259474629.6262,
+      "mtime": 1790173085940.4202,
       "source": "forge",
       "title": "A Shadow Puppet Theater",
       "description": "a shadow puppet theater"
@@ -75,23 +67,15 @@
     {
       "name": "a-slider-that-shows-the-real-size-of-t.html",
       "url": "games/a-slider-that-shows-the-real-size-of-t.html",
-      "mtime": 1790259474629.6262,
+      "mtime": 1790173085940.4202,
       "source": "forge",
       "title": "A Slider That Shows The Real Size Of Things Compared To A Human",
       "description": "a slider that shows the real size of things compared to a human"
     },
     {
-      "name": "a-stock-ticker-of-fake-companies.html",
-      "url": "games/a-stock-ticker-of-fake-companies.html",
-      "mtime": 1790259474629.6262,
-      "source": "forge",
-      "title": "A Stock Ticker Of Fake Companies",
-      "description": "a stock ticker of fake companies"
-    },
-    {
       "name": "a-choose-your-own-adventure-that-lasts.html",
       "url": "games/a-choose-your-own-adventure-that-lasts.html",
-      "mtime": 1790259474629.003,
+      "mtime": 1790173085939.5083,
       "source": "forge",
       "title": "A Choose-Your-Own-Adventure That Lasts 30 Seconds",
       "description": "a choose-your-own-adventure that lasts 30 seconds"
@@ -99,7 +83,7 @@
     {
       "name": "a-cookie-clicker-but-for-stars.html",
       "url": "games/a-cookie-clicker-but-for-stars.html",
-      "mtime": 1790259474629.003,
+      "mtime": 1790173085939.5083,
       "source": "forge",
       "title": "A Cookie Clicker But For Stars",
       "description": "a cookie clicker but for stars"
@@ -107,7 +91,7 @@
     {
       "name": "a-fake-daily-horoscope-generator-with-.html",
       "url": "games/a-fake-daily-horoscope-generator-with-.html",
-      "mtime": 1790259474629.003,
+      "mtime": 1790173085939.5083,
       "source": "forge",
       "title": "A Fake Daily Horoscope Generator With Constellations",
       "description": "a fake daily horoscope generator with constellations"
@@ -115,7 +99,7 @@
     {
       "name": "a-food-chain-ecosystem-you-feed.html",
       "url": "games/a-food-chain-ecosystem-you-feed.html",
-      "mtime": 1790259474629.003,
+      "mtime": 1790173085939.5083,
       "source": "forge",
       "title": "A Food-Chain Ecosystem You Feed",
       "description": "a food-chain ecosystem you feed"
@@ -123,7 +107,7 @@
     {
       "name": "a-full-platformer-with-15-handcrafted-le.html",
       "url": "games/a-full-platformer-with-15-handcrafted-le.html",
-      "mtime": 1790259474629.003,
+      "mtime": 1790173085939.5083,
       "source": "forge",
       "title": "A Full Platformer With 15+ Handcrafted Levels, Checkpoints And A Final Boss",
       "description": "a full platformer with 15+ handcrafted levels, checkpoints and a final boss"
@@ -131,7 +115,7 @@
     {
       "name": "a-gravity-sandbox-where-you-throw-plan.html",
       "url": "games/a-gravity-sandbox-where-you-throw-plan.html",
-      "mtime": 1790259474629.003,
+      "mtime": 1790173085939.5083,
       "source": "forge",
       "title": "A Gravity Sandbox Where You Throw Planets Around",
       "description": "a gravity sandbox where you throw planets around"
@@ -139,7 +123,7 @@
     {
       "name": "a-language-generator-that-invents-word.html",
       "url": "games/a-language-generator-that-invents-word.html",
-      "mtime": 1790259474629.003,
+      "mtime": 1790173085939.5083,
       "source": "forge",
       "title": "A Language Generator That Invents Words",
       "description": "a language generator that invents words"
@@ -147,7 +131,7 @@
     {
       "name": "a-markdown-editor-with-live-preview-auto.html",
       "url": "games/a-markdown-editor-with-live-preview-auto.html",
-      "mtime": 1790259474629.003,
+      "mtime": 1790173085939.5083,
       "source": "forge",
       "title": "A Markdown Editor With Live Preview, Autosave And Export",
       "description": "a markdown editor with live preview, autosave and export"
@@ -155,15 +139,23 @@
     {
       "name": "a-maze-that-rearranges-itself-every-fe.html",
       "url": "games/a-maze-that-rearranges-itself-every-fe.html",
-      "mtime": 1790259474629.003,
+      "mtime": 1790173085939.5083,
       "source": "forge",
       "title": "A Maze That Rearranges Itself Every Few Seconds",
       "description": "a maze that rearranges itself every few seconds"
     },
     {
+      "name": "a-mini-stock-market-you-can-crash.html",
+      "url": "games/a-mini-stock-market-you-can-crash.html",
+      "mtime": 1790173085939.5083,
+      "source": "forge",
+      "title": "A Mini Stock Market You Can Crash",
+      "description": "a mini stock market you can crash"
+    },
+    {
       "name": "a-button-that-does-something-different.html",
       "url": "games/a-button-that-does-something-different.html",
-      "mtime": 1790259474628.3691,
+      "mtime": 1790173085938.4202,
       "source": "forge",
       "title": "A Button That Does Something Different Every Time You Press It",
       "description": "a button that does something different every time you press it"

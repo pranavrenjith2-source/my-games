@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='UTF-8'>
+    <title>Raindrop Runner</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #001f3f; color: #00ffcc; font-family: monospace; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #00ffcc;
+            font-size: 18px;
+            text-shadow: 0 0 5px #000033;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">RAINDROP RUNNER<br>Move left/right to avoid obstacles</div>
+    <canvas id="game"></canvas>
+
+    <script>
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const gravity = 0.5;
+        const jumpStrength = -10;
+        const obstacles = [];
+        let player = { x: canvas.width/2, y: canvas.height*0.8, width: 15, height: 15, vy: 0, onGround: false };
+        let score = 0;
+        let gameOver = false;
+        let audioCtx;
+        let soundEnabled = true;
+        let lastTime = 0;
+        
+        function playSound(src) {
+            if (!soundEnabled || !audioCtx) return;
+            const now = performance.now();
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            const audio = new Audio(src);
+            audio.playbackRate = 1.5;
+            audio.play();
+        }
+        
+        function addObstacle() {
+            obstacles.push({
+                x: canvas.width, 
+                y: canvas.height*0.7, 
+                width: 30, 
+                height: 30, 
+                type: Math.random() > 0.5 ? 'cloud' : 'drop'
+            });
+        }
+        
+        function gameLoop(timestamp) {
+            const delta = timestamp - lastTime;
+            lastTime = timestamp;
+            
+            if (gameOver) {
+                ctx.fillStyle = '#00ffcc';
+                ctx.font = '40px monospace';
+                ctx.fillText('GAME OVER', canvas.width/2 - 120, canvas.height/2);
+                ctx.font = '20px monospace';
+                ctx.fillText(`Score: ${score}`, canvas.width/2 - 60, canvas.height/2 + 50);
+                return;
+            }
+            
+            // Input
+            const keys = {};
+            document.addEventListener('keydown', e => keys[e.key] = true);
+            document.addEventListener('keyup', e => keys[e.key] = false);
+            
+            // Physics
+            player.vy += gravity;
+            player.y += player.vy;
+            
+            // Ground collision
+            if (player.y + player.height >= canvas.height) {
+                player.y = canvas.height - player.height;
+                player.vy = 0;
+                player.onGround = true;
+            } else {
+                player.onGround = false;
+            }
+            
+            // Movement
+            if (keys['ArrowLeft'] || keys['a']) player.x -= 5;
+            if (keys['ArrowRight'] || keys['d']) player.x += 5;
+            
+            // Jump
+            if (keys[' ']) {
+                if (player.onGround) {
+                    player.vy = jumpStrength;
+                    playSound('https://neal.fun/sounds/jump.mp3');
+                }
+            }
+            
+            // Obstacle movement
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obs = obstacles[i];
+                obs.x -= 5;
+                
+                // Collision detection
+                if (obs.x + obs.width > player.x && 
+                    obs.x < player.x + player.width && 
+                    obs.y + obs.height > player.y && 
+                    obs.y < player.y + player.height) {
+                    gameOver = true;
+                    playSound('https://neal.fun/sounds/explosion.mp3');
+                    return;
+                }
+                
+                // Remove off-screen obstacles
+                if (obs.x + obs.width < 0) {
+                    obstacles.splice(i, 1);
+                    score++;
+                }
+            }
+            
+            // Spawn new obstacles
+            if (Math.random() < 0.02) {
+                addObstacle();
+            }
+            
+            // Drawing
+            ctx.fillStyle = '#000022';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw player
+            ctx.fillStyle = '#00ffcc';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.width/2, 0, Math.PI*2);
+            ctx.fill();
+            
+            // Draw obstacles
+            ctx.fillStyle = '#ff00cc';
+            obstacles.forEach(obs => {
+                ctx.beginPath();
+                ctx.arc(obs.x, obs.y, obs.width/2, 0, Math.PI*2);
+                ctx.fill();
+            });
+            
+            // Update score display
+            document.getElementById('info').innerText = `RAINDROP RUNNER
+Move left/right to avoid obstacles
+Score: ${score}`;
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Start game on user interaction
+        document.addEventListener('pointerdown', () => {
+            if (!gameOver) {
+                gameLoop(performance.now());
+            }
+        });
+        
+        // Handle window resizing
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+</html>

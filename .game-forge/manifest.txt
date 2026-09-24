@@ -1,5 +1,3 @@
-a-fake-daily-horoscope-generator-with-.html
-a-screensaver-that-reacts-to-your-mous.html
 a-maze-that-rearranges-itself-every-fe.html
 a-shadow-puppet-theater.html
 a-mini-stock-market-you-can-crash.html
@@ -19,3 +17,7 @@ a-slider-that-shows-the-real-size-of-t.html
 a-full-platformer-with-15-handcrafted-le.html
 a-markdown-editor-with-live-preview-auto.html
 a-stock-ticker-of-fake-companies.html
+a-fake-daily-horoscope-generator-with-.html
+a-time-lapse-of-a-city-growing.html
+an-endless-runner-where-you-are-a-rain.html
+a-screensaver-that-reacts-to-your-mous.html

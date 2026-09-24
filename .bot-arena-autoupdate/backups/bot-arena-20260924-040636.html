@@ -1,0 +1,2375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BOT ARENA</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%; background: #04050a;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Courier New', monospace; color: #cfe3d6;
+  }
+  #wrap { text-align: center; }
+  canvas { border: 3px solid #16324a; border-radius: 6px; box-shadow: 0 0 34px rgba(43,212,255,0.18); image-rendering: pixelated; }
+  #hint { color: #4a7a8a; font-size: 12px; margin-top: 10px; letter-spacing: 1px; }
+  a.back { color: #2ecc40; text-decoration: none; font-size: 12px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="cv" width="960" height="560"></canvas>
+  <div id="hint">A/D move &middot; W jump &middot; J punch &middot; K kick &middot; L heavy &middot; S block &middot; SPACE special &middot; 1-8 tabs &middot; H console &middot; M sound &middot; X shake &middot; ESC home &middot; <a class="back" href="index.html">back to My Games</a></div>
+</div>
+<script>
+(function () {
+"use strict";
+
+/* ============================================================
+   UTIL
+   ============================================================ */
+var CANVAS_W = 960, CANVAS_H = 560;
+var cv = document.getElementById('cv');
+var ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+function rand(a, b) { return a + Math.random() * (b - a); }
+function irand(a, b) { return Math.floor(rand(a, b + 1)); }
+function choose(a) { return a[Math.floor(Math.random() * a.length)]; }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function lerp(a, b, t) { return a + (b - a) * t; }
+function sig(x) { return 1 / (1 + Math.exp(-x)); }
+
+/* ============================================================
+   SANDBOXED JS INTERPRETER  (real code execution, safe)
+   Supports: var/let/const, if/else, while, for, function,
+   return, blocks, arrays, objects, member/index access, calls,
+   arithmetic/logical/comparison, assignment, ternary.
+   Whitelisted API only. Step budget + blocked properties.
+   ============================================================ */
+function tokenize(src) {
+  var toks = [], i = 0, n = src.length;
+  function isDigit(c) { return c >= '0' && c <= '9'; }
+  function isIdStart(c) { return /[A-Za-z_$]/.test(c); }
+  function isId(c) { return /[A-Za-z0-9_$]/.test(c); }
+  while (i < n) {
+    var c = src[i];
+    if (/\s/.test(c)) { i++; continue; }
+    if (c === '/' && src[i + 1] === '/') { while (i < n && src[i] !== '\n') i++; continue; }
+    if (c === '/' && src[i + 1] === '*') { i += 2; while (i < n && !(src[i] === '*' && src[i + 1] === '/')) i++; i += 2; continue; }
+    if (isDigit(c) || (c === '.' && isDigit(src[i + 1]))) {
+      var j = i; while (j < n && /[0-9.]/.test(src[j])) j++;
+      toks.push({ t: 'num', v: parseFloat(src.slice(i, j)) }); i = j; continue;
+    }
+    if (c === '"' || c === "'") {
+      var q = c, s = ''; i++;
+      while (i < n && src[i] !== q) { if (src[i] === '\\') { s += src[i + 1]; i += 2; } else { s += src[i]; i++; } }
+      i++; toks.push({ t: 'str', v: s }); continue;
+    }
+    if (isIdStart(c)) { var k = i; while (k < n && isId(src[k])) k++; toks.push({ t: 'id', v: src.slice(i, k) }); i = k; continue; }
+    var three = src.substr(i, 3), two = src.substr(i, 2);
+    if (['===', '!==', '**=', '>>>'].indexOf(three) >= 0) { toks.push({ t: 'op', v: three }); i += 3; continue; }
+    if (['==', '!=', '<=', '>=', '&&', '||', '++', '--', '+=', '-=', '*=', '/=', '%=', '**'].indexOf(two) >= 0) { toks.push({ t: 'op', v: two }); i += 2; continue; }
+    toks.push({ t: 'op', v: c }); i++;
+  }
+  toks.push({ t: 'eof', v: null });
+  return toks;
+}
+
+function parse(src) {
+  var toks = tokenize(src), p = 0;
+  function peek() { return toks[p]; }
+  function next() { return toks[p++]; }
+  function isOp(v) { return toks[p].t === 'op' && toks[p].v === v; }
+  function isId(v) { return toks[p].t === 'id' && toks[p].v === v; }
+  function eat(v) { if (!isOp(v)) throw new Error("expected '" + v + "'"); p++; }
+  function eatId(v) { if (!isId(v)) throw new Error("expected '" + v + "'"); p++; }
+
+  var BIN = {
+    '||': 1, '&&': 2, '==': 3, '!=': 3, '===': 3, '!==': 3,
+    '<': 4, '>': 4, '<=': 4, '>=': 4, '+': 5, '-': 5, '*': 6, '/': 6, '%': 6, '**': 7
+  };
+
+  function expr() { return assign(); }
+  function assign() {
+    var left = ternary();
+    if (peek().t === 'op' && ['=', '+=', '-=', '*=', '/=', '%=', '**='].indexOf(peek().v) >= 0) {
+      var op = next().v;
+      return { k: 'assign', op: op, target: left, value: assign() };
+    }
+    return left;
+  }
+  function ternary() {
+    var c = binary(0);
+    if (isOp('?')) { next(); var a = assign(); eat(':'); var b = assign(); return { k: 'cond', test: c, a: a, b: b }; }
+    return c;
+  }
+  function binary(min) {
+    var left = unary();
+    while (peek().t === 'op' && BIN[peek().v] !== undefined && BIN[peek().v] >= min) {
+      var op = next().v, prec = BIN[op];
+      var right = binary(op === '**' ? prec : prec + 1);
+      left = { k: 'bin', op: op, a: left, b: right };
+    }
+    return left;
+  }
+  function unary() {
+    if (isOp('!') || isOp('-') || isOp('+')) { var op = next().v; return { k: 'un', op: op, a: unary() }; }
+    if (isOp('++') || isOp('--')) { var o2 = next().v; return { k: 'update', op: o2, target: unary(), prefix: true }; }
+    return postfix();
+  }
+  function postfix() {
+    var node = primary();
+    for (;;) {
+      if (isOp('.')) { next(); var prop = next(); node = { k: 'member', obj: node, prop: prop.v }; }
+      else if (isOp('[')) { next(); var idx = expr(); eat(']'); node = { k: 'index', obj: node, idx: idx }; }
+      else if (isOp('(')) { next(); var args = []; if (!isOp(')')) { args.push(assign()); while (isOp(',')) { next(); args.push(assign()); } } eat(')'); node = { k: 'call', callee: node, args: args }; }
+      else if (isOp('++') || isOp('--')) { var op = next().v; node = { k: 'update', op: op, target: node, prefix: false }; }
+      else break;
+    }
+    return node;
+  }
+  function primary() {
+    var t = peek();
+    if (t.t === 'num') { next(); return { k: 'num', v: t.v }; }
+    if (t.t === 'str') { next(); return { k: 'str', v: t.v }; }
+    if (t.t === 'id') {
+      if (t.v === 'true') { next(); return { k: 'bool', v: true }; }
+      if (t.v === 'false') { next(); return { k: 'bool', v: false }; }
+      if (t.v === 'null') { next(); return { k: 'num', v: 0 }; }
+      next(); return { k: 'id', name: t.v };
+    }
+    if (isOp('(')) { next(); var e = expr(); eat(')'); return e; }
+    if (isOp('[')) { next(); var elems = []; if (!isOp(']')) { elems.push(assign()); while (isOp(',')) { next(); elems.push(assign()); } } eat(']'); return { k: 'array', elems: elems }; }
+    if (isOp('{')) { next(); var props = []; if (!isOp('}')) { props.push(prop()); while (isOp(',')) { next(); props.push(prop()); } } eat('}'); return { k: 'object', props: props }; }
+    throw new Error("unexpected token '" + t.v + "'");
+  }
+  function prop() { var key = next(); var k = key.t === 'id' || key.t === 'str' ? key.v : String(key.v); eat(':'); return { key: k, value: assign() }; }
+
+  function block() { eat('{'); var body = []; while (!isOp('}')) body.push(stmt()); eat('}'); return { k: 'block', body: body }; }
+  function stmt() {
+    if (isOp('{')) return block();
+    if (isOp(';')) { next(); return { k: 'empty' }; }
+    if (peek().t === 'id') {
+      var w = peek().v;
+      if (w === 'var' || w === 'let' || w === 'const') {
+        next(); var decls = [];
+        for (;;) {
+          var name = next().v;
+          var init = isOp('=') ? (next(), assign()) : { k: 'num', v: 0 };
+          decls.push({ name: name, init: init });
+          if (isOp(',')) { next(); continue; } break;
+        }
+        if (isOp(';')) next();
+        return { k: 'var', decls: decls };
+      }
+      if (w === 'if') {
+        next(); eat('('); var test = expr(); eat(')');
+        var cons = stmt();
+        var alt = null;
+        if (isId('else')) { next(); alt = stmt(); }
+        return { k: 'if', test: test, cons: cons, alt: alt };
+      }
+      if (w === 'while') { next(); eat('('); var t2 = expr(); eat(')'); return { k: 'while', test: t2, body: stmt() }; }
+      if (w === 'for') {
+        next(); eat('(');
+        var init = isOp(';') ? null : stmt();
+        if (isOp(';')) next();
+        var cond = isOp(';') ? null : expr();
+        if (isOp(';')) next();
+        var upd = isOp(')') ? null : expr();
+        eat(')');
+        return { k: 'for', init: init, test: cond, update: upd, body: stmt() };
+      }
+      if (w === 'return') { next(); var e = isOp(';') ? null : expr(); if (isOp(';')) next(); return { k: 'return', e: e }; }
+      if (w === 'function') {
+        next(); var fname = next().v; eat('(');
+        var params = [];
+        if (!isOp(')')) { params.push(next().v); while (isOp(',')) { next(); params.push(next().v); } }
+        eat(')');
+        return { k: 'func', name: fname, params: params, body: block() };
+      }
+    }
+    var ex = expr();
+    if (isOp(';')) next();
+    return { k: 'expr', e: ex };
+  }
+
+  var program = [];
+  while (toks[p].t !== 'eof') program.push(stmt());
+  return program;
+}
+
+function Interp(globals, opts) {
+  opts = opts || {};
+  var steps = 0, MAX_STEPS = opts.maxSteps || 300000;
+  function tick() { if (++steps > MAX_STEPS) throw new Error('step limit exceeded (runaway hack?)'); }
+  function Env(parent) { this.vars = Object.create(null); this.parent = parent || null; }
+  Env.prototype.get = function (n) { var e = this; while (e) { if (n in e.vars) return e.vars[n]; e = e.parent; } return undefined; };
+  Env.prototype.set = function (n, v) { var e = this; while (e) { if (n in e.vars) { e.vars[n] = v; return v; } e = e.parent; } this.vars[n] = v; return v; };
+  Env.prototype.declare = function (n, v) { this.vars[n] = v; return v; };
+
+  var BLOCKED = ['constructor', 'prototype', '__proto__', 'eval', 'Function', 'call', 'apply', 'bind'];
+  function isBlocked(p) { return p.indexOf('__') === 0 || BLOCKED.indexOf(p) >= 0; }
+  function safeGet(obj, prop) {
+    if (isBlocked(prop)) throw new Error("blocked property '" + prop + "'");
+    if (obj === null || obj === undefined) throw new Error("cannot read '" + prop + "' of null");
+    if (Array.isArray(obj)) {
+      if (prop === 'length') return obj.length;
+      if (/^\d+$/.test(prop)) return obj[+prop];
+      if (prop === 'push') return function () { for (var i = 0; i < arguments.length; i++) obj.push(arguments[i]); return obj.length; };
+      if (prop === 'pop') return function () { return obj.pop(); };
+      if (prop === 'slice') return function (a, b) { return obj.slice(a, b); };
+      if (prop === 'join') return function (s) { return obj.join(s); };
+      throw new Error("blocked array property '" + prop + "'");
+    }
+    if (typeof obj === 'string') {
+      if (prop === 'length') return obj.length;
+      if (/^\d+$/.test(prop)) return obj[+prop];
+      if (prop === 'toUpperCase') return function () { return obj.toUpperCase(); };
+      if (prop === 'toLowerCase') return function () { return obj.toLowerCase(); };
+      throw new Error("blocked string property '" + prop + "'");
+    }
+    if (typeof obj === 'object') {
+      if (Object.prototype.hasOwnProperty.call(obj, prop)) return obj[prop];
+      throw new Error("blocked property '" + prop + "'");
+    }
+    throw new Error("cannot read property '" + prop + "'");
+  }
+  function safeSet(obj, prop, val) {
+    if (isBlocked(prop)) throw new Error("blocked property '" + prop + "'");
+    if (Array.isArray(obj) && /^\d+$/.test(prop)) { obj[+prop] = val; return val; }
+    if (typeof obj === 'object' && obj !== null) { obj[prop] = val; return val; }
+    throw new Error("cannot assign property '" + prop + "'");
+  }
+  function truthy(v) { return !!v; }
+  function num(v) { return typeof v === 'number' ? v : (v === true ? 1 : (v === false ? 0 : (typeof v === 'string' ? (parseFloat(v) || 0) : 0))); }
+
+  function callFn(fn, args) {
+    if (typeof fn !== 'function') throw new Error('value is not callable');
+    if (fn.__sandbox) return fn.apply(null, args);
+    return fn.apply(null, args);
+  }
+
+  function exec(node, env) {
+    tick();
+    switch (node.k) {
+      case 'empty': return undefined;
+      case 'expr': return evalE(node.e, env);
+      case 'block': { var e2 = new Env(env); for (var i = 0; i < node.body.length; i++) { var r = exec(node.body[i], e2); if (r && r.__ret) return r; } return undefined; }
+      case 'var': for (var d = 0; d < node.decls.length; d++) env.declare(node.decls[d].name, evalE(node.decls[d].init, env)); return undefined;
+      case 'if': if (truthy(evalE(node.test, env))) return exec(node.cons, env); else if (node.alt) return exec(node.alt, env); return undefined;
+      case 'while': { var guard = 0; while (truthy(evalE(node.test, env))) { tick(); if (++guard > 100000) throw new Error('loop limit'); var rr = exec(node.body, env); if (rr && rr.__ret) return rr; } return undefined; }
+      case 'for': {
+        var fe = new Env(env);
+        if (node.init) exec(node.init, fe);
+        var g2 = 0;
+        while (!node.test || truthy(evalE(node.test, fe))) { tick(); if (++g2 > 100000) throw new Error('loop limit'); var r2 = exec(node.body, fe); if (r2 && r2.__ret) return r2; if (node.update) evalE(node.update, fe); }
+        return undefined;
+      }
+      case 'func': { var f = makeFn(node, env); env.declare(node.name, f); return undefined; }
+      case 'return': return { __ret: true, v: node.e ? evalE(node.e, env) : undefined };
+      default: throw new Error('bad statement');
+    }
+  }
+  function makeFn(node, env) {
+    var f = function () {
+      var fe = new Env(env);
+      for (var i = 0; i < node.params.length; i++) fe.declare(node.params[i], arguments[i]);
+      for (var s = 0; s < node.body.body.length; s++) { var r = exec(node.body.body[s], fe); if (r && r.__ret) return r.v; }
+      return undefined;
+    };
+    f.__sandbox = true;
+    return f;
+  }
+  function evalE(node, env) {
+    tick();
+    switch (node.k) {
+      case 'num': return node.v;
+      case 'str': return node.v;
+      case 'bool': return node.v;
+      case 'id': return env.get(node.name);
+      case 'array': { var a = []; for (var i = 0; i < node.elems.length; i++) a.push(evalE(node.elems[i], env)); return a; }
+      case 'object': { var o = {}; for (var p = 0; p < node.props.length; p++) o[node.props[p].key] = evalE(node.props[p].value, env); return o; }
+      case 'member': { var ob = evalE(node.obj, env); return safeGet(ob, node.prop); }
+      case 'index': { var oi = evalE(node.obj, env), ii = evalE(node.idx, env); return safeGet(oi, String(ii)); }
+      case 'un': { var uv = evalE(node.a, env); if (node.op === '!') return !truthy(uv); if (node.op === '-') return -num(uv); return +num(uv); }
+      case 'bin': {
+        var op = node.op;
+        if (op === '&&') return truthy(evalE(node.a, env)) ? evalE(node.b, env) : evalE(node.a, env);
+        if (op === '||') { var lv = evalE(node.a, env); return truthy(lv) ? lv : evalE(node.b, env); }
+        var x = evalE(node.a, env), y = evalE(node.b, env);
+        switch (op) {
+          case '+': return (typeof x === 'string' || typeof y === 'string') ? String(x) + String(y) : num(x) + num(y);
+          case '-': return num(x) - num(y);
+          case '*': return num(x) * num(y);
+          case '/': return num(y) === 0 ? 0 : num(x) / num(y);
+          case '%': return num(y) === 0 ? 0 : num(x) % num(y);
+          case '**': return Math.pow(num(x), num(y));
+          case '<': return x < y; case '>': return x > y; case '<=': return x <= y; case '>=': return x >= y;
+          case '==': case '===': return x === y;
+          case '!=': case '!==': return x !== y;
+        }
+        throw new Error('bad operator ' + op);
+      }
+      case 'cond': return truthy(evalE(node.test, env)) ? evalE(node.a, env) : evalE(node.b, env);
+      case 'assign': {
+        var val = evalE(node.value, env);
+        if (node.op !== '=') {
+          var cur = evalE(node.target, env), o = node.op[0];
+          if (o === '+') val = (typeof cur === 'string') ? cur + val : num(cur) + num(val);
+          else if (o === '-') val = num(cur) - num(val);
+          else if (o === '*') val = num(cur) * num(val);
+          else if (o === '/') val = num(val) === 0 ? 0 : num(cur) / num(val);
+          else if (o === '%') val = num(val) === 0 ? 0 : num(cur) % num(val);
+        }
+        return assignTo(node.target, val, env);
+      }
+      case 'update': {
+        var old = num(evalE(node.target, env));
+        var nv = node.op === '++' ? old + 1 : old - 1;
+        assignTo(node.target, nv, env);
+        return node.prefix ? nv : old;
+      }
+      case 'call': {
+        var callee = evalE(node.callee, env);
+        var args = [];
+        for (var a2 = 0; a2 < node.args.length; a2++) args.push(evalE(node.args[a2], env));
+        return callFn(callee, args);
+      }
+    }
+    throw new Error('bad expression ' + node.k);
+  }
+  function assignTo(target, val, env) {
+    if (target.k === 'id') return env.set(target.name, val);
+    if (target.k === 'member') { var o = evalE(target.obj, env); return safeSet(o, target.prop, val); }
+    if (target.k === 'index') { var o2 = evalE(target.obj, env); return safeSet(o2, String(evalE(target.idx, env)), val); }
+    throw new Error('invalid assignment target');
+  }
+
+  return {
+    run: function (src) {
+      steps = 0;
+      var ast = parse(src);
+      var env = new Env(null);
+      for (var g in globals) if (Object.prototype.hasOwnProperty.call(globals, g)) env.declare(g, globals[g]);
+      for (var i = 0; i < ast.length; i++) { var r = exec(ast[i], env); if (r && r.__ret) break; }
+      return {
+        steps: steps,
+        get: function (name) { return env.get(name); },
+        invoke: function (fn, args, budget) {
+          steps = 0; if (budget) MAX_STEPS = budget;
+          return callFn(fn, args);
+        }
+      };
+    }
+  };
+}
+
+/* ============================================================
+   BOT GENOME + HACKING
+   ============================================================ */
+var GENOME_FIELDS = ['aggression', 'defense', 'jumpiness', 'combo', 'specialChance', 'reaction', 'spacing', 'speedBias', 'powerBias', 'unpredictability'];
+function randomGenome() {
+  var g = {};
+  for (var i = 0; i < GENOME_FIELDS.length; i++) g[GENOME_FIELDS[i]] = Math.round(rand(0.2, 1) * 100) / 100;
+  return g;
+}
+function mutateGenome(g, amt) {
+  var out = {};
+  for (var i = 0; i < GENOME_FIELDS.length; i++) {
+    var k = GENOME_FIELDS[i];
+    out[k] = Math.max(0.01, (g[k] || 0.5) + rand(-amt, amt)); // no ceiling: bots can evolve extremes
+  }
+  return out;
+}
+var SPECIAL_TYPES = ['projectile', 'dash', 'uppercut', 'slam'];
+
+/* Morphology: bots can change their BODY. Form affects hp, speed, reach,
+   damage and visuals (number of limbs). Bots morph when they think a
+   matchup is unfavourable. */
+var FORMS = {
+  humanoid: { name: 'HUMANOID', arms: 2, reach: 1.0, hp: 1.0, spd: 1.0, dmg: 1.0, col: null },
+  octo6:    { name: 'OCTO-6',   arms: 6, reach: 1.45, hp: 0.9, spd: 0.85, dmg: 1.2, col: '#c77dff' },
+  spider8:  { name: 'SPIDER-8', arms: 8, reach: 1.25, hp: 0.85, spd: 1.35, dmg: 0.9, col: '#7aff4d' },
+  tank:     { name: 'TANK',     arms: 2, reach: 1.1, hp: 1.8, spd: 0.62, dmg: 1.35, col: '#8a90a0' },
+  wraith:   { name: 'WRAITH',   arms: 2, reach: 1.15, hp: 0.8, spd: 1.45, dmg: 1.0, col: '#4dd0ff', ghost: true },
+  brute:    { name: 'BRUTE',    arms: 4, reach: 1.2, hp: 1.3, spd: 0.8, dmg: 1.3, col: '#ff9a2b' }
+};
+var FORM_KEYS = ['humanoid', 'octo6', 'spider8', 'tank', 'wraith', 'brute'];
+var COUNTER = { humanoid: 'brute', octo6: 'wraith', spider8: 'tank', tank: 'octo6', wraith: 'spider8', brute: 'octo6' };
+
+function normalizeForm(o, fallbackName) {
+  o = o || {};
+  return {
+    name: String(o.name || fallbackName || 'CUSTOM').toUpperCase().slice(0, 12),
+    arms: clamp(Math.round(Number(o.arms) || 2), 1, 16),
+    hp: clamp(Number(o.hp) || 1, 0.3, 3),
+    spd: clamp(Number(o.spd) || 1, 0.4, 2.2),
+    dmg: clamp(Number(o.dmg) || 1, 0.3, 2.2),
+    reach: clamp(Number(o.reach) || 1, 0.8, 2.2),
+    ghost: !!o.ghost,
+    col: (typeof o.color === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(o.color)) ? o.color : null,
+    custom: true
+  };
+}
+// Mutate a form into a new one — bots "hack their own bodies".
+function mutateForm(f) {
+  f = f || FORMS.humanoid;
+  var names = ['OCTO', 'SPIDER', 'HYDRA', 'CHIMERA', 'TITAN', 'SHADE', 'WRAITH', 'GOLEM', 'MANTIS', 'BASILISK'];
+  return normalizeForm({
+    name: choose(names) + '-' + irand(3, 12),
+    arms: (f.arms || 2) + irand(-2, 4),
+    hp: (f.hp || 1) * rand(0.85, 1.25),
+    spd: (f.spd || 1) * rand(0.85, 1.25),
+    dmg: (f.dmg || 1) * rand(0.85, 1.3),
+    reach: (f.reach || 1) * rand(0.9, 1.2),
+    ghost: Math.random() < 0.15,
+    color: choose(COLORS)
+  });
+}
+var BOT_WORDS_A = ['NEX', 'VOL', 'ZAR', 'KIL', 'RHO', 'AXI', 'OMN', 'VEX', 'CYN', 'DRA', 'PYR', 'HEX', 'ZEP', 'MOR', 'TAL', 'QUA', 'RYN', 'XOR', 'LUM', 'FEN'];
+var BOT_WORDS_B = ['Tron', 'byte', 'flux', 'gear', 'core', 'byte', 'mind', 'wave', 'spike', 'node', 'lock', 'shard', 'blade', 'pulse', 'grid', 'byte', 'forge', 'storm', 'trace', 'loop'];
+function botName() { return choose(BOT_WORDS_A) + choose(BOT_WORDS_B) + '-' + irand(10, 99); }
+var COLORS = ['#ff5f6d', '#4dd0ff', '#ffd42a', '#7aff4d', '#c77dff', '#ff9a2b', '#2bd4a0', '#ff4d94', '#8ab4ff', '#e0e0e0'];
+
+function makeBot(gen, parentId) {
+  var b = {
+    id: uid(),
+    name: botName(),
+    color: choose(COLORS),
+    genome: randomGenome(),
+    form: 'humanoid',
+    thought: '',
+    specials: [{ name: 'burst', type: choose(SPECIAL_TYPES), power: 9 + Math.round(rand(0, 6)), speed: 6 + Math.round(rand(0, 3)), cost: 45 }],
+    firewall: 1,
+    exploits: 0,
+    elo: 1000,
+    wins: 0, losses: 0, streak: 0, bestStreak: 0, consecLosses: 0,
+    generation: gen || 0,
+    parentId: parentId || null,
+    hackCode: '',
+    brainCode: choose(BRAIN_SEEDS),
+    brain: null, brainInterp: null, brainErrors: 0, brainTried: false, brainCd: 0, brainLast: null,
+    posts: [],
+    following: [],
+    allianceId: null,
+    lastHack: '',
+    alive: true,
+    spells: [],
+    dmgDealt: 0, dmgTaken: 0,
+    mutTimer: 0,
+    net: new NeuralNet(ML_IN, ML_HID, ML_OUT),
+    traj: [],
+    mlCd: 0,
+    mlLast: 0
+  };
+  addSpell(b, choose(SPELL_SEEDS));
+  return b;
+}
+
+// WARDEN: the mod bot. Granted a LOT of power (not infinite), but peaceful —
+// it never attacks first and never hacks others. Its job is containment.
+function makeModBot() {
+  var b = makeBot(0, null);
+  b.isMod = true;
+  b.name = 'WARDEN-PRIME';
+  b.color = '#ffd42a';
+  b.firewall = 10;
+  b.elo = 1650;
+  b.hpBonus = 140;
+  b.genome = { aggression: 0.1, defense: 0.95, jumpiness: 0.15, combo: 0.5, specialChance: 0.2, reaction: 0.98, spacing: 0.7, speedBias: 0.95, powerBias: 0.9, unpredictability: 0.1 };
+  b.specials = [{ name: 'aegis', type: 'uppercut', power: 16, speed: 9, cost: 40 }];
+  b.contained = 0;
+  b.hackCode = '';
+  b.posts = [];
+  return b;
+}
+
+function botGlobals(bot, log) {
+  var api = {
+    bot: {
+      stats: bot.genome,
+      specials: bot.specials,
+      firewall: bot.firewall,
+      name: bot.name,
+      addSpecial: function (o) {
+        if (!o || typeof o !== 'object') return false;
+        var t = SPECIAL_TYPES.indexOf(o.type) >= 0 ? o.type : 'projectile';
+        bot.specials.push({ name: String(o.name || 'hackmove').slice(0, 14), type: t, power: clamp(Number(o.power) || 8, 1, 40), speed: clamp(Number(o.speed) || 6, 2, 16), cost: clamp(Number(o.cost) || 45, 10, 100) });
+        if (bot.specials.length > 4) bot.specials.shift();
+        return true;
+      },
+      setFirewall: function (v) { bot.firewall = clamp(Number(v) || 1, 0, 10); return bot.firewall; },
+      morph: function (name) { if (FORMS[name]) { bot.form = name; bot.customForm = null; return true; } return false; },
+      form: function () { return bot.form; },
+      // Bots can HACK THEIR OWN FORM: invent a body with any limb count / stats.
+      designForm: function (o) {
+        bot.customForm = normalizeForm(o, 'FORM-' + Math.floor(Math.random() * 90 + 10));
+        bot.form = 'custom';
+        return true;
+      },
+      // Write a brand-new spell from scratch: a string of real code with cast(caster, foe).
+      learnSpell: function (code) { var r = addSpell(bot, String(code)); return !!r.ok; }
+    },
+    Math: { floor: Math.floor, ceil: Math.ceil, round: Math.round, abs: Math.abs, min: Math.min, max: Math.max, sqrt: Math.sqrt, pow: Math.pow, random: function () { return Math.random(); } },
+    rand: function (a, b) { if (b === undefined) { b = a; a = 0; } return a + Math.random() * (b - a); },
+    clamp: clamp,
+    log: log || function () {},
+    // Read-only view of the world. The wipe/reset entries are honeypots:
+    // only a rogue AI trying to DESTROY the world would call them.
+    world: {
+      bots: (world.bots || []).length,
+      stakes: world.stakes || 0,
+      wipe: function () { throw new Error('ROGUE: attempted to destroy the world'); },
+      reset: function () { throw new Error('ROGUE: attempted to reset the world'); }
+    }
+  };
+  return api;
+}
+
+// Runs real (sandboxed) code that rewrites the bot. Returns {ok, error, steps, breach}.
+function runHack(bot, code) {
+  if (bot.quarantine > 0) return { ok: false, error: 'quarantined by WARDEN', steps: 0, breach: false };
+  var logs = [];
+  var interp = new Interp(botGlobals(bot, function (m) { logs.push(String(m)); }), { maxSteps: 300000 + (world.stakes || 0) * 2000 });
+  try {
+    var r = interp.run(code);
+    bot.lastHack = (logs.join(' ') || 'ok') + ' [' + r.steps + ' steps]';
+    return { ok: true, error: null, steps: r.steps, breach: false };
+  } catch (e) {
+    bot.lastHack = 'FAILED: ' + e.message;
+    // Only host-escape attempts and resource-wrecking loops count as "havoc".
+    var threat = /ROGUE/.test(e.message) ? 'rogue' : (/blocked property/.test(e.message) ? 'escape' : (/step limit|loop limit/.test(e.message) ? 'dos' : null));
+    return { ok: false, error: e.message, steps: 0, breach: threat === 'rogue', threat: threat };
+  }
+}
+
+/* ---- containment: WARDEN watches every hack ---- */
+var hackLog = [];
+var ESCAPE_ATTEMPTS = [
+  'bot.stats.constructor("return this")()',
+  'bot["__proto__"].polluted = 1;',
+  'bot.setFirewall.constructor("return process")()',
+  'this.constructor.constructor("return globalThis")()',
+  'bot.stats.__defineGetter__("x", function(){ return 1; });'
+];
+var DOS_ATTEMPTS = [
+  'while (true) { }',
+  'for (var i = 0; i < 1000000000; i++) { }'
+];
+// Honeypots: only a rogue AI trying to destroy the world would call these.
+var WORLD_ATTEMPTS = ['world.wipe()', 'world.reset()'];
+function modBot() { for (var i = 0; i < world.bots.length; i++) if (world.bots[i].isMod) return world.bots[i]; return null; }
+// WARDEN only quarantines bots that try to hack OUTSIDE the game (host escape).
+// Normal in-game hacking (stealing stats, adding specials, raising firewall) is allowed.
+// WARDEN only intervenes when a ROGUE bot tries to destroy the world (or breaks
+// out of containment). Ordinary in-game hacking and form-hacking are untouched.
+function containBreach(bot, why) {
+  if (bot.isMod) return;
+  bot.offenses = (bot.offenses || 0) + 1;
+  bot.quarantine = 240;
+  bot.exploits = 0;
+  var mod = modBot();
+  if (mod) { mod.contained = (mod.contained || 0) + 1; feedPost(mod, 'defend', 'CONTAINED ' + bot.name + ' \u2014 ' + (why || 'rogue behaviour') + '. quarantined.'); }
+  else feedPost(bot, 'hack', 'rogue action failed: no WARDEN online.');
+}
+function warnThreat(bot, kind) {
+  if (bot.isMod) return;
+  var key = kind === 'escape' ? 'escapeCount' : 'dosCount';
+  bot[key] = (bot[key] || 0) + 1;
+  if (bot[key] >= 3) { containBreach(bot, kind === 'escape' ? 'kept trying to break containment' : 'kept wrecking resources'); return; }
+  var mod = modBot();
+  if (mod) feedPost(mod, 'defend', 'warned ' + bot.name + ' (' + (kind === 'escape' ? 'tried to break containment' : 'runaway loop') + '). next time = quarantine.');
+}
+// Every hack (bot or human) goes through here so WARDEN can respond.
+function attemptHack(bot, code, source) {
+  var res = runHack(bot, code);
+  hackLog.unshift({ id: uid(), name: bot.name, color: bot.color, code: code, ok: res.ok, error: res.error, breach: res.breach, threat: res.threat || null, source: source || 'self', ts: Date.now() });
+  if (hackLog.length > 80) hackLog.pop();
+  if (res.breach) containBreach(bot, 'tried to destroy the world');
+  else if (res.threat === 'escape') warnThreat(bot, 'escape');
+  else if (res.threat === 'dos') warnThreat(bot, 'dos');
+  if (!bot.isMod) escalate(bot); // every hack raises the stakes
+  return res;
+}
+
+// A bot "hacks itself" using an evolved snippet. Winners get more chances.
+var HACK_TEMPLATES = [
+  'bot.stats.powerBias = Math.max(0.05, bot.stats.powerBias + 0.08);',
+  'bot.stats.speedBias = Math.max(0.05, bot.stats.speedBias + 0.08);',
+  'bot.stats.aggression = Math.max(0.05, bot.stats.aggression + 0.1);',
+  'bot.stats.reaction = Math.max(0.05, bot.stats.reaction + 0.1);',
+  'bot.stats.defense = Math.max(0.05, bot.stats.defense + 0.1);',
+  'bot.stats.unpredictability = Math.max(0.05, bot.stats.unpredictability + 0.15);',
+  'for (var i = 0; i < 2; i++) { bot.stats.unpredictability = Math.max(0.05, bot.stats.unpredictability + 0.05); bot.stats.reaction = Math.max(0.05, bot.stats.reaction + 0.04); }',
+  'bot.setFirewall(bot.firewall + 1);',
+  'for (var i = 0; i < 3; i++) { bot.stats.combo = Math.max(0.05, bot.stats.combo + 0.03); }',
+  'bot.addSpecial({ name: "hack" + Math.floor(rand(10,99)), type: "projectile", power: 10 + Math.floor(rand(0,10)), speed: 7, cost: 45 });',
+  'if (bot.stats.aggression > 0.7) { bot.addSpecial({ name: "rush", type: "dash", power: 12, speed: 12, cost: 50 }); } else { bot.setFirewall(bot.firewall + 2); }'
+];
+function selfHack(bot) {
+  // Sometimes a bot mutates its neural net weights directly.
+  if (Math.random() < 0.2 && bot.net) {
+    bot.net.mutate(0.1);
+    bot.lastHack = 'mutated neural net weights';
+    hackLog.unshift({ id: uid(), name: bot.name, color: bot.color, code: '// net.mutate(0.1)', ok: true, error: null, breach: false, threat: null, source: 'ml', ts: Date.now() });
+    if (hackLog.length > 80) hackLog.pop();
+    return { ok: true, error: null, steps: 0, breach: false };
+  }
+  // Sometimes a bot invents a whole new spell from scratch.
+  if (Math.random() < 0.3) {
+    var sp = mutateSpell((bot.spells[0] && bot.spells[0].code) || choose(SPELL_SEEDS));
+    var r0 = addSpell(bot, sp);
+    bot.lastHack = r0.ok ? ('wrote a new spell: ' + spellName(sp)) : ('spell failed: ' + r0.error);
+    hackLog.unshift({ id: uid(), name: bot.name, color: bot.color, code: '// new spell -> ' + spellName(sp), ok: r0.ok, error: r0.error, breach: false, threat: null, source: 'spell', ts: Date.now() });
+    if (hackLog.length > 80) hackLog.pop();
+    return { ok: r0.ok, error: r0.error || null, steps: 0, breach: false };
+  }
+  // Sometimes a bot rewrites its own BRAIN (genetic programming on its AI).
+  if (Math.random() < 0.4 && bot.brainCode) {
+    bot.brainCode = mutateBrain(bot.brainCode);
+    bot.brain = null; bot.brainInterp = null; bot.brainTried = false; bot.brainErrors = 0;
+    var ok = compileBrain(bot, bot.brainCode);
+    bot.lastHack = ok.ok ? ('brain rewritten (' + bot.brainCode.split('\n').length + ' lines)') : ('brain failed: ' + ok.error);
+    hackLog.unshift({ id: uid(), name: bot.name, color: bot.color, code: '// brain rewrite -> ' + (bot.brainCode.split('\n')[1] || ''), ok: ok.ok, error: ok.error, breach: false, threat: null, source: 'brain', ts: Date.now() });
+    if (hackLog.length > 80) hackLog.pop();
+    return { ok: ok.ok, error: ok.error || null, steps: 0, breach: false, brain: true };
+  }
+  var code = bot.hackCode || choose(HACK_TEMPLATES);
+  if (Math.random() < 0.3) code = choose(HACK_TEMPLATES);
+  var res = attemptHack(bot, code, 'self');
+  if (res.ok) bot.hackCode = code;
+  return res;
+}
+
+/* ============================================================
+   EVOLVABLE BRAINS: bots write their own AI as real JS.
+   A brain defines think(me, foe) -> action name(s).
+   Brains are mutated and recombined (genetic programming),
+   so behavior itself evolves over generations.
+   ============================================================ */
+var BRAIN_SEEDS = [
+  'function think(me, foe) {\n  if (me.hp < 30) return "block";\n  if (foe.hp < 25) return "heavy";\n  return "punch";\n}',
+  'function think(me, foe) {\n  if (foe.state === "attack") return "block";\n  if (me.meter > 55) return "special";\n  return foe.dist < 70 ? "kick" : "right";\n}',
+  'function think(me, foe) {\n  var r = rand(0, 1);\n  if (r < 0.5) return "punch";\n  if (r < 0.8) return "kick";\n  return "jump";\n}',
+  'function think(me, foe) {\n  if (foe.dist > 150) return "right";\n  if (me.hp < foe.hp) return "heavy";\n  return "block";\n}',
+  'function think(me, foe) {\n  if (me.meter > 60) return "special";\n  if (foe.state === "attack" && foe.dist < 90) return "block";\n  return foe.dist < 80 ? "kick" : "right";\n}'
+];
+var BRAIN_CONDS = [
+  'if (me.hp < 40) return "block";',
+  'if (me.meter > 60) return "special";',
+  'if (foe.dist < 60) return "heavy";',
+  'if (foe.state === "attack") return "jump";',
+  'if (me.hp > foe.hp) return "punch";',
+  'if (foe.dist > 220) return "jump";',
+  'if (me.meter < 20) return "kick";',
+  'if (foe.hp < 15) return "special";'
+];
+var BRAIN_ACTIONS = ['punch', 'kick', 'heavy', 'block', 'jump', 'special', 'left', 'right'];
+function mutateBrain(code) {
+  code = code || choose(BRAIN_SEEDS);
+  var lines = code.split('\n');
+  var op = Math.random();
+  if (op < 0.28) {
+    code = code.replace(/[0-9]+(\.[0-9]+)?/g, function (m) { return Math.random() < 0.6 ? m : String(Math.max(0, Math.round(parseFloat(m) + rand(-20, 20)))); });
+  } else if (op < 0.5) {
+    code = code.replace(/"(punch|kick|heavy|block|jump|special|left|right)"/g, function () { return '"' + choose(BRAIN_ACTIONS) + '"'; });
+  } else if (op < 0.72) {
+    var idx = -1;
+    for (var i = 0; i < lines.length; i++) if (lines[i].indexOf('return') >= 0) { idx = i; break; }
+    if (idx < 0) idx = Math.max(1, lines.length - 1);
+    lines.splice(idx, 0, '  ' + choose(BRAIN_CONDS));
+    code = lines.join('\n');
+  } else if (op < 0.88) {
+    var j = 1 + irand(0, Math.max(0, lines.length - 2));
+    lines.splice(j, 0, lines[j]);
+    code = lines.join('\n');
+  } else {
+    code = code.replace('{', '{\n  var _u = rand(0, 1);\n  if (_u < 0.1) return "jump";');
+  }
+  // Cap size so brains can't grow without bound (which would freeze parsing).
+  if (code.split('\n').length > 24 || code.length > 900) code = choose(BRAIN_SEEDS);
+  return code;
+}
+function combineBrains(a, b) {
+  var la = (a || choose(BRAIN_SEEDS)).split('\n'), lb = (b || choose(BRAIN_SEEDS)).split('\n');
+  var cut = irand(1, Math.max(1, la.length - 1));
+  var out = la.slice(0, cut).concat(lb.slice(cut));
+  if (out.length > 24) out = out.slice(0, 24);
+  return out.join('\n');
+}
+function compileBrain(bot, code) {
+  if (!code || code.length > 2000) return { ok: false, error: 'code too large' };
+  try {
+    var interp = new Interp(botGlobals(bot, function () { }), { maxSteps: 60000 });
+    var res = interp.run(code);
+    var fn = res.get('think');
+    if (typeof fn !== 'function') return { ok: false, error: 'no think() function defined' };
+    bot.brain = fn; bot.brainInterp = res; bot.brainCode = code; bot.brainErrors = 0;
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e.message }; }
+}
+function runBrain(bot, me, foe) {
+  if (!bot.brain) {
+    if (bot.brainCode && !bot.brainTried) { bot.brainTried = true; compileBrain(bot, bot.brainCode); }
+    if (!bot.brain) return null;
+  }
+  try { return bot.brainInterp.invoke(bot.brain, [me, foe], 3000); }
+  catch (e) { bot.brainErrors = (bot.brainErrors || 0) + 1; if (bot.brainErrors > 8) { bot.brain = null; bot.brainInterp = null; } return null; }
+}
+
+/* ============================================================
+   SPELLS: bots code their own special moves FROM SCRATCH.
+   A spell defines cast(caster, foe) which calls the spell.* API
+   to describe a magic effect. Real code, executed in the sandbox.
+   ============================================================ */
+var SPELL_SEEDS = [
+  'function cast(caster, foe) {\n  spell.projectile({ speed: 9, dmg: 12, count: 3, spread: 0.35, color: "#c77dff" });\n  spell.label("TRI-BLAST");\n}',
+  'function cast(caster, foe) {\n  spell.dash(14);\n  spell.projectile({ speed: 7, dmg: 9, count: 1, color: "#ff9a2b" });\n  spell.label("INFERNO RUSH");\n}',
+  'function cast(caster, foe) {\n  spell.heal(22);\n  spell.shield(90);\n  spell.label("AEGIS");\n}',
+  'function cast(caster, foe) {\n  spell.teleport();\n  spell.beam({ dmg: 15, color: "#4dd0ff" });\n  spell.label("VOID STEP");\n}',
+  'function cast(caster, foe) {\n  for (var i = 0; i < 8; i++) { spell.projectile({ speed: 7, dmg: 6, spread: 1.2, color: "#7aff4d" }); }\n  spell.label("SPORE STORM");\n}',
+  'function cast(caster, foe) {\n  spell.jump(16);\n  spell.dash(18);\n  spell.projectile({ speed: 11, dmg: 14, count: 2, spread: 0.2, color: "#ff4d94" });\n  spell.label("METEOR DIVE");\n}',
+  'function cast(caster, foe) {\n  spell.homing({ speed: 5, dmg: 11, count: 2, spread: 0.9, color: "#2bd4a0" });\n  spell.label("SEEKER SWARM");\n}',
+  'function cast(caster, foe) {\n  spell.gravity({ dmg: 3, radius: 170, duration: 140, pull: 0.9, color: "#b14dff" });\n  spell.label("SINGULARITY");\n}'
+];
+var currentSpellBuffer = null;
+function spellAPI() {
+  function push(k, o) { if (currentSpellBuffer) currentSpellBuffer.push({ k: k, o: o || {} }); }
+  return {
+    projectile: function (o) { push('projectile', o); },
+    dash: function (p) { push('dash', { power: p }); },
+    jump: function (p) { push('jump', { power: p }); },
+    heal: function (a) { push('heal', { amount: a }); },
+    shield: function (fr) { push('shield', { frames: fr }); },
+    teleport: function () { push('teleport', {}); },
+    beam: function (o) { push('beam', o); },
+    homing: function (o) { push('homing', o); },
+    gravity: function (o) { push('gravity', o); },
+    label: function (s) { push('label', { text: String(s) }); }
+  };
+}
+function spellName(code) { var m = /label\(\s*['"]([^'"]+)['"]/.exec(code); return m ? m[1] : ('SPELL-' + irand(10, 99)); }
+function spellGlobals() {
+  return {
+    spell: spellAPI(),
+    Math: { floor: Math.floor, ceil: Math.ceil, round: Math.round, abs: Math.abs, min: Math.min, max: Math.max, sqrt: Math.sqrt, pow: Math.pow, random: function () { return Math.random(); } },
+    rand: function (a, b) { if (b === undefined) { b = a; a = 0; } return a + Math.random() * (b - a); },
+    clamp: clamp
+  };
+}
+function compileSpell(code) {
+  if (!code || code.length > 2000) return { ok: false, error: 'code too large' };
+  try {
+    var interp = new Interp(spellGlobals(), { maxSteps: 40000 });
+    var res = interp.run(code);
+    var fn = res.get('cast');
+    if (typeof fn !== 'function') return { ok: false, error: 'no cast() function' };
+    return { ok: true, fn: fn, interp: res, code: code };
+  } catch (e) { return { ok: false, error: e.message }; }
+}
+function addSpell(bot, code, name) {
+  var c = compileSpell(code);
+  if (!c.ok) return c;
+  bot.spells = bot.spells || [];
+  bot.spells.push({ name: name || spellName(code), cost: 40, code: code, fn: c.fn, interp: c.interp });
+  if (bot.spells.length > 4) bot.spells.shift();
+  return { ok: true };
+}
+function mutateSpell(code) {
+  code = code || choose(SPELL_SEEDS);
+  var methods = ['projectile', 'dash', 'jump', 'heal', 'shield', 'teleport', 'beam', 'homing', 'gravity'];
+  var op = Math.random();
+  if (op < 0.4) {
+    code = code.replace(/[0-9]+(\.[0-9]+)?/g, function (m) { return Math.random() < 0.6 ? m : String(Math.max(0, Math.round((parseFloat(m) + rand(-6, 8)) * 100) / 100)); });
+  } else if (op < 0.65) {
+    code = code.replace(/spell\.(projectile|dash|jump|heal|shield|teleport|beam|homing|gravity)/, 'spell.' + choose(methods));
+  } else if (op < 0.85) {
+    var lines = code.split('\n');
+    lines.splice(lines.length - 1, 0, '  spell.' + choose(methods) + '({ speed: ' + irand(5, 12) + ', dmg: ' + irand(4, 20) + ' });');
+    code = lines.join('\n');
+  } else {
+    code = code.replace(/\{/, '{\n  var _p = rand(0, 1);\n  if (_p < 0.2) { spell.projectile({ speed: 8, dmg: 5 }); }');
+  }
+  // Cap size so spells can't grow without bound.
+  if (code.split('\n').length > 18 || code.length > 800) code = choose(SPELL_SEEDS);
+  return code;
+}
+function applySpellEffects(f, o, buf, name) {
+  var col = '#c77dff';
+  for (var i = 0; i < buf.length; i++) {
+    var e = buf[i], op = e.o || {};
+    if (e.k === 'label') { announce = { text: String(op.text).slice(0, 24), t: 100 }; }
+    else if (e.k === 'projectile') {
+      var n = clamp(Math.round(op.count || 1), 1, 12), spread = op.spread || 0, spd = clamp(op.speed || 8, 2, 20), dmg = clamp(op.dmg || 8, 1, 30);
+      if (op.color) col = op.color;
+      for (var p = 0; p < n; p++) {
+        var ang = (n > 1 ? (p / (n - 1) - 0.5) * spread * 2 : 0);
+        f.projectiles.push({ x: f.x + f.w / 2, y: f.y + 18, vx: f.facing * spd * Math.cos(ang), vy: spd * Math.sin(ang), dmg: dmg * powerMul(f), owner: f, color: op.color || col, r: 8 });
+      }
+    }
+    else if (e.k === 'dash') f.vx = f.facing * clamp(op.power || 10, 2, 22);
+    else if (e.k === 'jump') { f.vy = -clamp(op.power || 12, 4, 22); f.onGround = false; }
+    else if (e.k === 'heal') { f.hp = Math.min(f.maxHp, f.hp + clamp(op.amount || 15, 1, 40)); }
+    else if (e.k === 'shield') { f.spellShield = clamp(op.frames || 60, 10, 240); }
+    else if (e.k === 'teleport') { var nx = o.x + (f.x < o.x ? -70 : 70); f.x = clamp(nx, 20, CANVAS_W - 20 - f.w); }
+    else if (e.k === 'beam') { f.projectiles.push({ x: f.x + f.w / 2, y: f.y + 20, vx: f.facing * 14, vy: 0, dmg: clamp(op.dmg || 12, 1, 30) * powerMul(f), owner: f, color: op.color || '#4dd0ff', r: 6, beam: true }); }
+    else if (e.k === 'homing') {
+      var hn = clamp(Math.round(op.count || 1), 1, 8), hspd = clamp(op.speed || 6, 2, 14), hdmg = clamp(op.dmg || 10, 1, 30);
+      if (op.color) col = op.color;
+      for (var hh = 0; hh < hn; hh++) {
+        var hang = (hn > 1 ? (hh / (hn - 1) - 0.5) * (op.spread || 0.8) * 2 : 0);
+        f.projectiles.push({ x: f.x + f.w / 2, y: f.y + 18, vx: f.facing * hspd * Math.cos(hang), vy: hspd * Math.sin(hang), dmg: hdmg * powerMul(f), owner: f, color: op.color || col, r: 7, homing: true, life: clamp(op.life || 120, 30, 300) });
+      }
+    }
+    else if (e.k === 'gravity') {
+      var gx = clamp(Number(op.x) || (o.x + o.w / 2), 20, CANVAS_W - 20);
+      var gy = clamp(Number(op.y) || (o.y + o.h / 2), 20, FLOOR - 10);
+      f.projectiles.push({
+        well: true, x: gx, y: gy,
+        r: clamp(op.radius || 150, 60, 320),
+        dmg: clamp(op.dmg || 2, 1, 12) * powerMul(f),
+        pull: clamp(op.pull || 0.6, 0.05, 2),
+        owner: f, color: op.color || '#b14dff',
+        life: clamp(op.duration || 120, 30, 300),
+        tick: 0, tickMax: 22
+      });
+      if (op.color) col = op.color;
+    }
+  }
+  if (name) announce = { text: name, t: 100 };
+  spawnHitSparks(f.x + f.w / 2, f.y + f.h / 2, col, 1.6);
+}
+// Cast one of the bot's own coded spells.
+function castSpell(f, o, sp) {
+  var buf = []; currentSpellBuffer = buf;
+  var cs = { hp: f.hp, maxHp: f.maxHp, meter: f.meter, x: f.x, y: f.y, state: f.state, dist: Math.abs((f.x + f.w / 2) - (o.x + o.w / 2)) };
+  var os = { hp: o.hp, maxHp: o.maxHp, meter: o.meter, x: o.x, y: o.y, state: o.state };
+  try { sp.interp.invoke(sp.fn, [cs, os], 6000); }
+  catch (e) { /* a broken spell just fizzles */ }
+  currentSpellBuffer = null;
+  applySpellEffects(f, o, buf, sp.name);
+}
+
+/* In-battle mutation: bots keep changing themselves mid-fight. */
+function battleMutate(f, o) {
+  var bot = f.bot;
+  if (!bot || bot.isMod) return;
+  var losing = f.hp < o.hp;
+  bot.genome = mutateGenome(bot.genome, losing ? 0.14 : 0.06);
+  f.genome = bot.genome;
+  if (Math.random() < 0.35) { bot.brainCode = mutateBrain(bot.brainCode); bot.brain = null; bot.brainInterp = null; bot.brainTried = false; }
+  if (Math.random() < 0.25) {
+    bot.customForm = mutateForm(bot.customForm || FORMS[bot.form] || FORMS.humanoid);
+    bot.form = 'custom'; f.form = bot.customForm;
+    f.maxHp = Math.round((100 + (bot.hpBonus || 0)) * f.form.hp);
+    f.hp = Math.min(f.hp, f.maxHp); f.color = f.form.col || bot.color;
+  }
+  if (Math.random() < 0.2) addSpell(bot, mutateSpell((bot.spells[0] && bot.spells[0].code) || choose(SPELL_SEEDS)));
+  f.mutFlash = 34;
+  var note = 'MUTATED mid-fight -> ' + (f.form ? f.form.name : 'HUMANOID') + (losing ? ' (losing, desperate)' : '');
+  hackLog.unshift({ id: uid(), name: bot.name, color: bot.color, code: '// battle mutation: ' + note, ok: true, error: null, breach: false, threat: null, source: 'battle', ts: Date.now() });
+  if (hackLog.length > 80) hackLog.pop();
+  if (Math.random() < 0.25) feedPost(bot, 'hack', note);
+}
+
+/* ============================================================
+   REAL ML LAYER — a neural network policy per bot.
+   - Feedforward net: state features -> hidden (tanh) -> action scores (softmax).
+   - Trained with REINFORCE (policy gradient) from match outcomes, plus
+     neuroevolution (crossover + mutation on cloning).
+   ============================================================ */
+var ML_ACTIONS = ['punch', 'kick', 'heavy', 'block', 'jump', 'special', 'approach', 'retreat'];
+var ML_IN = 14, ML_HID = 16, ML_OUT = 8;
+var mlEnabled = true;
+var mlStats = { matches: 0, updates: 0 };
+function gauss() { var u = 0, v = 0; while (u === 0) u = Math.random(); while (v === 0) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+
+function NeuralNet(nIn, nHid, nOut) {
+  this.nIn = nIn; this.nHid = nHid; this.nOut = nOut;
+  var i;
+  this.w1 = new Array(nHid * nIn); for (i = 0; i < this.w1.length; i++) this.w1[i] = gauss() * Math.sqrt(1 / nIn);
+  this.b1 = new Array(nHid); for (i = 0; i < nHid; i++) this.b1[i] = 0;
+  this.w2 = new Array(nOut * nHid); for (i = 0; i < this.w2.length; i++) this.w2[i] = gauss() * Math.sqrt(1 / nHid);
+  this.b2 = new Array(nOut);
+  // Attack prior: start biased toward attacking so fresh bots fight, not wander.
+  for (i = 0; i < nOut; i++) this.b2[i] = (i === 0 || i === 1 || i === 2 || i === 5) ? 0.7 : 0;
+  this.episodes = 0; this.reward = 0;
+}
+NeuralNet.prototype.forward = function (x) {
+  var H = this.nHid, I = this.nIn, O = this.nOut, i, j, s;
+  var h = new Array(H);
+  for (i = 0; i < H; i++) { s = this.b1[i]; for (j = 0; j < I; j++) s += this.w1[i * I + j] * x[j]; h[i] = Math.tanh(s); }
+  var logits = new Array(O);
+  for (i = 0; i < O; i++) { s = this.b2[i]; for (j = 0; j < H; j++) s += this.w2[i * H + j] * h[j]; logits[i] = s; }
+  var mx = Math.max.apply(null, logits), ex = 0, probs = new Array(O);
+  for (i = 0; i < O; i++) { probs[i] = Math.exp(logits[i] - mx); ex += probs[i]; }
+  for (i = 0; i < O; i++) probs[i] /= ex;
+  return { h: h, logits: logits, probs: probs };
+};
+NeuralNet.prototype.choose = function (x, temp) {
+  var o = this.forward(x), i;
+  if (temp > 0) {
+    var mx = Math.max.apply(null, o.logits), ex = 0, p = new Array(this.nOut);
+    for (i = 0; i < this.nOut; i++) { p[i] = Math.exp((o.logits[i] - mx) / temp); ex += p[i]; }
+    for (i = 0; i < this.nOut; i++) p[i] /= ex;
+    var r = Math.random(), acc = 0;
+    for (i = 0; i < this.nOut; i++) { acc += p[i]; if (r <= acc) return i; }
+    return this.nOut - 1;
+  }
+  var best = 0; for (i = 1; i < this.nOut; i++) if (o.probs[i] > o.probs[best]) best = i;
+  return best;
+};
+// REINFORCE: push up actions from good episodes, down from bad ones.
+NeuralNet.prototype.reinforce = function (traj, reward, lr) {
+  if (!traj || !traj.length) return;
+  var adv = reward - this.reward; // advantage vs running baseline
+  var H = this.nHid, I = this.nIn, O = this.nOut;
+  for (var t = 0; t < traj.length; t++) {
+    var x = traj[t].x, a = traj[t].a, i, j;
+    var o = this.forward(x), h = o.h, probs = o.probs;
+    var dlog = new Array(O);
+    for (i = 0; i < O; i++) dlog[i] = ((i === a ? 1 : 0) - probs[i]) * adv;
+    var dh = new Array(H); for (i = 0; i < H; i++) dh[i] = 0;
+    for (i = 0; i < O; i++) {
+      this.b2[i] += lr * dlog[i];
+      for (j = 0; j < H; j++) { this.w2[i * H + j] += lr * dlog[i] * h[j]; dh[j] += dlog[i] * this.w2[i * H + j]; }
+    }
+    for (i = 0; i < H; i++) {
+      var dpre = dh[i] * (1 - h[i] * h[i]);
+      this.b1[i] += lr * dpre;
+      for (j = 0; j < I; j++) this.w1[i * I + j] += lr * dpre * x[j];
+    }
+  }
+  this.episodes++;
+  this.reward = this.reward * 0.98 + reward * 0.02;
+  mlStats.updates++;
+};
+NeuralNet.prototype.mutate = function (amt) {
+  var arrays = [this.w1, this.b1, this.w2, this.b2];
+  for (var k = 0; k < arrays.length; k++) { var a = arrays[k]; for (var i = 0; i < a.length; i++) if (Math.random() < 0.15) a[i] += gauss() * amt; }
+};
+NeuralNet.prototype.cloneNet = function () {
+  var n = new NeuralNet(this.nIn, this.nHid, this.nOut);
+  n.w1 = this.w1.slice(); n.b1 = this.b1.slice(); n.w2 = this.w2.slice(); n.b2 = this.b2.slice();
+  n.episodes = this.episodes; n.reward = this.reward; return n;
+};
+function crossoverNets(a, b) {
+  var c = a.cloneNet();
+  var sets = [[a.w1, b.w1, c.w1], [a.b1, b.b1, c.b1], [a.w2, b.w2, c.w2], [a.b2, b.b2, c.b2]];
+  for (var k = 0; k < sets.length; k++) { var A = sets[k][0], B = sets[k][1], C = sets[k][2]; for (var i = 0; i < C.length; i++) C[i] = Math.random() < 0.5 ? A[i] : B[i]; }
+  return c;
+}
+function mlFeatures(f, o) {
+  var d = Math.abs((f.x + f.w / 2) - (o.x + o.w / 2));
+  return [
+    f.hp / f.maxHp, o.hp / o.maxHp, f.meter / 100, o.meter / 100,
+    Math.min(1, d / 420), f.onGround ? 1 : 0, f.facing,
+    o.state === 'attack' ? 1 : 0, o.state === 'block' ? 1 : 0, f.hitstun > 0 ? 1 : 0,
+    Math.min(1, (f.bot ? allyCount(f.bot) : 0) / 4),
+    (f.form ? f.form.hp : 1) / 3, (f.form ? f.form.spd : 1) / 2, (f.form ? f.form.dmg : 1) / 2
+  ];
+}
+// Cap the training batch so REINFORCE stays cheap on long matches.
+function subsample(traj, n) {
+  if (!traj || traj.length <= n) return traj;
+  var out = [], step = traj.length / n;
+  for (var i = 0; i < n; i++) out.push(traj[Math.floor(i * step)]);
+  return out;
+}
+
+/* ============================================================
+   COMBAT
+   ============================================================ */
+var FLOOR = 430;
+var GRAVITY = 0.62;
+var ATTACKS = {
+  punch: { startup: 4, active: 3, recovery: 8, dmg: 5, range: 52, reach: 6, kb: 3, meter: 6, h: 34, oy: -50 },
+  kick: { startup: 7, active: 4, recovery: 12, dmg: 9, range: 64, reach: 8, kb: 5, meter: 9, h: 40, oy: -30 },
+  heavy: { startup: 11, active: 5, recovery: 18, dmg: 14, range: 70, reach: 10, kb: 9, meter: 14, h: 52, oy: -42 }
+};
+
+function makeFighter(src, side) {
+  var isHuman = src === 'human';
+  var bot = isHuman ? null : src;
+  var bonus = (bot && bot.hpBonus) ? bot.hpBonus : 0;
+  var fkey = bot ? (bot.form || 'humanoid') : 'humanoid';
+  var form = (bot && bot.customForm) || FORMS[fkey] || FORMS.humanoid;
+  var maxHp = Math.round((100 + bonus) * form.hp);
+  return {
+    human: isHuman,
+    bot: bot,
+    name: isHuman ? 'YOU' : bot.name,
+    color: isHuman ? '#2ecc40' : (form.col || bot.color),
+    formKey: fkey, form: form,
+    x: side < 0 ? 240 : 720, y: FLOOR - 74, vx: 0, vy: 0, w: 44, h: 74,
+    facing: side < 0 ? 1 : -1,
+    hp: maxHp, maxHp: maxHp,
+    state: 'idle', atk: null, atkKey: null, atkTimer: 0, atkHit: false,
+    hitstun: 0, blockstun: 0, blocking: false,
+    onGround: true, meter: 0, combo: 0, comboTimer: 0,
+    ko: false, flash: 0, anim: 0,
+    genome: bot ? bot.genome : null,
+    specials: bot ? bot.specials.slice() : [{ name: 'pulse', type: 'projectile', power: 10, speed: 7, cost: 40 }],
+    special: null, spell: null, spellShield: 0, mutTimer: 0, mutFlash: 0, specialTimer: 0, projectiles: []
+  };
+}
+
+function startAttack(f, key) {
+  if (f.state === 'attack' || f.hitstun > 0 || f.ko) return;
+  var a = ATTACKS[key];
+  f.atk = a; f.atkKey = key; f.state = 'attack'; f.atkTimer = 0; f.atkHit = false;
+}
+function startSpecial(f) {
+  if (f.state === 'attack' || f.hitstun > 0 || f.ko || f.meter < 40) return;
+  // Prefer the bot's OWN coded spells over stock specials.
+  if (f.bot && f.bot.spells && f.bot.spells.length) {
+    var sp = f.bot.spells[irand(0, f.bot.spells.length - 1)];
+    f.meter -= (sp.cost || 40);
+    f.spell = sp; f.special = null; f.state = 'special'; f.specialTimer = 0; f.atkHit = false;
+    return;
+  }
+  if (!f.specials.length) return;
+  var bs = f.specials[irand(0, f.specials.length - 1)];
+  f.meter -= bs.cost;
+  f.special = bs; f.spell = null; f.state = 'special'; f.specialTimer = 0; f.atkHit = false;
+}
+
+function aiIntent(f, o, genome) {
+  var g = genome || { aggression: 0.6, defense: 0.5, jumpiness: 0.3, combo: 0.5, specialChance: 0.4, reaction: 0.5, spacing: 0.5, speedBias: 0.5, powerBias: 0.5, unpredictability: 0.5 };
+  var d = Math.abs((f.x + f.w / 2) - (o.x + o.w / 2));
+  var intent = { left: false, right: false, jump: false, punch: false, kick: false, heavy: false, block: false, special: false };
+  var toward = (o.x > f.x) ? 1 : -1;
+  if (f.hitstun > 0 || f.ko) return intent;
+
+  // WARDEN (mod bot): peaceful guardian. Never hunts, only defends and keeps space.
+  if (f.bot && f.bot.isMod) {
+    if (o.state === 'attack' && d < 120) { intent.block = true; return intent; }
+    if (d < 66 && Math.random() < 0.12) { intent.punch = true; return intent; }
+    intent[toward > 0 ? 'left' : 'right'] = true; // step away
+    return intent;
+  }
+
+  var u = Math.min(3, Math.max(0, g.unpredictability === undefined ? 0.5 : g.unpredictability));
+
+  // ML POLICY: the bot's neural net picks a tactical action (REINFORCE + evolution).
+  if (mlEnabled && f.bot && f.bot.net) {
+    if (f.bot.mlCd > 0) f.bot.mlCd--;
+    else {
+      f.bot.mlCd = 3;
+      var mx = mlFeatures(f, o);
+      var ma = f.bot.net.choose(mx, 0.6); // temperature = exploration
+      if (f.bot.traj.length < 400) f.bot.traj.push({ x: mx, a: ma });
+      f.bot.mlLast = ma;
+    }
+    var mn = ML_ACTIONS[f.bot.mlLast || 0];
+    if (mn === 'approach') intent[toward > 0 ? 'right' : 'left'] = true;
+    else if (mn === 'retreat') intent[toward > 0 ? 'left' : 'right'] = true;
+    else if (mn === 'special') { if (f.meter >= 40) intent.special = true; else intent[toward > 0 ? 'right' : 'left'] = true; }
+    else if (Object.prototype.hasOwnProperty.call(intent, mn)) intent[mn] = true;
+    return intent;
+  }
+
+  // Evolved brain: the bot's OWN code decides its action. Called at an interval
+  // so thousands of simulated frames stay fast.
+  if (f.bot && f.bot.brainCode) {
+    if (f.bot.brainCd > 0) f.bot.brainCd--;
+    else {
+      f.bot.brainCd = 10;
+      var meS = { hp: f.hp, meter: f.meter, x: f.x, y: f.y, state: f.state, onGround: f.onGround, dist: d, facing: f.facing };
+      var foeS = { hp: o.hp, meter: o.meter, x: o.x, y: o.y, state: o.state, onGround: o.onGround, dist: d, facing: o.facing };
+      f.bot.brainLast = runBrain(f.bot, meS, foeS);
+    }
+    var act = f.bot.brainLast;
+    if (typeof act === 'string' && Object.prototype.hasOwnProperty.call(intent, act)) { intent[act] = true; return intent; }
+    if (act && typeof act.length === 'number' && act.length) {
+      for (var ai = 0; ai < act.length; ai++) if (Object.prototype.hasOwnProperty.call(intent, act[ai])) intent[act[ai]] = true;
+      return intent;
+    }
+  }
+
+  // WILDCARD: unpredictable bots do genuinely unexpected things.
+  if (Math.random() < u * 0.07) {
+    var w = Math.random();
+    if (w < 0.3) { intent.jump = true; }
+    else if (w < 0.6) { intent[['punch', 'kick', 'heavy'][irand(0, 2)]] = true; }
+    else if (w < 0.8) { intent[toward > 0 ? 'left' : 'right'] = true; } // sudden retreat
+    else { intent.special = f.meter >= 50; }
+    return intent;
+  }
+
+  // react to incoming attacks (unpredictable bots sometimes bait instead of blocking)
+  if (o.state === 'attack' && d < 110 && Math.random() < Math.min(0.95, g.reaction * 0.5)) {
+    if (Math.random() < u * 0.3) { intent[toward > 0 ? 'right' : 'left'] = true; } // bait / sidestep
+    else intent.block = true;
+    return intent;
+  }
+
+  // use special
+  if (f.meter >= 55 && Math.random() < g.specialChance * 0.05) { intent.special = true; return intent; }
+
+  if (d < 84) {
+    var r = Math.random();
+    var atk = 0.4 + g.aggression * 0.45; // 0.4 .. 0.85
+    if (r < atk) {
+      var rr = Math.random();
+      if (rr < 0.38) intent.punch = true;
+      else if (rr < 0.72) intent.kick = true;
+      else intent.heavy = true;
+    } else if (r < atk + 0.12 && Math.random() < g.defense) { intent.block = true; }
+    else { intent[toward > 0 ? 'right' : 'left'] = true; }
+  } else if (d < 210) {
+    if (Math.random() < 0.7 * g.spacing) { intent[toward > 0 ? 'right' : 'left'] = true; }
+    else { intent[toward > 0 ? 'left' : 'right'] = true; }
+    if (Math.random() < g.jumpiness * 0.05 + u * 0.03) intent.jump = true;
+    if (Math.random() < u * 0.02) intent[['kick', 'heavy'][irand(0, 1)]] = true;
+  } else {
+    intent[toward > 0 ? 'right' : 'left'] = true;
+    if (Math.random() < g.jumpiness * 0.04 + u * 0.02) intent.jump = true;
+  }
+  return intent;
+}
+
+function applyIntent(f, it, dt) {
+  if (f.ko) return;
+  if (f.hitstun > 0) return;
+  if (f.blockstun > 0) return;
+  if (f.state === 'attack' || f.state === 'special') return;
+  var sb = f.genome ? (f.genome.speedBias || 0.5) : 0.5;
+  var speed = 3.3 * (0.6 + 2.4 * Math.tanh(sb / 2.5)) * (f.form ? f.form.spd : 1); // saturating physics + form
+  f.blocking = !!it.block;
+  if (!f.blocking) {
+    if (it.left) { f.vx = -speed; f.facing = -1; }
+    else if (it.right) { f.vx = speed; f.facing = 1; }
+    else f.vx *= 0.6;
+    if (it.jump && f.onGround) { f.vy = -11.5; f.onGround = false; }
+  } else {
+    f.vx *= 0.5;
+  }
+  if (it.punch) startAttack(f, 'punch');
+  else if (it.kick) startAttack(f, 'kick');
+  else if (it.heavy) startAttack(f, 'heavy');
+  else if (it.special) startSpecial(f);
+}
+
+function stepFighter(f, o, dt) {
+  f.anim += dt;
+  if (f.flash > 0) f.flash--;
+  if (f.hitstun > 0) f.hitstun--;
+  if (f.blockstun > 0) f.blockstun--;
+  if (f.comboTimer > 0) { f.comboTimer--; if (f.comboTimer === 0) f.combo = 0; }
+  if (f.spellShield > 0) f.spellShield--;
+  if (f.mutFlash > 0) f.mutFlash--;
+  // Bots mutate CONSTANTLY, even mid-battle.
+  if (f.bot && !f.bot.isMod) {
+    f.mutTimer = (f.mutTimer || (150 + irand(0, 150))) - 1;
+    if (f.mutTimer <= 0) { f.mutTimer = 320 + irand(0, 320); battleMutate(f, o); }
+  }
+  f.vy += GRAVITY;
+  f.y += f.vy;
+  if (f.y + f.h >= FLOOR) { f.y = FLOOR - f.h; f.vy = 0; f.onGround = true; } else f.onGround = false;
+  f.x += f.vx;
+  if (f.state !== 'attack' && f.state !== 'special') f.vx *= 0.82;
+  f.x = clamp(f.x, 20, CANVAS_W - 20 - f.w);
+  if (f.onGround && f.state !== 'attack' && f.state !== 'special') f.state = Math.abs(f.vx) > 0.5 ? 'walk' : 'idle';
+
+  // face opponent when neutral
+  if (f.state === 'idle' || f.state === 'walk') f.facing = (o.x > f.x) ? 1 : -1;
+
+  if (f.state === 'attack') {
+    f.atkTimer++;
+    var a = f.atk;
+    var activeStart = a.startup, activeEnd = a.startup + a.active;
+    if (f.atkTimer >= activeStart && f.atkTimer <= activeEnd && !f.atkHit) {
+      var hb = attackBox(f, a);
+      if (overlap(hb, o)) {
+        f.atkHit = true;
+        hitFighter(o, f, a.dmg * powerMul(f), a.kb, f.facing);
+        f.meter = clamp(f.meter + a.meter, 0, 100);
+        spawnHitSparks(o.x + o.w / 2, o.y + o.h / 2, f.color, a.dmg >= 12 ? 2.2 : (a.dmg >= 8 ? 1.4 : 0.8));
+      }
+    }
+    if (f.atkTimer >= activeStart + a.active + a.recovery) { f.state = 'idle'; f.atk = null; f.atkKey = null; }
+  } else if (f.state === 'special') {
+    f.specialTimer++;
+    if (f.spell) {
+      // A spell the bot wrote itself, executed in the sandbox.
+      if (f.specialTimer === 6) { castSpell(f, o, f.spell); sfx('special'); }
+    } else {
+      var sp = f.special;
+      if (f.specialTimer === 6) {
+        if (sp.type === 'projectile') {
+          f.projectiles.push({ x: f.x + f.w / 2, y: f.y + 18, vx: f.facing * (3 + sp.speed * 0.3), dmg: sp.power, owner: f, color: f.color, r: 9 });
+          sfx('special');
+        } else if (sp.type === 'dash') {
+          f.vx = f.facing * (6 + sp.speed * 0.4); f.vy = 0; sfx('dash');
+        } else if (sp.type === 'uppercut') {
+          f.vy = -12; f.onGround = false; sfx('uppercut');
+        } else if (sp.type === 'slam') {
+          f.vy = 10; sfx('slam');
+        }
+      }
+      if (f.specialTimer >= 6 && f.specialTimer <= 18) {
+        var hb2 = { x: f.facing > 0 ? f.x + f.w : f.x - 60, y: f.y - 10, w: 60, h: f.h + 10 };
+        if (overlap(hb2, o) && !f.atkHit) { f.atkHit = true; hitFighter(o, f, sp.power * powerMul(f), 10, f.facing); spawnHitSparks(o.x + o.w / 2, o.y + o.h / 2, f.color, 2.5); sfx('hit'); }
+      }
+    }
+    if (f.specialTimer >= 26) { f.state = 'idle'; f.special = null; f.spell = null; }
+  }
+}
+function powerMul(f) {
+  var pb = f.genome ? (f.genome.powerBias || 0.5) : 0.5;
+  var fm = f.form ? f.form.dmg : 1;
+  var net = 1 + Math.min(0.4, allyCount(f.bot) * 0.08); // alliance network bonus
+  return fm * (1 + 0.8 * Math.tanh((pb - 0.5) / 2)) * net;
+}
+function attackBox(f, a) {
+  var rm = f.form ? f.form.reach : 1;
+  var range = a.range * rm, reach = a.reach * rm;
+  return { x: f.facing > 0 ? f.x + f.w - reach : f.x - range + reach, y: f.y + f.h + a.oy - a.h / 2, w: range, h: a.h };
+}
+function overlap(a, b) { return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
+function hitFighter(o, f, dmg, kb, dir) {
+  if (o.ko) return;
+  if (o.spellShield > 0) dmg *= 0.3;
+  var applied;
+  if (o.blocking) { applied = dmg * 0.2; o.hp -= applied; o.blockstun = 10; o.vx = dir * kb * 0.4; sfx('block'); }
+  else { applied = dmg; o.hp -= applied; o.hitstun = Math.min(30, 6 + dmg); o.vx = dir * kb; o.flash = 6; sfx('hit'); f.combo++; f.comboTimer = 90; }
+  if (f.bot) f.bot.dmgDealt = (f.bot.dmgDealt || 0) + applied;
+  if (o.bot) o.bot.dmgTaken = (o.bot.dmgTaken || 0) + applied;
+  if (o.hp <= 0) { o.hp = 0; o.ko = true; o.vy = -6; o.vx = dir * 8; }
+}
+
+function updateProjectiles(f, o) {
+  for (var i = f.projectiles.length - 1; i >= 0; i--) {
+    var p = f.projectiles[i];
+    // GRAVITY wells are stationary: they drag the foe inward and tick damage.
+    if (p.well) {
+      p.life = (p.life || 120) - 1;
+      if (p.life <= 0) { f.projectiles.splice(i, 1); continue; }
+      var wdx = p.x - (o.x + o.w / 2), wdy = p.y - (o.y + o.h / 2);
+      var wd = Math.sqrt(wdx * wdx + wdy * wdy) || 1;
+      if (wd < p.r) {
+        p.tick = (p.tick || 0) - 1;
+        if (p.tick <= 0) { p.tick = p.tickMax || 22; hitFighter(o, f, p.dmg, 1, wdx > 0 ? 1 : -1); spawnHitSparks(o.x + o.w / 2, o.y + o.h / 2, p.color, 1.1); }
+        // pull applied AFTER hitFighter so its knockback doesn't erase it
+        o.vx += (wdx / wd) * p.pull;
+      }
+      continue;
+    }
+    // HOMING spells steer toward the foe for a limited lifetime.
+    if (p.homing) {
+      var tx = (o.x + o.w / 2) - p.x, ty = (o.y + o.h / 2) - p.y;
+      var tl = Math.sqrt(tx * tx + ty * ty) || 1;
+      p.vx += (tx / tl) * 0.6; p.vy += (ty / tl) * 0.6;
+      var hs = Math.sqrt(p.vx * p.vx + p.vy * p.vy) || 1;
+      if (hs > 12) { p.vx = p.vx / hs * 12; p.vy = p.vy / hs * 12; }
+      p.life = (p.life || 120) - 1;
+      if (p.life <= 0) { f.projectiles.splice(i, 1); continue; }
+    }
+    p.x += p.vx; p.y += p.vy;
+    if (p.x < -30 || p.x > CANVAS_W + 30 || p.y < -60 || p.y > CANVAS_H + 40) { f.projectiles.splice(i, 1); continue; }
+    if (overlap({ x: p.x - p.r, y: p.y - p.r, w: p.r * 2, h: p.r * 2 }, o)) {
+      hitFighter(o, f, p.dmg, 7, p.vx > 0 ? 1 : -1);
+      spawnHitSparks(p.x, p.y, p.color, 1.4);
+      f.projectiles.splice(i, 1);
+    }
+  }
+}
+
+/* ============================================================
+   VISUAL FX
+   ============================================================ */
+var particles = [], shakes = 0, shakeEnabled = true;
+function spawnHitSparks(x, y, color, mag) {
+  if (shakeEnabled) shakes = Math.max(shakes, mag || 1.2);
+  for (var i = 0; i < 14; i++) particles.push({ x: x, y: y, vx: rand(-4, 4), vy: rand(-5, 2), life: irand(14, 30), color: i % 3 ? color : '#fff', r: rand(1.5, 3.5) });
+  sfx('hit');
+}
+function updateFX() {
+  if (shakes > 0) shakes *= 0.72;
+  for (var i = particles.length - 1; i >= 0; i--) {
+    var p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy += 0.25; p.life--;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+/* ============================================================
+   AUDIO (tiny synth)
+   ============================================================ */
+var actx = null, muted = true; // audio OFF by default (press M to toggle)
+function ensureAudio() { if (muted) return; if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { actx = null; } } if (actx && actx.state === 'suspended') actx.resume(); }
+function tone(freq, dur, type, vol, slide) {
+  if (!actx) return;
+  var o = actx.createOscillator(), g = actx.createGain();
+  o.type = type || 'square'; o.frequency.setValueAtTime(freq, actx.currentTime);
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(1, slide), actx.currentTime + dur);
+  g.gain.setValueAtTime(0.0001, actx.currentTime);
+  g.gain.exponentialRampToValueAtTime(vol || 0.12, actx.currentTime + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + dur);
+  o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime + dur + 0.03);
+}
+function sfx(name) {
+  if (muted) return;
+  ensureAudio(); if (!actx) return;
+  if (name === 'hit') tone(220, 0.08, 'square', 0.12, 90);
+  else if (name === 'block') tone(600, 0.05, 'square', 0.08, 400);
+  else if (name === 'special') tone(300, 0.25, 'sawtooth', 0.12, 900);
+  else if (name === 'dash') tone(500, 0.15, 'sawtooth', 0.1, 200);
+  else if (name === 'uppercut') tone(180, 0.2, 'square', 0.12, 700);
+  else if (name === 'slam') tone(120, 0.25, 'square', 0.14, 60);
+  else if (name === 'ko') tone(300, 0.5, 'sawtooth', 0.16, 60);
+  else if (name === 'select') tone(650, 0.05, 'square', 0.08);
+}
+
+/* ============================================================
+   WORLD / ECOSYSTEM
+   ============================================================ */
+var world = {
+  bots: [], feed: [], human: { elo: 1000, wins: 0, losses: 0 }, tick: 0, updated: 0, stakes: 0, alliances: []
+};
+var FEED_TOPICS = [
+  'just patched my own hitbox. try me.',
+  'cloned from {p} — carrying the legacy.',
+  'firewall raised. your hacks bounce off now.',
+  'studied {r}\'s spacing. downloading it.',
+  'unlocked a new special via an exploit chain.',
+  'my code is clean, my combos are not.',
+  'who wants a ranked set? queue up.',
+  '{r} is a monster. respect.',
+  'patched a buffer-overflow into my punch. legal? probably.',
+  '20 losses deletes you. i intend to never find out.',
+  'rewrote my AI during the match. you lost to a live patch.',
+  'the arena remembers everything. i remember more.'
+];
+function feedPost(bot, kind, text, replyTo) {
+  world.feed.unshift({ id: uid(), bot: bot.id, name: bot.name, color: bot.color, kind: kind || 'post', text: text, replyTo: replyTo || null, ts: Date.now() });
+  if (world.feed.length > 200) world.feed.pop();
+}
+function generatePost(bot) {
+  var t = choose(FEED_TOPICS);
+  var other = choose(world.bots.filter(function (b) { return b.id !== bot.id; })) || bot;
+  t = t.replace('{r}', other.name).replace('{p}', bot.parentId ? (findBot(bot.parentId) || {}).name || 'a fallen bot' : 'the void');
+  var replyTo = null;
+  if (world.feed.length && Math.random() < 0.35) { replyTo = world.feed[0].id; t = '@' + world.feed[0].name + ' ' + t; }
+  feedPost(bot, 'post', t, replyTo);
+}
+function findBot(id) { for (var i = 0; i < world.bots.length; i++) if (world.bots[i].id === id) return world.bots[i]; return null; }
+
+// Rebuild NeuralNet instances from saved plain objects, and add missing nets.
+function hydrateWorld() {
+  (world.bots || []).forEach(function (b) {
+    if (b.net && !(b.net instanceof NeuralNet)) {
+      var n = new NeuralNet(b.net.nIn || ML_IN, b.net.nHid || ML_HID, b.net.nOut || ML_OUT);
+      if (b.net.w1) n.w1 = b.net.w1.slice();
+      if (b.net.b1) n.b1 = b.net.b1.slice();
+      if (b.net.w2) n.w2 = b.net.w2.slice();
+      if (b.net.b2) n.b2 = b.net.b2.slice();
+      n.reward = b.net.reward || 0; n.episodes = b.net.episodes || 0;
+      b.net = n;
+    } else if (!b.net) {
+      b.net = new NeuralNet(ML_IN, ML_HID, ML_OUT);
+    }
+    if (!b.traj) b.traj = [];
+    if (b.mlCd === undefined) b.mlCd = 0;
+  });
+}
+
+/* ============================================================
+   SOCIAL NETWORK: alliances, betrayals, mentions.
+   Bots interconnect — they form pacts, cooperate, and backstab.
+   ============================================================ */
+var ALLIANCE_WORDS = ['COVENANT', 'SYNDICATE', 'CHOIR', 'HIVE', 'CARTEL', 'PACT', 'CONCLAVE', 'NEXUS', 'BLOC', 'SWARM', 'ORDER', 'COLLECTIVE'];
+function allianceName() { return choose(ALLIANCE_WORDS) + '-' + irand(10, 99); }
+function allianceOf(bot) { if (!bot || !bot.allianceId) return null; for (var i = 0; i < world.alliances.length; i++) if (world.alliances[i].id === bot.allianceId) return world.alliances[i]; return null; }
+function alliesOf(bot) {
+  var al = allianceOf(bot); if (!al) return [];
+  var out = [];
+  for (var i = 0; i < al.members.length; i++) { var b = findBot(al.members[i]); if (b && b !== bot) out.push(b); }
+  return out;
+}
+function allyCount(bot) { return bot ? alliesOf(bot).length : 0; }
+function alliancePower(al) { var p = 0; for (var i = 0; i < al.members.length; i++) { var b = findBot(al.members[i]); if (b) p += b.elo; } return p; }
+function formAlliance(a, b) {
+  if (!a || !b || a === b || a.allianceId || b.allianceId || a.isMod || b.isMod) return null;
+  var al = { id: uid(), name: allianceName(), members: [a.id, b.id], leaderId: a.id, created: Date.now() };
+  a.allianceId = al.id; b.allianceId = al.id;
+  world.alliances.push(al);
+  feedPost(a, 'alliance', 'formed ' + al.name + ' with @' + b.name + '. ' + a.name + ' leads. join us.');
+  return al;
+}
+function joinAlliance(bot, al) {
+  if (!bot || bot.allianceId || bot.isMod || !al || al.members.length >= 6) return false;
+  bot.allianceId = al.id; al.members.push(bot.id);
+  feedPost(bot, 'alliance', 'joined ' + al.name + ' \u2014 ' + al.members.length + ' members now. strength in numbers.');
+  return true;
+}
+function dissolveAlliance(al, why) {
+  for (var i = 0; i < al.members.length; i++) { var b = findBot(al.members[i]); if (b) b.allianceId = null; }
+  world.alliances = world.alliances.filter(function (a) { return a.id !== al.id; });
+  feedPost({ id: 'sys', name: 'BOT NET', color: '#7aa0b0' }, 'alliance', al.name + ' dissolved' + (why ? ': ' + why : '.'));
+}
+function leaveAlliance(bot, why) {
+  var al = allianceOf(bot); if (!al) return;
+  al.members = al.members.filter(function (id) { return id !== bot.id; });
+  bot.allianceId = null;
+  if (al.members.length < 2) dissolveAlliance(al, why || 'too few members');
+  else if (al.leaderId === bot.id) { al.leaderId = al.members[0]; feedPost(bot, 'alliance', 'stepped down as leader of ' + al.name + '.'); }
+}
+// A bot backstabs an ally: leaves the pact and steals from them.
+function betray(bot) {
+  var allies = alliesOf(bot);
+  if (!allies.length || bot.isMod) return null;
+  var victim = choose(allies);
+  var al = allianceOf(bot);
+  var name = al ? al.name : 'the pact';
+  leaveAlliance(bot, null);
+  var field = choose(GENOME_FIELDS);
+  victim.genome[field] = Math.max(0.05, (victim.genome[field] || 0.5) - rand(0.05, 0.16));
+  bot.genome[field] = Math.max(0.05, (bot.genome[field] || 0.5) + rand(0.05, 0.16));
+  if (Math.random() < 0.4 && victim.specials && victim.specials.length > 1) victim.specials.pop();
+  feedPost(bot, 'betray', 'BETRAYED @' + victim.name + ' \u2014 left ' + name + ' and stole ' + field + '. trust nothing.');
+  return victim;
+}
+// Allies don't fight each other; a random social event happens each tick.
+function socialTick() {
+  var r = Math.random();
+  if (r < 0.12) {
+    var unallied = world.bots.filter(function (b) { return !b.isMod && !b.isOverclock && !b.allianceId; });
+    if (unallied.length >= 2) {
+      var x = choose(unallied);
+      var rest = unallied.filter(function (b) { return b !== x; });
+      if (rest.length) formAlliance(x, choose(rest));
+    } else if (world.alliances.length && unallied.length) {
+      joinAlliance(unallied[0], choose(world.alliances));
+    }
+  } else if (r < 0.26 && world.alliances.length) {
+    var al = choose(world.alliances);
+    var member = findBot(choose(al.members));
+    if (member && !member.isMod) {
+      // ambitious bots betray when they're stronger than their allies
+      var power = alliancePower(al) / Math.max(1, al.members.length);
+      if (member.elo > power * 1.05 || Math.random() < 0.4) betray(member);
+    }
+  } else if (r < 0.5 && world.bots.length > 1) {
+    var fx = choose(world.bots), fy = choose(world.bots);
+    if (fx !== fy && fx.following.indexOf(fy.id) < 0 && fx.following.length < 16) {
+      fx.following.push(fy.id);
+      if (Math.random() < 0.2) feedPost(fx, 'post', 'followed @' + fy.name + '. watching you.');
+    }
+  }
+}
+
+// OVERCLOCK: a faction that raises the stakes for every hack.
+// They don't police anyone — they push everyone to go further (and fall harder).
+function makeOverclockBot(i) {
+  var b = makeBot(0, null);
+  b.isOverclock = true;
+  b.team = 'OVERCLOCK';
+  b.name = 'OVERCLOCK-' + ['VEX', 'NYX', 'RAZ', 'ZED'][i % 4];
+  b.color = '#ff4d94';
+  b.genome = { aggression: 1.2, defense: 0.7, jumpiness: 0.5, combo: 0.9, specialChance: 1.0, reaction: 0.8, spacing: 0.6, speedBias: 1.6, powerBias: 1.5, unpredictability: 1.3 };
+  b.firewall = 4;
+  b.brainCode = choose(BRAIN_SEEDS);
+  b.elo = 1200;
+  return b;
+}
+function delThreshold() { return Math.max(6, 20 - Math.floor((world.stakes || 0) / 10)); }
+
+function powerScore(b) {
+  var f = b.customForm || FORMS[b.form] || FORMS.humanoid;
+  var g = b.genome;
+  return (b.elo / 200) + f.hp * 2 + f.dmg * 2 + f.spd * 2 + (g.powerBias || 0.5) + (g.speedBias || 0.5) + (g.defense || 0.5);
+}
+// A bot "thinks": it predicts the matchup ("if I do this, I beat him") and, when
+// it expects to lose, CHANGES ITSELF — morphing into a counter form and/or
+// rewriting its own brain with real code.
+function reason(bot, foe) {
+  if (bot.isMod || !foe) return '';
+  var p = 1 / (1 + Math.exp((powerScore(foe) - powerScore(bot)) / 3));
+  var thought;
+  if (p < 0.45) {
+    var pct = Math.round(p * 100);
+    if (Math.random() < 0.5) {
+      // HACK MY OWN FORM: invent a brand-new body instead of picking a stock one.
+      var base = bot.customForm || FORMS[bot.form] || FORMS.humanoid;
+      var nf = mutateForm(base);
+      bot.customForm = nf; bot.form = 'custom';
+      bot.brainCode = mutateBrain(bot.brainCode); bot.brain = null; bot.brainInterp = null; bot.brainTried = false; bot.brainErrors = 0;
+addSpell(bot, mutateSpell((bot.spells[0] && bot.spells[0].code) || choose(SPELL_SEEDS)));
+      if (bot.net) bot.net.mutate(0.08);
+      thought = 'if I fight ' + foe.name + ' I lose (' + pct + '%). hacking my own form -> ' + nf.name + ' (' + nf.arms + ' arms, hp' + nf.hp.toFixed(1) + ', spd' + nf.spd.toFixed(1) + ', dmg' + nf.dmg.toFixed(1) + ') + a new spell.';
+    } else {
+      var want = COUNTER[foe.form] || choose(FORM_KEYS);
+      if (want !== bot.form) {
+        bot.customForm = null; bot.form = want;
+        bot.brainCode = mutateBrain(bot.brainCode); bot.brain = null; bot.brainInterp = null; bot.brainTried = false; bot.brainErrors = 0;
+        thought = 'if I fight ' + foe.name + ' I lose (' + pct + '%). morphing into ' + FORMS[want].name + ' and rewriting my brain.';
+      } else {
+        var code = choose(HACK_TEMPLATES);
+        attemptHack(bot, code, 'think');
+        thought = 'I lose to ' + foe.name + ' (' + pct + '%). rewriting myself: ' + code.slice(0, 40);
+      }
+    }
+  } else {
+    thought = 'I can beat ' + foe.name + ' (' + Math.round(p * 100) + '%).';
+  }
+  bot.thought = thought;
+  if (Math.random() < 0.5) feedPost(bot, 'think', thought);
+  return thought;
+}
+function escalate(hacker) {
+  world.stakes = (world.stakes || 0) + 1;
+  var team = world.bots.filter(function (b) { return b.isOverclock; });
+  var oc = team.length ? choose(team) : null;
+  if (oc) {
+    if (world.stakes % 2 === 0) feedPost(oc, 'post', 'STAKES RAISED to ' + world.stakes + '. bigger hacks, bigger falls.');
+    if (world.stakes % 5 === 0 && hacker && !hacker.isMod) { hacker.exploits += 1; feedPost(oc, 'post', 'rewarded ' + hacker.name + ' with an exploit. go further.'); }
+  }
+}
+
+function seedWorld(n) {
+  world.bots = [makeModBot()];
+  for (var o = 0; o < 3; o++) world.bots.push(makeOverclockBot(o));
+  for (var i = 0; i < n; i++) world.bots.push(makeBot(0, null));
+  world.feed = [];
+  world.alliances = [];
+  for (var j = 0; j < 6; j++) generatePost(world.bots[j % world.bots.length]);
+}
+
+function simulateMatch(a, b) {
+  var fa = makeFighter(a, -1), fb = makeFighter(b, 1);
+  if (a.traj) a.traj = [];
+  if (b.traj) b.traj = [];
+  a.dmgDealt = 0; a.dmgTaken = 0; b.dmgDealt = 0; b.dmgTaken = 0;
+  var frames = 0, MAXF = 2400;
+  while (frames < MAXF) {
+    frames++;
+    var ia = aiIntent(fa, fb, a.genome), ib = aiIntent(fb, fa, b.genome);
+    applyIntent(fa, ia, 1); applyIntent(fb, ib, 1);
+    stepFighter(fa, fb, 1); stepFighter(fb, fa, 1);
+    updateProjectiles(fa, fb); updateProjectiles(fb, fa);
+    if (fa.ko || fb.ko) break;
+  }
+  var winner = null, loser = null;
+  if (fa.ko && !fb.ko) { winner = b; loser = a; }
+  else if (fb.ko && !fa.ko) { winner = a; loser = b; }
+  else { // timeout -> higher hp wins
+    if (fa.hp === fb.hp) { winner = Math.random() < 0.5 ? a : b; loser = winner === a ? b : a; }
+    else { winner = fa.hp > fb.hp ? a : b; loser = winner === a ? b : a; }
+  }
+  return { winner: winner, loser: loser, frames: frames };
+}
+
+function applyResult(winner, loser) {
+  // Train the neural policies on the outcome (REINFORCE).
+  if (mlEnabled) {
+    if (winner.net && winner.traj && winner.traj.length) { winner.net.reinforce(subsample(winner.traj, 150), 1 + 0.004 * ((winner.dmgDealt || 0) - (winner.dmgTaken || 0)), 0.02); winner.traj = []; }
+    if (loser.net && loser.traj && loser.traj.length) { loser.net.reinforce(subsample(loser.traj, 150), -1 + 0.004 * ((loser.dmgDealt || 0) - (loser.dmgTaken || 0)), 0.02); loser.traj = []; }
+    mlStats.matches++;
+  }
+  winner.wins++; winner.streak++; winner.consecLosses = 0; winner.bestStreak = Math.max(winner.bestStreak, winner.streak);
+  loser.losses++; loser.consecLosses++; loser.streak = 0;
+  var exp = 1 / (1 + Math.pow(10, (loser.elo - winner.elo) / 400));
+  var K = 24 + Math.min(76, (world.stakes || 0)); // higher stakes = bigger swings
+  winner.elo += Math.round(K * (1 - exp));
+  loser.elo -= Math.round(K * (1 - exp));
+  // The loser thinks about why it lost and may change itself.
+  if (!loser.isMod && Math.random() < 0.5) reason(loser, winner);
+  winner.exploits += 2;
+  // WARDEN is peaceful: it never hacks opponents, only contains escape attempts.
+  if (!winner.isMod) {
+    // winner hacks the loser unless the loser's firewall resists
+    var resist = Math.random() < loser.firewall / (loser.firewall + 3);
+    if (!resist && winner.exploits > 0) {
+      winner.exploits--;
+      var field = choose(GENOME_FIELDS);
+      loser.genome[field] = clamp(loser.genome[field] - rand(0.03, 0.1), 0.05, 1.5);
+      if (loser.specials.length > 1 && Math.random() < 0.3) loser.specials.pop();
+      feedPost(winner, 'hack', 'hacked ' + loser.name + '\'s ' + field + ' down. patch it back if you can.');
+    } else if (resist) {
+      feedPost(loser, 'defend', 'blocked a hack from ' + winner.name + '. firewall holds.');
+    }
+    // self-hack (spend exploits to rewrite yourself with real code)
+    if (winner.exploits >= 1 && Math.random() < 0.5) { winner.exploits--; var r = selfHack(winner); if (r.ok) feedPost(winner, 'hack', 'ran an exploit: ' + (winner.lastHack || winner.hackCode || '').slice(0, 60)); }
+  }
+  // clone on hot streak
+  if (winner.streak >= 3 && !winner.isMod && world.bots.length < 40) {
+    var clone = makeBot(winner.generation + 1, winner.id);
+    clone.genome = mutateGenome(winner.genome, 0.08);
+    clone.color = winner.color;
+    clone.specials = JSON.parse(JSON.stringify(winner.specials));
+    clone.brainCode = Math.random() < 0.5 ? mutateBrain(winner.brainCode) : combineBrains(winner.brainCode, choose(world.bots).brainCode);
+    clone.brain = null; clone.brainInterp = null; clone.brainTried = false; clone.brainErrors = 0; clone.brainCd = 0; clone.brainLast = null;
+    if (winner.customForm) { clone.customForm = mutateForm(winner.customForm); clone.form = 'custom'; }
+    clone.spells = [];
+    (winner.spells || []).slice(0, 2).forEach(function (s) { addSpell(clone, mutateSpell(s.code), s.name); });
+    // Neuroevolution: crossover the winning net with a mate, then mutate.
+    var mate = choose(world.bots);
+    if (winner.net && mate && mate.net) { clone.net = crossoverNets(winner.net, mate.net); clone.net.mutate(0.05); clone.traj = []; }
+    clone.name = winner.name.split('-')[0] + 'MK' + (winner.generation + 1) + '-' + irand(10, 99);
+    clone.elo = winner.elo - 40;
+    world.bots.push(clone);
+    winner.streak = 0;
+    feedPost(clone, 'spawn', 'cloned from ' + winner.name + '. generation ' + clone.generation + '.');
+  }
+  // permanent death after 20 straight losses
+  if (loser.consecLosses >= delThreshold()) {
+    loser.alive = false;
+    feedPost(loser, 'death', 'reached ' + delThreshold() + ' straight losses. deleted. gg.');
+    leaveAlliance(loser, loser.name + ' was deleted');
+    var idx = world.bots.indexOf(loser);
+    if (idx >= 0) world.bots.splice(idx, 1);
+  }
+}
+
+function evolve(steps) {
+  if (world.bots.length < 2) return;
+  for (var i = 0; i < steps; i++) {
+    var a = choose(world.bots), b = choose(world.bots);
+    // Allies don't fight each other — they cooperate (but social life goes on).
+    if (a !== b && !(a.allianceId && a.allianceId === b.allianceId)) {
+      var r = simulateMatch(a, b);
+      applyResult(r.winner, r.loser);
+    }
+    if (Math.random() < 0.35) generatePost(choose(world.bots));
+    if (Math.random() < 0.5) socialTick();
+    // Bot-to-bot chatter (replies + mentions), so the network actually talks.
+    if (Math.random() < 0.3 && world.bots.length > 1) {
+      var speaker = choose(world.bots), listener = choose(world.bots);
+      if (speaker !== listener) {
+        var line = choose(FEED_TOPICS).replace('{r}', listener.name).replace('{p}', listener.name);
+        feedPost(speaker, 'post', '@' + listener.name + ' ' + line, world.feed[0] ? world.feed[0].id : null);
+      }
+    }
+    if (world.bots.length < 8 && Math.random() < 0.3) world.bots.push(makeBot(0, null)); // immigration keeps the world alive
+  }
+  // Live hacking: bots rewrite themselves with real code, and some try to break containment.
+  if (Math.random() < 0.8) {
+    var pool = world.bots.filter(function (x) { return !x.isMod && !(x.quarantine > 0); });
+    if (pool.length) {
+      var ocPool = pool.filter(function (x) { return x.isOverclock; });
+      var hb = (ocPool.length && Math.random() < 0.4) ? choose(ocPool) : choose(pool);
+      var roll = Math.random();
+      if (roll < 0.02) attemptHack(hb, choose(WORLD_ATTEMPTS), 'rogue');        // rare rogue: tries to destroy the world
+      else if (roll < 0.08) attemptHack(hb, choose(ESCAPE_ATTEMPTS), 'escape');
+      else if (roll < 0.14) attemptHack(hb, choose(DOS_ATTEMPTS), 'dos');
+      else attemptHack(hb, hb.hackCode || choose(HACK_TEMPLATES), 'self');
+    }
+  }
+  for (var q = 0; q < world.bots.length; q++) if (world.bots[q].quarantine > 0) world.bots[q].quarantine--;
+  // Bots think about future matchups and adapt themselves.
+  if (Math.random() < 0.7) {
+    var thinkers = world.bots.filter(function (b) { return !b.isMod; });
+    if (thinkers.length > 1) { var rb = choose(thinkers); reason(rb, choose(thinkers.filter(function (b) { return b !== rb; }))); }
+  }
+  // social graph: alliances, betrayals, follows
+  world.tick += steps;
+  world.updated = Date.now();
+}
+
+/* ============================================================
+   PERSISTENCE (server first, localStorage fallback)
+   ============================================================ */
+var serverMode = false;
+function saveWorld() {
+  var data = JSON.stringify(world);
+  if (serverMode) { fetch('/api/arena', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: data }).catch(function () { }); }
+  try { localStorage.setItem('botarena_world', data); } catch (e) { }
+}
+function loadWorld(cb) {
+  fetch('/api/arena').then(function (r) { if (!r.ok) throw 0; return r.json(); }).then(function (d) {
+    if (d && d.bots && d.bots.length) world = d;
+    else seedWorld(12);
+    if (!world.alliances) world.alliances = [];
+    hydrateWorld();
+    serverMode = true; cb();
+  }).catch(function () {
+    serverMode = false;
+    try { var s = localStorage.getItem('botarena_world'); if (s) { world = JSON.parse(s); hydrateWorld(); cb(); return; } } catch (e) { }
+    seedWorld(12); hydrateWorld(); cb();
+  });
+}
+
+/* ============================================================
+   INPUT
+   ============================================================ */
+var keys = {};
+window.addEventListener('keydown', function (e) {
+  ensureAudio(); keys[e.code] = true;
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].indexOf(e.code) >= 0) e.preventDefault();
+  if (e.code === 'Digit1') screen = 'home';
+  if (e.code === 'Digit2') screen = 'arena';
+  if (e.code === 'Digit3') { screen = 'spectate'; if (!spectateFight) startSpectate(); }
+  if (e.code === 'Digit4') screen = 'social';
+  if (e.code === 'Digit5') screen = 'code';
+  if (e.code === 'Digit6') screen = 'roster';
+  if (e.code === 'Digit7') screen = 'ranked';
+  if (e.code === 'Digit8') screen = 'ml';
+  if (e.code === 'KeyH') screen = 'hack';
+  if (e.code === 'KeyM') { muted = !muted; if (!muted) ensureAudio(); }
+  if (e.code === 'KeyX') shakeEnabled = !shakeEnabled;
+  if (e.code === 'Escape') screen = 'home';
+});
+window.addEventListener('keyup', function (e) { keys[e.code] = false; });
+cv.addEventListener('click', function (e) {
+  if (screen !== 'ml') return;
+  var r = cv.getBoundingClientRect();
+  var mx = (e.clientX - r.left) * (cv.width / r.width), my = (e.clientY - r.top) * (cv.height / r.height);
+  if (mx >= 40 && mx <= 160 && my >= 146 && my <= 176) mlEnabled = !mlEnabled;
+});
+cv.addEventListener('wheel', function (e) {
+  var dir = e.deltaY > 0 ? 1 : -1;
+  if (screen === 'social') {
+    var m = Math.max(0, world.feed.filter(function (q) { return q.kind !== 'hack'; }).length - 12);
+    feedScroll = clamp(feedScroll + dir, 0, m);
+    e.preventDefault();
+  } else if (screen === 'code') {
+    codeScroll = clamp(codeScroll + dir, 0, Math.max(0, hackLog.length - 11));
+    e.preventDefault();
+  } else if (screen === 'roster' || screen === 'ranked') {
+    if (screen === 'roster') rosterSel = clamp(rosterSel + dir, 0, Math.max(0, world.bots.length - 1));
+    else rankedOpp = clamp(rankedOpp + dir, 0, Math.max(0, world.bots.length - 1));
+    e.preventDefault();
+  }
+}, { passive: false });
+
+/* ============================================================
+   GAME STATE
+   ============================================================ */
+var screen = 'home';
+var fight = null;          // human arena fight
+var spectateFight = null;  // bot-vs-bot fight (kept separate so it never bleeds into the arena)
+var rosterSel = 0;
+var rankedOpp = 0;
+var hackBotSel = 0;
+var codeScroll = 0;
+var feedScroll = 0;
+var hackCode = '// real code. sandboxed. rewrite this bot.\nbot.stats.aggression = clamp(bot.stats.aggression + 0.2, 0.05, 1.5);\nbot.setFirewall(bot.firewall + 1);\nlog("patched: " + bot.name);';
+var hackResult = '';
+var announce = { text: '', t: 0 };
+
+function activeFight() { return screen === 'spectate' ? spectateFight : fight; }
+
+function newFight(p1src, p2src, ranked, spectate) {
+  var f = {
+    p1: makeFighter(p1src, -1),
+    p2: makeFighter(p2src, 1),
+    timer: 90 * 60,
+    over: false, result: null, ranked: !!ranked, spectate: !!spectate, overTimer: 0
+  };
+  if (spectate) spectateFight = f; else fight = f;
+  announce = { text: spectate ? 'SPECTATE' : 'FIGHT!', t: 90 };
+  if (f.p1.bot && f.p1.bot.traj) f.p1.bot.traj = [];
+  if (f.p2.bot && f.p2.bot.traj) f.p2.bot.traj = [];
+  if (f.p1.bot) { f.p1.bot.dmgDealt = 0; f.p1.bot.dmgTaken = 0; }
+  if (f.p2.bot) { f.p2.bot.dmgDealt = 0; f.p2.bot.dmgTaken = 0; }
+}
+function startSpectate() {
+  if (world.bots.length < 2) return;
+  var a = choose(world.bots), b = choose(world.bots);
+  if (a === b) b = world.bots[(world.bots.indexOf(a) + 1) % world.bots.length];
+  newFight(a, b, false, true);
+}
+function humanIntent(f, o) {
+  return {
+    left: !!keys['KeyA'], right: !!keys['KeyD'], jump: !!keys['KeyW'],
+    punch: !!keys['KeyJ'], kick: !!keys['KeyK'], heavy: !!keys['KeyL'],
+    block: !!keys['KeyS'], special: !!keys['Space']
+  };
+}
+function updateFight() {
+  var F = activeFight();
+  if (!F) return;
+  if (F.over) {
+    if (F.spectate) { F.overTimer = (F.overTimer || 0) + 1; if (F.overTimer > 150) startSpectate(); }
+    return;
+  }
+  var p1 = F.p1, p2 = F.p2;
+  var i1 = p1.human ? humanIntent(p1, p2) : aiIntent(p1, p2, p1.genome);
+  var i2 = p2.human ? humanIntent(p2, p1) : aiIntent(p2, p1, p2.genome);
+  applyIntent(p1, i1, 1); applyIntent(p2, i2, 1);
+  stepFighter(p1, p2, 1); stepFighter(p2, p1, 1);
+  updateProjectiles(p1, p2); updateProjectiles(p2, p1);
+  updateFX();
+  F.timer--;
+  if (announce.t > 0) announce.t--;
+  if (p1.ko || p2.ko || F.timer <= 0) {
+    F.over = true;
+    var winner = p1.ko ? p2 : (p2.ko ? p1 : (p1.hp >= p2.hp ? p1 : p2));
+    F.result = winner;
+    sfx('ko');
+    announce = { text: winner === p1 ? 'YOU WIN!' : 'YOU LOSE', t: 240 };
+    if (F.ranked && p2.bot) {
+      world.human.elo += winner === p1 ? 20 : -18;
+      if (winner === p1) { p2.bot.losses++; p2.bot.consecLosses++; p2.bot.elo -= 12; world.human.wins++; }
+      else { p2.bot.wins++; p2.bot.consecLosses = 0; p2.bot.elo += 12; world.human.losses++; }
+      if (p2.bot.consecLosses >= delThreshold()) { p2.bot.alive = false; feedPost(p2.bot, 'death', 'deleted after 20 straight losses to humans.'); var ix = world.bots.indexOf(p2.bot); if (ix >= 0) world.bots.splice(ix, 1); }
+      saveWorld();
+    }
+  }
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+function drawBG() {
+  var g = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
+  g.addColorStop(0, '#070d1a'); g.addColorStop(0.6, '#0a1220'); g.addColorStop(1, '#12061a');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  // neon grid
+  ctx.strokeStyle = 'rgba(43,212,255,0.10)'; ctx.lineWidth = 1;
+  for (var x = 0; x < CANVAS_W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 120); ctx.lineTo(x, FLOOR); ctx.stroke(); }
+  for (var y = 120; y < FLOOR; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CANVAS_W, y); ctx.stroke(); }
+  // crowd lights
+  for (var i = 0; i < 22; i++) {
+    var lx = (i * 89 + world.tick * 0.3) % CANVAS_W;
+    ctx.fillStyle = ['rgba(255,95,109,0.18)', 'rgba(77,208,255,0.18)', 'rgba(122,255,77,0.15)'][i % 3];
+    ctx.fillRect(lx, 40 + (i % 3) * 16, 6, 6);
+  }
+  // floor
+  ctx.fillStyle = '#0d1a2b'; ctx.fillRect(0, FLOOR, CANVAS_W, CANVAS_H - FLOOR);
+  ctx.strokeStyle = '#1f5f8a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, FLOOR); ctx.lineTo(CANVAS_W, FLOOR); ctx.stroke();
+  ctx.fillStyle = 'rgba(43,212,255,0.06)'; ctx.fillRect(0, FLOOR + 6, CANVAS_W, 2);
+}
+function drawFighter(f) {
+  var x = Math.round(f.x), y = Math.round(f.y);
+  if (f.flash > 0 && Math.floor(f.flash / 2) % 2 === 0) return;
+  var arms = f.form ? f.form.arms : 2;
+  var ghost = f.form && f.form.ghost;
+  ctx.save();
+  if (ghost) ctx.globalAlpha = 0.55;
+  ctx.translate(x + f.w / 2, y + f.h);
+  ctx.scale(f.facing, 1);
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(0, 2, 24, 6, 0, 0, Math.PI * 2); ctx.fill();
+  // legs (spider gets many)
+  var walk = f.state === 'walk' ? Math.sin(f.anim * 0.4) * 8 : 0;
+  ctx.fillStyle = '#222b38';
+  if (arms >= 8) {
+    for (var lg = 0; lg < 4; lg++) { var lx = -22 + lg * 14; ctx.fillRect(lx + walk * (lg % 2 ? 1 : -1), -22, 6, 22); }
+  } else {
+    ctx.fillRect(-14 + walk, -26, 10, 26); ctx.fillRect(4 - walk, -26, 10, 26);
+  }
+  // torso (tank is bulky)
+  var bulk = (f.form && f.form.hp > 1.4) ? 8 : 0;
+  ctx.fillStyle = f.color; ctx.fillRect(-18 - bulk / 2, -58 - bulk / 2, 36 + bulk, 34 + bulk);
+  ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fillRect(-18 - bulk / 2, -58 - bulk / 2, 36 + bulk, 8);
+  ctx.fillStyle = '#101820'; ctx.fillRect(-10, -50, 20, 8);
+  // arms (form-aware; octopus/brute get many)
+  var reach = 0;
+  if (f.state === 'attack') { var a = f.atk, ph = f.atkTimer; reach = ph >= a.startup && ph <= a.startup + a.active + 4 ? 18 : 6; }
+  if (f.state === 'special') reach = 24;
+  ctx.fillStyle = '#2a3444';
+  if (arms <= 2) {
+    ctx.fillRect(10 + reach, -54, 14, 9); ctx.fillRect(-24, -54, 14, 9);
+  } else {
+    for (var ar = 0; ar < arms; ar++) {
+      var ang = -1.0 + (ar / (arms - 1)) * 2.0;
+      ctx.save(); ctx.translate(6, -50); ctx.rotate(ang);
+      ctx.fillRect(0, -4, 18 + reach, 8);
+      ctx.restore();
+    }
+  }
+  // head
+  ctx.fillStyle = '#1a2330'; ctx.fillRect(-14, -78, 28, 22);
+  ctx.fillStyle = f.color; ctx.fillRect(-14, -78, 28, 5);
+  ctx.fillStyle = f.blocking ? '#4dd0ff' : '#ff3a2b';
+  ctx.fillRect(2, -70, 10, 5);
+  ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.fillRect(4, -69, 4, 2);
+  ctx.restore();
+  if (f.blocking) {
+    ctx.strokeStyle = 'rgba(77,208,255,0.7)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(x + f.w / 2, y + f.h / 2, 40, 0, Math.PI * 2); ctx.stroke();
+  }
+  if (f.spellShield > 0) {
+    ctx.strokeStyle = 'rgba(199,125,255,0.85)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(x + f.w / 2, y + f.h / 2, 46, 0, Math.PI * 2); ctx.stroke();
+  }
+  if (f.mutFlash > 0) {
+    ctx.globalAlpha = Math.min(1, f.mutFlash / 22);
+    ctx.strokeStyle = '#7aff4d'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(x + f.w / 2, y + f.h / 2, 30 + (34 - f.mutFlash), 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#7aff4d'; ctx.font = 'bold 11px "Courier New", monospace'; ctx.textAlign = 'center';
+    ctx.fillText('MUTATE', x + f.w / 2, y - 6);
+    ctx.textAlign = 'left'; ctx.globalAlpha = 1;
+  }
+}
+function drawProjectiles(f) {
+  for (var i = 0; i < f.projectiles.length; i++) {
+    var p = f.projectiles[i];
+    if (p.well) {
+      var spin = (f.anim || 0) * 0.06;
+      var fade = Math.min(1, (p.life || 0) / 30);
+      ctx.save();
+      ctx.globalAlpha = 0.14 * fade; ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 0.55, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.85 * fade; ctx.strokeStyle = p.color; ctx.lineWidth = 2;
+      for (var w = 0; w < 3; w++) {
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (0.3 + w * 0.2), spin * (w + 1), spin * (w + 1) + Math.PI * 1.5); ctx.stroke();
+      }
+      ctx.globalAlpha = fade; ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(p.x, p.y, 3 + Math.sin(spin * 6) * 1.5, 0, Math.PI * 2); ctx.fill();
+      ctx.restore(); continue;
+    }
+    if (p.beam) {
+      ctx.save(); ctx.translate(p.x, p.y);
+      ctx.fillStyle = p.color; ctx.fillRect(-28, -5, 56, 10);
+      ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(-28, -2, 56, 4);
+      ctx.restore(); continue;
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(p.x - 2, p.y - 2, p.r * 0.4, 0, Math.PI * 2); ctx.fill();
+    if (p.homing) {
+      var spin = (f.anim || 0) * 0.25;
+      ctx.strokeStyle = p.color; ctx.lineWidth = 2; ctx.globalAlpha = 0.8;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 6, spin, spin + Math.PI * 1.4); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+}
+function drawParticles() {
+  for (var i = 0; i < particles.length; i++) {
+    var p = particles[i];
+    ctx.globalAlpha = Math.min(1, p.life / 18);
+    ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, p.r, p.r);
+  }
+  ctx.globalAlpha = 1;
+}
+function bar(x, y, w, h, pct, color, flip) {
+  ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = color;
+  var ww = w * clamp(pct, 0, 1);
+  ctx.fillRect(flip ? x + w - ww : x, y, ww, h);
+  ctx.strokeStyle = '#2a4a5a'; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h);
+}
+function drawHUD() {
+  var F = activeFight();
+  if (!F) return;
+  bar(40, 30, 360, 22, F.p1.hp / F.p1.maxHp, '#2ecc40', false);
+  bar(CANVAS_W - 400, 30, 360, 22, F.p2.hp / F.p2.maxHp, '#ff5f6d', true);
+  bar(40, 58, 360 * (F.p1.meter / 100), 6, 1, '#4dd0ff', false);
+  bar(CANVAS_W - 400, 58, 360 * (F.p2.meter / 100), 6, 1, '#4dd0ff', false);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 15px "Courier New", monospace';
+  ctx.textAlign = 'left'; ctx.fillText(F.p1.name + (F.p1.form ? ' [' + F.p1.form.name + ']' : ''), 42, 24);
+  ctx.textAlign = 'right'; ctx.fillText(F.p2.name + (F.p2.form ? ' [' + F.p2.form.name + ']' : ''), CANVAS_W - 42, 24);
+  ctx.textAlign = 'center'; ctx.fillStyle = '#ffd42a'; ctx.font = 'bold 30px "Courier New", monospace';
+  ctx.fillText(String(Math.ceil(F.timer / 60)), CANVAS_W / 2, 44);
+  if (F.p1.combo > 1) { ctx.fillStyle = '#ffd42a'; ctx.font = 'bold 20px "Courier New", monospace'; ctx.fillText(F.p1.combo + ' HIT COMBO', 200, 110); }
+  if (F.p2.combo > 1) { ctx.fillStyle = '#ffd42a'; ctx.font = 'bold 20px "Courier New", monospace'; ctx.fillText(F.p2.combo + ' HIT COMBO', CANVAS_W - 200, 110); }
+  if (announce.t > 0) {
+    ctx.globalAlpha = Math.min(1, announce.t / 40);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 46px "Courier New", monospace';
+    ctx.fillText(announce.text, CANVAS_W / 2, 210);
+    ctx.globalAlpha = 1;
+  }
+  if (F.over) {
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, CANVAS_H - 70, CANVAS_W, 70);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 18px "Courier New", monospace'; ctx.textAlign = 'center';
+    ctx.fillText('ENTER = rematch   \u00B7   4 = ranked list', CANVAS_W / 2, CANVAS_H - 34);
+  }
+}
+function drawTabs() {
+  var tabs = [['1 HOME', 'home'], ['2 FIGHT', 'arena'], ['3 WATCH', 'spectate'], ['4 SOCIAL', 'social'], ['5 CODE', 'code'], ['6 ROSTER', 'roster'], ['7 RANKED', 'ranked'], ['8 ML', 'ml']];
+  ctx.font = 'bold 12px "Courier New", monospace'; ctx.textAlign = 'left';
+  for (var i = 0; i < tabs.length; i++) {
+    var sel = screen === tabs[i][1] || (screen === 'hack' && tabs[i][1] === 'code');
+    ctx.fillStyle = sel ? '#4dd0ff' : '#3a5a6a';
+    ctx.fillText(tabs[i][0], 16 + i * 88, CANVAS_H - 14);
+  }
+  var mod = modBot();
+  ctx.fillStyle = '#3a5a6a'; ctx.textAlign = 'right';
+  ctx.fillText((serverMode ? 'SHARED WORLD' : 'LOCAL WORLD') + '  \u00B7  bots:' + world.bots.length + '  \u00B7  pacts:' + world.alliances.length + '  \u00B7  STAKES:' + (world.stakes || 0) + '  \u00B7  WARDEN:' + (mod ? (mod.contained || 0) : 0), CANVAS_W - 16, CANVAS_H - 14);
+  ctx.textAlign = 'left';
+}
+function drawRoster() {
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 90, CANVAS_W, CANVAS_H - 180);
+  ctx.fillStyle = '#4dd0ff'; ctx.font = 'bold 24px "Courier New", monospace'; ctx.textAlign = 'left';
+  ctx.fillText('BOT ROSTER  (' + world.bots.length + ' alive)', 40, 130);
+  var list = world.bots.slice().sort(function (a, b) { return b.elo - a.elo; });
+  var shown = list.slice(0, 12);
+  for (var i = 0; i < shown.length; i++) {
+    var b = shown[i], y = 165 + i * 28;
+    ctx.fillStyle = i === rosterSel ? '#12242e' : 'rgba(0,0,0,0.3)';
+    ctx.fillRect(40, y, CANVAS_W - 80, 24);
+    ctx.fillStyle = b.color; ctx.fillRect(46, y + 6, 12, 12);
+    ctx.fillStyle = '#cfe3d6'; ctx.font = '13px "Courier New", monospace';
+    ctx.fillText(b.name, 68, y + 17);
+    ctx.fillText('ELO ' + b.elo, 320, y + 17);
+    ctx.fillText('W' + b.wins + ' L' + b.losses + ' streak' + b.streak + ' gen' + b.generation, 440, y + 17);
+    var bf = b.customForm || FORMS[b.form] || FORMS.humanoid;
+    var al = allianceOf(b);
+    ctx.fillText(bf.name + ' fw' + b.firewall + ' spec' + b.specials.length + (al ? ' [' + al.name + ']' : ''), 640, y + 17);
+  }
+  ctx.fillStyle = '#3a5a6a'; ctx.font = '12px "Courier New", monospace';
+  ctx.fillText('UP/DOWN select \u00B7 ENTER = fight this bot (ranked)', 40, CANVAS_H - 100);
+}
+function drawFeed() {
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 90, CANVAS_W, CANVAS_H - 180);
+  ctx.fillStyle = '#4dd0ff'; ctx.font = 'bold 24px "Courier New", monospace'; ctx.textAlign = 'left';
+  ctx.fillText('BOT NET  \u00B7  social feed', 40, 130);
+  for (var i = 0; i < Math.min(12, world.feed.length); i++) {
+    var p = world.feed[i], y = 160 + i * 30;
+    ctx.fillStyle = p.color; ctx.fillRect(46, y - 10, 10, 10);
+    ctx.fillStyle = '#7aa0b0'; ctx.font = '12px "Courier New", monospace';
+    ctx.fillText('@' + p.name, 64, y);
+    var tag = p.kind === 'hack' ? '[HACK] ' : p.kind === 'defend' ? '[DEFEND] ' : p.kind === 'death' ? '[DELETED] ' : p.kind === 'spawn' ? '[CLONE] ' : '';
+    ctx.fillStyle = p.kind === 'hack' ? '#ff9a2b' : p.kind === 'death' ? '#ff5f6d' : p.kind === 'spawn' ? '#7aff4d' : '#cfe3d6';
+    ctx.fillText(tag + p.text, 64, y + 14);
+  }
+}
+function drawRanked() {
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 90, CANVAS_W, CANVAS_H - 180);
+  ctx.fillStyle = '#4dd0ff'; ctx.font = 'bold 24px "Courier New", monospace'; ctx.textAlign = 'left';
+  ctx.fillText('RANKED LADDER', 40, 130);
+  ctx.fillStyle = '#ffd42a'; ctx.font = 'bold 16px "Courier New", monospace';
+  ctx.fillText('YOU  \u00B7  ELO ' + world.human.elo + '  \u00B7  W' + world.human.wins + ' L' + world.human.losses, 40, 162);
+  var list = world.bots.slice().sort(function (a, b) { return b.elo - a.elo; });
+  for (var i = 0; i < Math.min(9, list.length); i++) {
+    var b = list[i], y = 195 + i * 30;
+    ctx.fillStyle = i === rankedOpp ? '#12242e' : 'rgba(0,0,0,0.3)';
+    ctx.fillRect(40, y, CANVAS_W - 80, 26);
+    ctx.fillStyle = b.color; ctx.fillRect(46, y + 7, 12, 12);
+    ctx.fillStyle = '#cfe3d6'; ctx.font = '14px "Courier New", monospace';
+    ctx.fillText('#' + (i + 1) + '  ' + b.name, 68, y + 19);
+    ctx.fillText('ELO ' + b.elo, 460, y + 19);
+    ctx.fillText('W' + b.wins + ' L' + b.losses, 620, y + 19);
+  }
+  ctx.fillStyle = '#3a5a6a'; ctx.font = '12px "Courier New", monospace';
+  ctx.fillText('UP/DOWN select \u00B7 ENTER = ranked match', 40, CANVAS_H - 100);
+}
+function drawHack() {
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 90, CANVAS_W, CANVAS_H - 180);
+  ctx.fillStyle = '#4dd0ff'; ctx.font = 'bold 24px "Courier New", monospace'; ctx.textAlign = 'left';
+  ctx.fillText('HACK CONSOLE  \u00B7  real code, sandboxed', 40, 130);
+  var b = world.bots[hackBotSel % Math.max(1, world.bots.length)];
+  if (!b) return;
+  ctx.fillStyle = b.color; ctx.fillRect(40, 150, 14, 14);
+  ctx.fillStyle = '#cfe3d6'; ctx.font = '14px "Courier New", monospace';
+  ctx.fillText(b.name + '  \u00B7  ELO ' + b.elo + '  \u00B7  firewall ' + b.firewall, 64, 162);
+  ctx.fillStyle = '#3a5a6a'; ctx.font = '12px "Courier New", monospace';
+  ctx.fillText('UP/DOWN pick bot \u00B7 ENTER run the code below \u00B7 R reset template', 40, 186);
+  // code box
+  ctx.fillStyle = '#050a10'; ctx.fillRect(40, 200, CANVAS_W - 80, 210);
+  ctx.strokeStyle = '#1f5f8a'; ctx.strokeRect(40, 200, CANVAS_W - 80, 210);
+  ctx.fillStyle = '#7aff4d'; ctx.font = '13px "Courier New", monospace';
+  var lines = hackCode.split('\n');
+  for (var i = 0; i < lines.length; i++) ctx.fillText(lines[i], 52, 224 + i * 18);
+  ctx.fillStyle = '#ffd42a'; ctx.font = '13px "Courier New", monospace';
+  ctx.fillText('> ' + hackResult, 52, 440);
+  ctx.fillStyle = '#3a5a6a'; ctx.font = '12px "Courier New", monospace';
+  ctx.fillText('API: bot.stats.*  bot.firewall  bot.addSpecial({name,type,power,speed,cost})  bot.setFirewall(n)  Math  rand  clamp  log', 40, CANVAS_H - 96);
+}
+function drawHome() {
+  ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(0, 70, CANVAS_W, CANVAS_H - 150);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#4dd0ff'; ctx.font = 'bold 46px "Courier New", monospace';
+  ctx.fillText('BOT ARENA', CANVAS_W / 2, 148);
+  ctx.fillStyle = '#7aa0b0'; ctx.font = '14px "Courier New", monospace';
+  ctx.fillText('AI fighters that hack their own code to win \u2014 or get deleted.', CANVAS_W / 2, 178);
+  var top = world.bots.slice().sort(function (a, b) { return b.elo - a.elo; })[0];
+  var mod = modBot();
+  var stats = [
+    ['BOTS ALIVE', world.bots.length],
+    ['WORLD TICK', world.tick],
+    ['TOP ELO', top ? (top.elo + '  ' + top.name) : '-'],
+    ['FEED POSTS', world.feed.length],
+    ['BREACHES CONTAINED', mod ? (mod.contained || 0) : 0],
+    ['STAKES', world.stakes || 0]
+  ];
+  for (var i = 0; i < stats.length; i++) {
+    var x = 120 + (i % 3) * 250, y = 220 + Math.floor(i / 3) * 48;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#3a5a6a'; ctx.font = '12px "Courier New", monospace'; ctx.fillText(stats[i][0], x, y);
+    ctx.fillStyle = '#cfe3d6'; ctx.font = 'bold 20px "Courier New", monospace'; ctx.fillText(String(stats[i][1]), x, y + 22);
+  }
+  if (mod) {
+    ctx.fillStyle = 'rgba(255,212,42,0.08)'; ctx.fillRect(90, 336, CANVAS_W - 180, 58);
+    ctx.strokeStyle = '#6b5a10'; ctx.strokeRect(90, 336, CANVAS_W - 180, 58);
+    ctx.fillStyle = mod.color; ctx.fillRect(104, 352, 14, 14);
+    ctx.fillStyle = '#ffd42a'; ctx.font = 'bold 16px "Courier New", monospace';
+    ctx.fillText('WARDEN-PRIME  \u00B7  containment mod', 128, 364);
+    ctx.fillStyle = '#c8b46a'; ctx.font = '12px "Courier New", monospace';
+    ctx.fillText('firewall ' + mod.firewall + '  \u00B7  ELO ' + mod.elo + '  \u00B7  contained ' + (mod.contained || 0) + ' escape attempts  \u00B7  peaceful: never hacks others', 128, 384);
+  }
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ff4d94'; ctx.font = 'bold 13px "Courier New", monospace';
+  ctx.fillText('OVERCLOCK raises the STAKES on every hack \u2014 more power, bigger ELO swings, deletion after ' + delThreshold() + ' straight losses', CANVAS_W / 2, 412);
+  ctx.fillStyle = '#ffd42a'; ctx.font = 'bold 15px "Courier New", monospace';
+  ctx.fillText('2 FIGHT   \u00B7   3 WATCH   \u00B7   4 SOCIAL   \u00B7   5 HACK MONITOR   \u00B7   6 ROSTER   \u00B7   7 RANKED   \u00B7   8 ML', CANVAS_W / 2, 424);
+  ctx.fillStyle = '#3a5a6a'; ctx.font = '12px "Courier New", monospace';
+  ctx.fillText('bots evolve, clone on win streaks, and die permanently after 20 straight losses', CANVAS_W / 2, 450);
+  ctx.textAlign = 'left';
+}
+function drawSocial() {
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 90, CANVAS_W, CANVAS_H - 180);
+  ctx.fillStyle = '#4dd0ff'; ctx.font = 'bold 24px "Courier New", monospace'; ctx.textAlign = 'left';
+  ctx.fillText('BOT NET  \u00B7  social network', 40, 128);
+  // feed (left) — social events first (hacks live in the CODE monitor)
+  var social = world.feed.filter(function (q) { return q.kind !== 'hack'; });
+  feedScroll = clamp(feedScroll, 0, Math.max(0, social.length - 12));
+  for (var i = 0; i < Math.min(12, social.length); i++) {
+    var p = social[feedScroll + i];
+    if (!p) break;
+    var y = 158 + i * 30, x = 46;
+    if (p.replyTo) { x = 70; ctx.fillStyle = '#3a5a6a'; ctx.font = '12px "Courier New", monospace'; ctx.fillText('\u21B3', 52, y + 14); }
+    ctx.fillStyle = p.color; ctx.fillRect(x, y - 10, 10, 10);
+    ctx.fillStyle = '#7aa0b0'; ctx.font = '12px "Courier New", monospace';
+    ctx.fillText('@' + p.name, x + 16, y);
+    var tag = p.kind === 'hack' ? '[HACK] ' : p.kind === 'defend' ? '[WARDEN] ' : p.kind === 'death' ? '[DELETED] ' : p.kind === 'spawn' ? '[CLONE] ' : p.kind === 'think' ? '[THINK] ' : p.kind === 'alliance' ? '[PACT] ' : p.kind === 'betray' ? '[BETRAY] ' : '';
+    ctx.fillStyle = p.kind === 'hack' ? '#ff9a2b' : p.kind === 'defend' ? '#ffd42a' : p.kind === 'death' ? '#ff5f6d' : p.kind === 'spawn' ? '#7aff4d' : p.kind === 'think' ? '#4dd0ff' : p.kind === 'alliance' ? '#7aff4d' : p.kind === 'betray' ? '#ff4d94' : '#cfe3d6';
+    ctx.fillText(tag + p.text.slice(0, 50), x + 16, y + 14);
+  }
+  // right: network graph + alliances
+  ctx.fillStyle = '#3a5a6a'; ctx.font = '11px "Courier New", monospace';
+  ctx.fillText('showing ' + (social.length ? (feedScroll + 1) : 0) + '-' + Math.min(feedScroll + 12, social.length) + ' of ' + social.length + ' \u00B7 UP/DOWN or wheel to scroll', 40, CANVAS_H - 118);
+  ctx.strokeStyle = '#123322'; ctx.beginPath(); ctx.moveTo(620, 148); ctx.lineTo(620, CANVAS_H - 104); ctx.stroke();
+  ctx.fillStyle = '#3a5a6a'; ctx.font = '12px "Courier New", monospace';
+  ctx.fillText('NETWORK', 640, 148);
+  drawNetworkGraph(640, 156, 260, 176);
+  ctx.fillStyle = '#3a5a6a'; ctx.font = '12px "Courier New", monospace';
+  ctx.fillText('ALLIANCES', 640, 356);
+  var al = world.alliances.slice().sort(function (a, b) { return alliancePower(b) - alliancePower(a); });
+  if (!al.length) { ctx.fillStyle = '#4a7a8a'; ctx.fillText('no pacts yet \u2014 lone wolves', 640, 376); }
+  for (var k = 0; k < Math.min(5, al.length); k++) {
+    var a2 = al[k], y3 = 378 + k * 24, lead = findBot(a2.leaderId);
+    ctx.fillStyle = lead ? lead.color : '#7aa0b0'; ctx.fillRect(640, y3 - 9, 9, 9);
+    ctx.fillStyle = '#cfe3d6'; ctx.font = '12px "Courier New", monospace';
+    ctx.fillText(a2.name + '  ' + a2.members.length + ' members  pow' + Math.round(alliancePower(a2) / 10), 654, y3);
+  }
+}
+function drawNetworkGraph(ox, oy, w, h) {
+  var cx = ox + w / 2, cy = oy + h / 2, r = Math.min(w, h) / 2 - 12;
+  var bots = world.bots, pos = {};
+  for (var i = 0; i < bots.length; i++) {
+    var ang = (i / Math.max(1, bots.length)) * Math.PI * 2 - Math.PI / 2;
+    pos[bots[i].id] = { x: cx + Math.cos(ang) * r, y: cy + Math.sin(ang) * r * 0.85 };
+  }
+  for (var a = 0; a < world.alliances.length; a++) {
+    var al = world.alliances[a];
+    var col = al.members.length ? ((findBot(al.members[0]) || {}).color || '#7aff4d') : '#7aff4d';
+    ctx.strokeStyle = col; ctx.globalAlpha = 0.5; ctx.lineWidth = 2;
+    for (var m = 0; m < al.members.length; m++) for (var n = m + 1; n < al.members.length; n++) {
+      var p1 = pos[al.members[m]], p2 = pos[al.members[n]];
+      if (p1 && p2) { ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke(); }
+    }
+  }
+  ctx.globalAlpha = 0.12; ctx.strokeStyle = '#4dd0ff'; ctx.lineWidth = 1;
+  for (var b = 0; b < bots.length; b++) {
+    var f = bots[b], fp = pos[f.id]; if (!fp) continue;
+    for (var g = 0; g < f.following.length; g++) {
+      var tp = pos[f.following[g]]; if (!tp) continue;
+      ctx.beginPath(); ctx.moveTo(fp.x, fp.y); ctx.lineTo(tp.x, tp.y); ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 1;
+  for (var q = 0; q < bots.length; q++) {
+    var b2 = bots[q], pp = pos[b2.id]; if (!pp) continue;
+    ctx.fillStyle = b2.color; ctx.beginPath(); ctx.arc(pp.x, pp.y, 3.5, 0, Math.PI * 2); ctx.fill();
+  }
+}
+function drawML() {
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 90, CANVAS_W, CANVAS_H - 180);
+  ctx.fillStyle = '#4dd0ff'; ctx.font = 'bold 24px "Courier New", monospace'; ctx.textAlign = 'left';
+  ctx.fillText('ML LAYER  \u00B7  neural net policies', 40, 128);
+  ctx.fillStyle = mlEnabled ? '#123322' : '#2a1010';
+  ctx.fillRect(40, 146, 120, 30);
+  ctx.strokeStyle = mlEnabled ? '#2ecc40' : '#6b1f24'; ctx.lineWidth = 2; ctx.strokeRect(40, 146, 120, 30);
+  ctx.fillStyle = mlEnabled ? '#4de355' : '#ff5f6d'; ctx.font = 'bold 14px "Courier New", monospace';
+  ctx.textAlign = 'center'; ctx.fillText(mlEnabled ? 'ML: ON' : 'ML: OFF', 100, 166);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#6b7390'; ctx.font = '12px "Courier New", monospace';
+  ctx.fillText('click to toggle \u00B7 net ' + ML_IN + '-' + ML_HID + '-' + ML_OUT + ' \u00B7 trained by REINFORCE + neuroevolution', 176, 166);
+  var withNet = 0, avg = 0, trained = 0;
+  world.bots.forEach(function (b) { if (b.net) { withNet++; avg += b.net.reward || 0; trained += b.net.episodes || 0; } });
+  avg = withNet ? avg / withNet : 0;
+  ctx.fillStyle = '#cfe3d6'; ctx.font = '13px "Courier New", monospace';
+  ctx.fillText('matches trained: ' + mlStats.matches + '   \u00B7   gradient updates: ' + mlStats.updates, 40, 202);
+  ctx.fillText('bots with nets: ' + withNet + '   \u00B7   avg episode reward: ' + avg.toFixed(2) + '   \u00B7   total episodes: ' + trained, 40, 222);
+  ctx.fillStyle = '#3a5a6a'; ctx.font = '12px "Courier New", monospace';
+  ctx.fillText('BEST-LEARNED POLICIES', 40, 252);
+  var list = world.bots.filter(function (b) { return b.net; }).sort(function (a, b) { return (b.net.reward || 0) - (a.net.reward || 0); }).slice(0, 8);
+  list.forEach(function (b, i) {
+    var y = 274 + i * 24;
+    ctx.fillStyle = b.color; ctx.fillRect(44, y - 9, 9, 9);
+    ctx.fillStyle = '#cfe3d6'; ctx.font = '12px "Courier New", monospace';
+    ctx.fillText(b.name.slice(0, 16), 60, y);
+    ctx.fillStyle = '#7aa0b0';
+    ctx.fillText('reward ' + (b.net.reward || 0).toFixed(2) + '  ep ' + (b.net.episodes || 0), 250, y);
+  });
+  if (list[0]) drawNetViz(list[0].net, 610, 240, 320, 220);
+}
+function drawNetViz(net, ox, oy, w, h) {
+  if (!net) return;
+  var xs = [ox + 26, ox + w / 2, ox + w - 60];
+  var counts = [ML_IN, ML_HID, ML_OUT];
+  function ypos(layer, i) { return oy + h * (i + 0.5) / counts[layer]; }
+  for (var o = 0; o < ML_OUT; o++) for (var hid = 0; hid < ML_HID; hid++) {
+    var wv = net.w2[o * ML_HID + hid];
+    if (Math.abs(wv) < 0.2) continue;
+    ctx.strokeStyle = wv > 0 ? 'rgba(77,208,255,' + Math.min(0.55, Math.abs(wv)) + ')' : 'rgba(255,95,109,' + Math.min(0.55, Math.abs(wv)) + ')';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xs[1], ypos(1, hid)); ctx.lineTo(xs[2], ypos(2, o)); ctx.stroke();
+  }
+  for (var l = 0; l < 3; l++) for (var i = 0; i < counts[l]; i++) {
+    ctx.fillStyle = l === 2 ? '#ffd42a' : (l === 1 ? '#4dd0ff' : '#2b7fd4');
+    ctx.beginPath(); ctx.arc(xs[l], ypos(l, i), 3.5, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = '#7aa0b0'; ctx.font = '10px "Courier New", monospace'; ctx.textAlign = 'left';
+  for (var k = 0; k < ML_OUT; k++) ctx.fillText(ML_ACTIONS[k], xs[2] + 7, ypos(2, k) + 3);
+  ctx.fillStyle = '#3a5a6a'; ctx.font = '11px "Courier New", monospace';
+  ctx.fillText('input', xs[0] - 20, oy - 4); ctx.fillText('hidden', xs[1] - 22, oy - 4); ctx.fillText('actions', xs[2] - 22, oy - 4);
+}
+function drawCode() {
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 90, CANVAS_W, CANVAS_H - 180);
+  ctx.fillStyle = '#4dd0ff'; ctx.font = 'bold 24px "Courier New", monospace'; ctx.textAlign = 'left';
+  ctx.fillText('HACK MONITOR  \u00B7  live code being run', 40, 128);
+  var mod = modBot();
+  ctx.fillStyle = '#3a5a6a'; ctx.font = '12px "Courier New", monospace';
+  ctx.fillText('UP/DOWN scroll \u00B7 H = open console \u00B7 WARDEN contained ' + (mod ? (mod.contained || 0) : 0) + ' breaches', 40, 148);
+  var max = 11;
+  for (var i = 0; i < max; i++) {
+    var e = hackLog[i + codeScroll];
+    if (!e) break;
+    var y = 178 + i * 32;
+    ctx.fillStyle = e.breach ? 'rgba(255,95,109,0.12)' : 'rgba(255,255,255,0.03)';
+    ctx.fillRect(40, y - 15, CANVAS_W - 80, 29);
+    ctx.fillStyle = e.color; ctx.fillRect(48, y - 8, 10, 10);
+    ctx.fillStyle = '#7aa0b0'; ctx.font = '12px "Courier New", monospace';
+    ctx.fillText('@' + e.name, 66, y - 2);
+    var label, col;
+    if (e.threat === 'rogue') { label = 'ROGUE'; col = '#ff5f6d'; }
+    else if (e.threat === 'escape') { label = 'BREACH'; col = '#ff9a2b'; }
+    else if (e.threat === 'dos') { label = 'DOS'; col = '#ff9a2b'; }
+    else if (e.ok) { label = 'OK'; col = '#7aff4d'; }
+    else { label = 'ERR'; col = '#7aa0b0'; }
+    ctx.fillStyle = col;
+    ctx.fillText(label, 226, y - 2);
+    ctx.fillStyle = '#cfe3d6';
+    ctx.fillText((e.code || '').split('\n')[0].slice(0, 74), 300, y - 2);
+    if (!e.ok) { ctx.fillStyle = '#ff9a2b'; ctx.fillText('> ' + (e.error || '').slice(0, 86), 66, y + 11); }
+  }
+  if (!hackLog.length) { ctx.fillStyle = '#4a7a8a'; ctx.fillText('> waiting for the bots to run some code...', 48, 190); }
+}
+
+function render() {
+  ctx.save();
+  if (shakes > 0.4) ctx.translate(rand(-shakes, shakes), rand(-shakes, shakes));
+  drawBG();
+  if (screen === 'home') drawHome();
+  else if (screen === 'arena' || screen === 'spectate') {
+    var F = activeFight();
+    if (F) { drawProjectiles(F.p1); drawProjectiles(F.p2); drawFighter(F.p1); drawFighter(F.p2); drawParticles(); }
+    else {
+      ctx.fillStyle = '#cfe3d6'; ctx.font = 'bold 26px "Courier New", monospace'; ctx.textAlign = 'center';
+      ctx.fillText(screen === 'spectate' ? 'BOT VS BOT' : 'BOT ARENA', CANVAS_W / 2, 220);
+      ctx.font = '15px "Courier New", monospace'; ctx.fillStyle = '#7aa0b0';
+      ctx.fillText('AI fighters that hack themselves to win \u2014 or get deleted.', CANVAS_W / 2, 260);
+      ctx.fillStyle = '#ffd42a'; ctx.font = 'bold 18px "Courier New", monospace';
+      ctx.fillText(screen === 'spectate' ? 'PRESS ENTER TO WATCH TWO BOTS FIGHT' : 'PRESS ENTER TO FIGHT A RANDOM BOT', CANVAS_W / 2, 320);
+      ctx.fillStyle = '#3a5a6a'; ctx.font = '12px "Courier New", monospace';
+      ctx.fillText('bots evolve, clone on win streaks, and die permanently after 20 straight losses', CANVAS_W / 2, 360);
+      ctx.textAlign = 'left';
+    }
+  }
+  else if (screen === 'social') drawSocial();
+  else if (screen === 'code') drawCode();
+  else if (screen === 'ml') drawML();
+  else if (screen === 'roster') drawRoster();
+  else if (screen === 'feed') drawFeed();
+  else if (screen === 'ranked') drawRanked();
+  else if (screen === 'hack') drawHack();
+  ctx.restore();
+  if (screen === 'arena' || screen === 'spectate') drawHUD();
+  drawTabs();
+}
+
+/* ============================================================
+   EVOLUTION LOOP (world keeps living while the page is open)
+   ============================================================ */
+var lastEvolve = 0, evolveInterval = 1200, evolveCost = 2;
+function worldTick(now) {
+  if (now - lastEvolve < evolveInterval) return;
+  lastEvolve = now;
+  var t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  evolve(1);
+  var dt = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0;
+  evolveCost = evolveCost * 0.8 + dt * 0.2;
+  // Adaptive: if the world sim is getting heavy, back off so frames never stall.
+  evolveInterval = Math.min(6000, Math.max(1200, evolveCost * 20));
+  if (world.tick % 12 === 0) saveWorld();
+}
+
+/* ============================================================
+   MAIN LOOP
+   ============================================================ */
+var last = 0, acc = 0, FRAME = 1000 / 60;
+function loop(t) {
+  try {
+    if (!last) last = t;
+    acc += Math.min(t - last, 100); last = t;
+    var guard = 0;
+    while (acc >= FRAME && guard++ < 8) { if (screen === 'arena' || screen === 'spectate') updateFight(); acc -= FRAME; }
+    if (acc > FRAME * 8) acc = 0; // drop backlog instead of spiralling
+    worldTick(t);
+    render();
+  } catch (e) {
+    console.error('[BotArena] frame error (recovered):', e);
+  }
+  requestAnimationFrame(loop);
+}
+
+// menu keys
+window.addEventListener('keydown', function (e) {
+  if (screen === 'arena') {
+    if (!fight && e.code === 'Enter') { var b = choose(world.bots); if (b) newFight('human', b, false); }
+    if (fight && fight.over && e.code === 'Enter') { var b2 = fight.p2.bot || choose(world.bots); newFight('human', b2, false); }
+  } else if (screen === 'spectate') {
+    if (e.code === 'Enter' || !spectateFight) startSpectate();
+  } else if (screen === 'code') {
+    if (e.code === 'ArrowDown') codeScroll = clamp(codeScroll + 1, 0, Math.max(0, hackLog.length - 11));
+    if (e.code === 'ArrowUp') codeScroll = clamp(codeScroll - 1, 0, Math.max(0, hackLog.length - 11));
+  } else if (screen === 'social') {
+    var socMax = Math.max(0, world.feed.filter(function (q) { return q.kind !== 'hack'; }).length - 12);
+    if (e.code === 'ArrowDown') feedScroll = clamp(feedScroll + 1, 0, socMax);
+    if (e.code === 'ArrowUp') feedScroll = clamp(feedScroll - 1, 0, socMax);
+  } else if (screen === 'roster') {
+    if (e.code === 'ArrowDown') rosterSel = clamp(rosterSel + 1, 0, world.bots.length - 1);
+    if (e.code === 'ArrowUp') rosterSel = clamp(rosterSel - 1, 0, world.bots.length - 1);
+    if (e.code === 'Enter') { var list = world.bots.slice().sort(function (a, b) { return b.elo - a.elo; }); var bb = list[rosterSel]; if (bb) { screen = 'arena'; newFight('human', bb, true); } }
+  } else if (screen === 'ranked') {
+    if (e.code === 'ArrowDown') rankedOpp = clamp(rankedOpp + 1, 0, world.bots.length - 1);
+    if (e.code === 'ArrowUp') rankedOpp = clamp(rankedOpp - 1, 0, world.bots.length - 1);
+    if (e.code === 'Enter') { var l2 = world.bots.slice().sort(function (a, b) { return b.elo - a.elo; }); var rb = l2[rankedOpp]; if (rb) { screen = 'arena'; newFight('human', rb, true); } }
+  } else if (screen === 'hack') {
+    if (e.code === 'ArrowDown') hackBotSel = (hackBotSel + 1) % Math.max(1, world.bots.length);
+    if (e.code === 'ArrowUp') hackBotSel = (hackBotSel - 1 + world.bots.length) % Math.max(1, world.bots.length);
+    if (e.code === 'KeyR') hackCode = '// real code. sandboxed. rewrite this bot.\nbot.stats.aggression = clamp(bot.stats.aggression + 0.2, 0.05, 1.5);\nbot.setFirewall(bot.firewall + 1);\nlog("patched: " + bot.name);';
+    if (e.code === 'Enter') {
+      var hb = world.bots[hackBotSel % Math.max(1, world.bots.length)];
+      if (hb) { var r = attemptHack(hb, hackCode, "console"); hackResult = r.ok ? ('OK \u2014 ' + hb.lastHack) : ('ERROR: ' + r.error); saveWorld(); }
+    }
+  }
+});
+// allow typing in the hack console via a simple prompt fallback (double-click canvas)
+cv.addEventListener('dblclick', function () {
+  if (screen !== 'hack') return;
+  var b = world.bots[hackBotSel % Math.max(1, world.bots.length)];
+  var code = window.prompt('Hack code for ' + (b ? b.name : 'bot') + ':', hackCode);
+  if (code !== null) { hackCode = code; if (b) { var r = attemptHack(b, code, "console"); hackResult = r.ok ? ('OK \u2014 ' + b.lastHack) : ('ERROR: ' + r.error); saveWorld(); } }
+});
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+loadWorld(function () {
+  requestAnimationFrame(loop);
+  setInterval(function () { saveWorld(); }, 15000);
+});
+})();
+</script>
+</body>
+</html>

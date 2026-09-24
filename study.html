@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StudyHub — Calculator, Converter, Periodic Table</title>
+<style>
+  :root {
+    --bg: #f5f7fa; --card: #ffffff; --ink: #1c2430; --muted: #6b7684;
+    --line: #dde3ea; --accent: #2b6cb0; --accent-soft: #e8f1fb; --ok: #2f855a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  header { background: var(--card); border-bottom: 1px solid var(--line); padding: 14px 20px; display: flex; align-items: center; gap: 14px; position: sticky; top: 0; z-index: 20; }
+  header h1 { margin: 0; font-size: 19px; letter-spacing: .2px; }
+  header h1 span { color: var(--accent); }
+  header .tag { font-size: 12px; color: var(--muted); margin-left: auto; }
+  nav { display: flex; gap: 6px; flex-wrap: wrap; padding: 12px 20px 0; }
+  nav button { font: inherit; font-size: 13px; cursor: pointer; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px; padding: 8px 15px; }
+  nav button:hover { border-color: var(--accent); }
+  nav button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  main { max-width: 1040px; margin: 0 auto; padding: 16px 20px 80px; }
+  .panel { display: none; }
+  .panel.on { display: block; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-top: 14px; }
+  h2 { font-size: 15px; margin: 0 0 12px; color: var(--accent); letter-spacing: .3px; }
+  input, select, textarea, button { font: inherit; }
+  input[type=text], input[type=number], select, textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  .btn { cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 8px; padding: 10px 16px; }
+  .btn.ghost { background: #fff; color: var(--accent); }
+  .btn:hover { filter: brightness(1.06); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  @media (max-width: 720px){ .grid2, .grid3 { grid-template-columns: 1fr; } }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .muted { color: var(--muted); font-size: 12px; }
+  /* calculator */
+  .calc { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  #expr { font-size: 20px; padding: 14px; text-align: right; letter-spacing: 1px; }
+  #result { text-align: right; font-size: 28px; font-weight: 600; color: var(--accent); min-height: 36px; word-break: break-all; }
+  .keys { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  .keys button { padding: 13px 0; border: 1px solid var(--line); background: #fff; border-radius: 8px; cursor: pointer; font-size: 15px; }
+  .keys button:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .keys button.fn { color: var(--accent); font-size: 13px; }
+  .keys button.eq { background: var(--accent); color: #fff; border-color: var(--accent); }
+  #hist { font-size: 12px; color: var(--muted); margin-top: 8px; max-height: 120px; overflow: auto; }
+  #hist div { padding: 3px 0; border-bottom: 1px dashed var(--line); cursor: pointer; }
+  /* periodic table */
+  .ptable { display: grid; grid-template-columns: repeat(18, minmax(0, 1fr)); gap: 3px; margin-top: 6px; overflow-x: auto; }
+  .el { border: 1px solid var(--line); border-radius: 5px; padding: 4px 2px; text-align: center; cursor: pointer; font-size: 11px; line-height: 1.15; background: #fff; }
+  .el b { display: block; font-size: 13px; }
+  .el small { color: var(--muted); font-size: 9px; }
+  .el:hover { outline: 2px solid var(--accent); }
+  .el.sel { outline: 2px solid var(--accent); background: var(--accent-soft); }
+  .cat-alkali { background: #ffe0e0; } .cat-alkaline { background: #ffeacc; }
+  .cat-transition { background: #fff6cc; } .cat-post { background: #e9f7e0; }
+  .cat-metalloid { background: #d9f2e6; } .cat-nonmetal { background: #dcecff; }
+  .cat-halogen { background: #e6e0ff; } .cat-noble { background: #f0dcff; }
+  .cat-lanthanide { background: #ffe3f2; } .cat-actinide { background: #ffe9d6; }
+  #elInfo { margin-top: 14px; }
+  #elInfo .big { font-size: 40px; font-weight: 700; color: var(--accent); }
+  .legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--muted); margin-top: 10px; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; border: 1px solid var(--line); }
+  /* flashcards */
+  .fc { perspective: 1000px; }
+  .fc-inner { position: relative; min-height: 150px; transition: transform .4s; transform-style: preserve-3d; cursor: pointer; }
+  .fc.flip .fc-inner { transform: rotateY(180deg); }
+  .fc-face { position: absolute; inset: 0; backface-visibility: hidden; border: 1px solid var(--line); border-radius: 12px; display: flex; align-items: center; justify-content: center; padding: 20px; text-align: center; font-size: 18px; background: #fff; }
+  .fc-back { transform: rotateY(180deg); background: var(--accent-soft); }
+  /* timer */
+  #clock { font-size: 64px; font-weight: 700; text-align: center; letter-spacing: 3px; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 8px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 50; }
+  .toast.on { opacity: 1; }
+  table.conv { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.conv td { padding: 6px 4px; border-bottom: 1px solid var(--line); }
+  table.conv td:first-child { color: var(--muted); width: 45%; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Study<span>Hub</span></h1>
+  <span class="tag">calculator · converter · periodic table · flashcards · timer</span>
+</header>
+
+<nav id="nav">
+  <button data-tab="calc" class="on">Calculator</button>
+  <button data-tab="convert">Unit Converter</button>
+  <button data-tab="table">Periodic Table</button>
+  <button data-tab="cards">Flashcards</button>
+  <button data-tab="timer">Study Timer</button>
+</nav>
+
+<main>
+  <!-- CALCULATOR -->
+  <section class="panel on" id="tab-calc">
+    <div class="card calc">
+      <input id="expr" type="text" placeholder="type an expression, e.g. 2*sin(pi/4)+sqrt(9)" autocomplete="off" spellcheck="false" />
+      <div id="result"></div>
+      <div class="keys" id="keys"></div>
+      <div class="row">
+        <button class="btn" id="calcGo">= Evaluate</button>
+        <button class="btn ghost" id="calcClear">Clear</button>
+        <span class="muted">supports + − × ÷ ^ ( ) sin cos tan asin acos atan sqrt log ln abs exp pi e</span>
+      </div>
+      <div id="hist"></div>
+    </div>
+  </section>
+
+  <!-- CONVERTER -->
+  <section class="panel" id="tab-convert">
+    <div class="card">
+      <h2>Unit Converter</h2>
+      <div class="grid2">
+        <div><div class="muted">category</div><select id="cat"></select></div>
+        <div><div class="muted">amount</div><input id="amt" type="number" value="1" step="any" /></div>
+      </div>
+      <div class="grid2" style="margin-top:12px">
+        <div><div class="muted">from</div><select id="fromU"></select></div>
+        <div><div class="muted">to</div><select id="toU"></select></div>
+      </div>
+      <div class="card" style="margin-top:14px;background:var(--accent-soft);border-color:#cfe1f7">
+        <div id="convOut" style="font-size:26px;font-weight:600;color:var(--accent)"></div>
+        <div class="muted" id="convAll" style="margin-top:8px"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PERIODIC TABLE -->
+  <section class="panel" id="tab-table">
+    <div class="card">
+      <h2>Periodic Table <span class="muted" style="font-weight:400">— click an element</span></h2>
+      <div class="row" style="margin-bottom:8px"><input id="elSearch" type="text" placeholder="search by name, symbol or number" /></div>
+      <div class="ptable" id="ptable"></div>
+      <div class="legend">
+        <span><i class="cat-alkali"></i>alkali</span><span><i class="cat-alkaline"></i>alkaline</span>
+        <span><i class="cat-transition"></i>transition</span><span><i class="cat-post"></i>post-transition</span>
+        <span><i class="cat-metalloid"></i>metalloid</span><span><i class="cat-nonmetal"></i>nonmetal</span>
+        <span><i class="cat-halogen"></i>halogen</span><span><i class="cat-noble"></i>noble gas</span>
+        <span><i class="cat-lanthanide"></i>lanthanide</span><span><i class="cat-actinide"></i>actinide</span>
+      </div>
+      <div id="elInfo"></div>
+    </div>
+  </section>
+
+  <!-- FLASHCARDS -->
+  <section class="panel" id="tab-cards">
+    <div class="card">
+      <h2>Flashcards <span class="muted" style="font-weight:400">— saved in this browser</span></h2>
+      <div class="grid2">
+        <div><div class="muted">front (question)</div><input id="fcFront" type="text" placeholder="What is the capital of France?" /></div>
+        <div><div class="muted">back (answer)</div><input id="fcBack" type="text" placeholder="Paris" /></div>
+      </div>
+      <div class="row" style="margin-top:10px"><button class="btn" id="fcAdd">+ Add card</button><button class="btn ghost" id="fcReset">Reset deck</button><span class="muted" id="fcCount"></span></div>
+    </div>
+    <div class="card">
+      <div class="fc" id="fcCard"><div class="fc-inner">
+        <div class="fc-face" id="fcQ">no cards yet — add one above</div>
+        <div class="fc-face fc-back" id="fcA"></div>
+      </div></div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn ghost" id="fcPrev">‹ Prev</button>
+        <button class="btn" id="fcNext">Next ›</button>
+        <span class="muted">click the card to flip</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- TIMER -->
+  <section class="panel" id="tab-timer">
+    <div class="card">
+      <h2>Study Timer</h2>
+      <div id="clock">25:00</div>
+      <div class="row" style="justify-content:center;margin-top:12px">
+        <button class="btn" id="tmStart">Start</button>
+        <button class="btn ghost" id="tmPause">Pause</button>
+        <button class="btn ghost" id="tmReset">Reset</button>
+      </div>
+      <div class="row" style="justify-content:center;margin-top:14px">
+        <span class="muted">minutes</span><input id="tmMin" type="number" value="25" min="1" max="180" style="width:90px" />
+        <span class="muted" id="tmDone"></span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+  function toast(msg){ var t=$("toast"); t.textContent=msg; t.classList.add("on"); setTimeout(function(){ t.classList.remove("on"); }, 1600); }
+
+  /* ---------- tabs ---------- */
+  Array.prototype.forEach.call(document.querySelectorAll("#nav button"), function(b){
+    b.addEventListener("click", function(){
+      Array.prototype.forEach.call(document.querySelectorAll("#nav button"), function(x){ x.classList.remove("on"); });
+      Array.prototype.forEach.call(document.querySelectorAll(".panel"), function(p){ p.classList.remove("on"); });
+      b.classList.add("on"); $("tab-" + b.getAttribute("data-tab")).classList.add("on");
+    });
+  });
+
+  /* ---------- calculator (safe expression parser) ---------- */
+  function tokenize(s){
+    var t=[], i=0;
+    var isD=function(c){ return c>="0"&&c<="9"||c==="."; };
+    var isL=function(c){ return c>="a"&&c<="z"; };
+    while(i<s.length){
+      var c=s[i];
+      if(c===" "||c===","){ i++; continue; }
+      if(isD(c)){ var j=i; while(j<s.length&&(isD(s[j])||s[j]==="e"&&isD(s[j+1])))j++; t.push({t:"num",v:parseFloat(s.slice(i,j))}); i=j; continue; }
+      if(isL(c)){ var k=i; while(k<s.length&&isL(s[k]))k++; t.push({t:"id",v:s.slice(i,k)}); i=k; continue; }
+      if("+-*/^()%".indexOf(c)>=0){ t.push({t:c}); i++; continue; }
+      throw new Error("unexpected character '" + c + "'");
+    }
+    return t;
+  }
+  var FN = {
+    sin:Math.sin, cos:Math.cos, tan:Math.tan, asin:Math.asin, acos:Math.acos, atan:Math.atan,
+    sqrt:Math.sqrt, log:Math.log10, ln:Math.log, abs:Math.abs, exp:Math.exp,
+    floor:Math.floor, ceil:Math.ceil, round:Math.round, sign:Math.sign
+  };
+  var CONST = { pi: Math.PI, e: Math.E };
+  function parse(tokens){
+    var pos=0;
+    function peek(){ return tokens[pos]; }
+    function eat(t){ var x=tokens[pos]; if(!x||x.t!==t) throw new Error("expected " + t); pos++; return x; }
+    function expr(){ var v=term(); while(peek()&&(peek().t==="+"||peek().t==="-")){ var op=tokens[pos++].t; var r=term(); v = op==="+" ? v+r : v-r; } return v; }
+    function term(){ var v=unary(); while(peek()&&(peek().t==="*"||peek().t==="/"||peek().t==="%")){ var op=tokens[pos++].t; var r=unary(); v = op==="*" ? v*r : op==="/" ? v/r : v%r; } return v; }
+    function unary(){ if(peek()&&(peek().t==="-"||peek().t==="+")){ var op=tokens[pos++].t; var v=unary(); return op==="-" ? -v : v; } return power(); }
+    function power(){ var base=atom(); if(peek()&&peek().t==="^"){ pos++; return Math.pow(base, unary()); } return base; }
+    function atom(){
+      var x=peek(); if(!x) throw new Error("unexpected end");
+      if(x.t==="num"){ pos++; return x.v; }
+      if(x.t==="("){ pos++; var v=expr(); eat(")"); return v; }
+      if(x.t==="id"){
+        pos++;
+        var name=x.v.toLowerCase();
+        if(peek()&&peek().t==="("){ pos++; var a=expr(); eat(")"); if(!(name in FN)) throw new Error("unknown function " + name); return FN[name](a); }
+        if(name in CONST) return CONST[name];
+        if(name in FN) throw new Error(name + " needs ( )");
+        throw new Error("unknown name " + name);
+      }
+      throw new Error("unexpected token");
+    }
+    var v=expr(); if(pos<tokens.length) throw new Error("unexpected trailing input"); return v;
+  }
+  function evaluate(s){ return parse(tokenize(String(s).replace(/×/g,"*").replace(/÷/g,"/").replace(/−/g,"-"))); }
+  function show(){
+    var s=$("expr").value;
+    try { var v=evaluate(s); $("result").textContent = (s.trim()==="" ? "" : (Math.round(v*1e12)/1e12)); }
+    catch(e){ $("result").textContent = ""; }
+  }
+  var keys=["7","8","9","/","sin","cos","4","5","6","*","tan","sqrt","1","2","3","-","log","ln","0",".","(",")","^","pi","e","+","abs","exp"];
+  keys.forEach(function(k){
+    var b=document.createElement("button");
+    b.textContent=k;
+    if(/[a-z]/i.test(k)) b.className="fn";
+    b.addEventListener("click", function(){
+      if(k==="sin"||k==="cos"||k==="tan"||k==="sqrt"||k==="log"||k==="ln"||k==="abs"||k==="exp") $("expr").value += k+"(";
+      else $("expr").value += k;
+      $("expr").focus(); show();
+    });
+    $("keys").appendChild(b);
+  });
+  $("expr").addEventListener("input", show);
+  $("expr").addEventListener("keydown", function(e){ if(e.key==="Enter"){ calcGo(); } });
+  function calcGo(){
+    var s=$("expr").value; if(!s.trim()) return;
+    try { var v=evaluate(s); var line=document.createElement("div"); line.textContent=s+" = "+(Math.round(v*1e12)/1e12);
+      line.addEventListener("click", function(){ $("expr").value=s; show(); });
+      $("hist").insertBefore(line, $("hist").firstChild); $("result").textContent=Math.round(v*1e12)/1e12; }
+    catch(e){ toast("Error: " + e.message); }
+  }
+  $("calcGo").addEventListener("click", calcGo);
+  $("calcClear").addEventListener("click", function(){ $("expr").value=""; $("result").textContent=""; $("expr").focus(); });
+
+  /* ---------- unit converter ---------- */
+  var UNITS = {
+    Length: { Meter:1, Kilometer:1000, Centimeter:0.01, Millimeter:0.001, Mile:1609.344, Yard:0.9144, Foot:0.3048, Inch:0.0254, "Nautical mile":1852 },
+    Mass: { Kilogram:1, Gram:0.001, Milligram:1e-6, Tonne:1000, Pound:0.45359237, Ounce:0.028349523125, Stone:6.35029318 },
+    Area: { "Square meter":1, "Square kilometer":1e6, "Square foot":0.09290304, Acre:4046.8564224, Hectare:10000 },
+    Volume: { Liter:1, Milliliter:0.001, "Cubic meter":1000, "US gallon":3.785411784, "US quart":0.946352946, "US cup":0.2365882365, "Fluid ounce":0.0295735295625 },
+    Speed: { "Meter/second":1, "Kilometer/hour":0.2777777778, "Mile/hour":0.44704, Knot:0.5144444444 },
+    Time: { Second:1, Minute:60, Hour:3600, Day:86400, Week:604800, Year:31557600 },
+    Data: { Byte:1, Kilobyte:1024, Megabyte:1048576, Gigabyte:1073741824, Terabyte:1099511627776, Bit:0.125 },
+    Energy: { Joule:1, Kilojoule:1000, Calorie:4.184, Kilocalorie:4184, "Watt-hour":3600, "Kilowatt-hour":3600000 },
+    Pressure: { Pascal:1, Kilopascal:1000, Bar:100000, Atmosphere:101325, PSI:6894.757293168 }
+  };
+  var TEMPS = ["Celsius","Fahrenheit","Kelvin"];
+  function tempToC(v,u){ return u==="Celsius"?v : u==="Fahrenheit"?(v-32)*5/9 : v-273.15; }
+  function cToTemp(c,u){ return u==="Celsius"?c : u==="Fahrenheit"?c*9/5+32 : c+273.15; }
+  var catSel=$("cat");
+  Object.keys(UNITS).forEach(function(c){ var o=document.createElement("option"); o.value=c; o.textContent=c; catSel.appendChild(o); });
+  var o2=document.createElement("option"); o2.value="Temperature"; o2.textContent="Temperature"; catSel.appendChild(o2);
+  function fillUnits(){
+    var cat=catSel.value, from=$("fromU"), to=$("toU");
+    from.innerHTML=""; to.innerHTML="";
+    var list = cat==="Temperature" ? TEMPS : Object.keys(UNITS[cat]);
+    list.forEach(function(u){ from.appendChild(new Option(u,u)); to.appendChild(new Option(u,u)); });
+    to.selectedIndex = Math.min(1, list.length-1);
+    convert();
+  }
+  function convert(){
+    var cat=catSel.value, v=parseFloat($("amt").value)||0, f=$("fromU").value, t=$("toU").value, out;
+    if(cat==="Temperature"){ out = cToTemp(tempToC(v,f), t); }
+    else { out = v * UNITS[cat][f] / UNITS[cat][t]; }
+    $("convOut").textContent = (Math.round(out*1e8)/1e8) + " " + t;
+    if(cat==="Temperature"){
+      $("convAll").textContent = TEMPS.map(function(u){ return (Math.round(cToTemp(tempToC(v,f),u)*100)/100) + " " + u; }).join("  ·  ");
+    } else {
+      $("convAll").textContent = Object.keys(UNITS[cat]).map(function(u){ return (Math.round(v*UNITS[cat][f]/UNITS[cat][u]*1e6)/1e6) + " " + u; }).join("  ·  ");
+    }
+  }
+  catSel.addEventListener("change", fillUnits);
+  ["fromU","toU"].forEach(function(id){ $(id).addEventListener("change", convert); });
+  $("amt").addEventListener("input", convert);
+  fillUnits();
+
+  /* ---------- periodic table ---------- */
+  var ELEMENTS = [
+    [1,"H","Hydrogen",1.008,"nonmetal"],[2,"He","Helium",4.0026,"noble"],[3,"Li","Lithium",6.94,"alkali"],[4,"Be","Beryllium",9.0122,"alkaline"],
+    [5,"B","Boron",10.81,"metalloid"],[6,"C","Carbon",12.011,"nonmetal"],[7,"N","Nitrogen",14.007,"nonmetal"],[8,"O","Oxygen",15.999,"nonmetal"],
+    [9,"F","Fluorine",18.998,"halogen"],[10,"Ne","Neon",20.180,"noble"],[11,"Na","Sodium",22.990,"alkali"],[12,"Mg","Magnesium",24.305,"alkaline"],
+    [13,"Al","Aluminium",26.982,"post"],[14,"Si","Silicon",28.085,"metalloid"],[15,"P","Phosphorus",30.974,"nonmetal"],[16,"S","Sulfur",32.06,"nonmetal"],
+    [17,"Cl","Chlorine",35.45,"halogen"],[18,"Ar","Argon",39.948,"noble"],[19,"K","Potassium",39.098,"alkali"],[20,"Ca","Calcium",40.078,"alkaline"],
+    [21,"Sc","Scandium",44.956,"transition"],[22,"Ti","Titanium",47.867,"transition"],[23,"V","Vanadium",50.942,"transition"],[24,"Cr","Chromium",51.996,"transition"],
+    [25,"Mn","Manganese",54.938,"transition"],[26,"Fe","Iron",55.845,"transition"],[27,"Co","Cobalt",58.933,"transition"],[28,"Ni","Nickel",58.693,"transition"],
+    [29,"Cu","Copper",63.546,"transition"],[30,"Zn","Zinc",65.38,"transition"],[31,"Ga","Gallium",69.723,"post"],[32,"Ge","Germanium",72.630,"metalloid"],
+    [33,"As","Arsenic",74.922,"metalloid"],[34,"Se","Selenium",78.971,"nonmetal"],[35,"Br","Bromine",79.904,"halogen"],[36,"Kr","Krypton",83.798,"noble"],
+    [37,"Rb","Rubidium",85.468,"alkali"],[38,"Sr","Strontium",87.62,"alkaline"],[39,"Y","Yttrium",88.906,"transition"],[40,"Zr","Zirconium",91.224,"transition"],
+    [41,"Nb","Niobium",92.906,"transition"],[42,"Mo","Molybdenum",95.95,"transition"],[43,"Tc","Technetium",98,"transition"],[44,"Ru","Ruthenium",101.07,"transition"],
+    [45,"Rh","Rhodium",102.91,"transition"],[46,"Pd","Palladium",106.42,"transition"],[47,"Ag","Silver",107.87,"transition"],[48,"Cd","Cadmium",112.41,"transition"],
+    [49,"In","Indium",114.82,"post"],[50,"Sn","Tin",118.71,"post"],[51,"Sb","Antimony",121.76,"metalloid"],[52,"Te","Tellurium",127.60,"metalloid"],
+    [53,"I","Iodine",126.90,"halogen"],[54,"Xe","Xenon",131.29,"noble"],[55,"Cs","Caesium",132.91,"alkali"],[56,"Ba","Barium",137.33,"alkaline"],
+    [57,"La","Lanthanum",138.91,"lanthanide"],[58,"Ce","Cerium",140.12,"lanthanide"],[59,"Pr","Praseodymium",140.91,"lanthanide"],[60,"Nd","Neodymium",144.24,"lanthanide"],
+    [61,"Pm","Promethium",145,"lanthanide"],[62,"Sm","Samarium",150.36,"lanthanide"],[63,"Eu","Europium",151.96,"lanthanide"],[64,"Gd","Gadolinium",157.25,"lanthanide"],
+    [65,"Tb","Terbium",158.93,"lanthanide"],[66,"Dy","Dysprosium",162.50,"lanthanide"],[67,"Ho","Holmium",164.93,"lanthanide"],[68,"Er","Erbium",167.26,"lanthanide"],
+    [69,"Tm","Thulium",168.93,"lanthanide"],[70,"Yb","Ytterbium",173.05,"lanthanide"],[71,"Lu","Lutetium",174.97,"lanthanide"],[72,"Hf","Hafnium",178.49,"transition"],
+    [73,"Ta","Tantalum",180.95,"transition"],[74,"W","Tungsten",183.84,"transition"],[75,"Re","Rhenium",186.21,"transition"],[76,"Os","Osmium",190.23,"transition"],
+    [77,"Ir","Iridium",192.22,"transition"],[78,"Pt","Platinum",195.08,"transition"],[79,"Au","Gold",196.97,"transition"],[80,"Hg","Mercury",200.59,"transition"],
+    [81,"Tl","Thallium",204.38,"post"],[82,"Pb","Lead",207.2,"post"],[83,"Bi","Bismuth",208.98,"post"],[84,"Po","Polonium",209,"post"],
+    [85,"At","Astatine",210,"halogen"],[86,"Rn","Radon",222,"noble"],[87,"Fr","Francium",223,"alkali"],[88,"Ra","Radium",226,"alkaline"],
+    [89,"Ac","Actinium",227,"actinide"],[90,"Th","Thorium",232.04,"actinide"],[91,"Pa","Protactinium",231.04,"actinide"],[92,"U","Uranium",238.03,"actinide"],
+    [93,"Np","Neptunium",237,"actinide"],[94,"Pu","Plutonium",244,"actinide"],[95,"Am","Americium",243,"actinide"],[96,"Cm","Curium",247,"actinide"],
+    [97,"Bk","Berkelium",247,"actinide"],[98,"Cf","Californium",251,"actinide"],[99,"Es","Einsteinium",252,"actinide"],[100,"Fm","Fermium",257,"actinide"],
+    [101,"Md","Mendelevium",258,"actinide"],[102,"No","Nobelium",259,"actinide"],[103,"Lr","Lawrencium",266,"actinide"],[104,"Rf","Rutherfordium",267,"transition"],
+    [105,"Db","Dubnium",268,"transition"],[106,"Sg","Seaborgium",269,"transition"],[107,"Bh","Bohrium",270,"transition"],[108,"Hs","Hassium",269,"transition"],
+    [109,"Mt","Meitnerium",278,"transition"],[110,"Ds","Darmstadtium",281,"transition"],[111,"Rg","Roentgenium",282,"transition"],[112,"Cn","Copernicium",285,"transition"],
+    [113,"Nh","Nihonium",286,"post"],[114,"Fl","Flerovium",289,"post"],[115,"Mc","Moscovium",290,"post"],[116,"Lv","Livermorium",293,"post"],
+    [117,"Ts","Tennessine",294,"halogen"],[118,"Og","Oganesson",294,"noble"]
+  ];
+  // grid positions (col,row) on the 18-column layout
+  function pos(z){
+    if(z===1) return [1,1]; if(z===2) return [18,1];
+    if(z<=4) return [z-2+1,2]; if(z<=10) return [z-10+13,2];
+    if(z<=12) return [z-12+1,3]; if(z<=18) return [z-18+13,3];
+    if(z<=36){ var r=Math.floor((z-19)/18)+4, c=(z-19)%18+1; return [c,r]; }
+    if(z<=54){ var r2=Math.floor((z-37)/18)+5, c2=(z-37)%18+1; return [c2,r2]; }
+    if(z<=56) return [z-55+1,6];
+    if(z<=71) return [z-57+4,9];
+    if(z<=86){ var r3=Math.floor((z-72)/18)+6, c3=(z-72)%18+1; return [c3,r3]; }
+    if(z<=88) return [z-87+1,7];
+    if(z<=103) return [z-89+4,10];
+    var r4=Math.floor((z-104)/18)+7, c4=(z-104)%18+1; return [c4,r4];
+  }
+  var pt=$("ptable"), tiles={};
+  ELEMENTS.forEach(function(e){
+    var p=pos(e[0]);
+    var d=document.createElement("div");
+    d.className="el cat-"+e[4];
+    d.style.gridColumn=p[0]; d.style.gridRow=p[1];
+    d.innerHTML="<small>"+e[0]+"</small><b>"+e[1]+"</b><small>"+e[2]+"</small>";
+    d.addEventListener("click", function(){ selectEl(e[0]); });
+    pt.appendChild(d); tiles[e[0]]=d;
+  });
+  function selectEl(z){
+    var e=null; for(var i=0;i<ELEMENTS.length;i++) if(ELEMENTS[i][0]===z) e=ELEMENTS[i];
+    if(!e) return;
+    Object.keys(tiles).forEach(function(k){ tiles[k].classList.remove("sel"); });
+    tiles[z].classList.add("sel");
+    $("elInfo").innerHTML = '<div class="big">'+e[1]+'</div><div style="font-size:18px;font-weight:600">'+e[2]+'</div>' +
+      '<table class="conv"><tr><td>Atomic number</td><td>'+e[0]+'</td></tr>' +
+      '<tr><td>Atomic mass</td><td>'+e[3]+' u</td></tr>' +
+      '<tr><td>Category</td><td>'+e[4]+'</td></tr></table>';
+  }
+  $("elSearch").addEventListener("input", function(){
+    var q=this.value.trim().toLowerCase(); if(!q) return;
+    var hit=null; ELEMENTS.forEach(function(e){ if(!hit && (e[1].toLowerCase()===q || e[2].toLowerCase().indexOf(q)===0 || String(e[0])===q)) hit=e; });
+    if(hit) selectEl(hit[0]);
+  });
+
+  /* ---------- flashcards ---------- */
+  var DECK="studyhub_deck";
+  var deck=[]; try{ deck=JSON.parse(localStorage.getItem(DECK)||"[]"); }catch(e){ deck=[]; }
+  var idx=0;
+  function saveDeck(){ try{ localStorage.setItem(DECK, JSON.stringify(deck)); }catch(e){} }
+  function renderCard(){
+    $("fcCount").textContent = deck.length ? (idx+1)+" / "+deck.length : "0 cards";
+    var c=deck[idx]||{f:"no cards yet — add one above", b:""};
+    $("fcQ").textContent=c.f; $("fcA").textContent=c.b;
+    $("fcCard").classList.remove("flip");
+  }
+  $("fcAdd").addEventListener("click", function(){
+    var f=$("fcFront").value.trim(), b=$("fcBack").value.trim();
+    if(!f||!b){ toast("fill both sides"); return; }
+    deck.push({f:f,b:b}); saveDeck(); idx=deck.length-1; renderCard(); $("fcFront").value=""; $("fcBack").value="";
+  });
+  $("fcReset").addEventListener("click", function(){ if(confirm("Clear all flashcards?")){ deck=[]; idx=0; saveDeck(); renderCard(); } });
+  $("fcNext").addEventListener("click", function(){ if(deck.length){ idx=(idx+1)%deck.length; renderCard(); } });
+  $("fcPrev").addEventListener("click", function(){ if(deck.length){ idx=(idx-1+deck.length)%deck.length; renderCard(); } });
+  $("fcCard").addEventListener("click", function(){ this.classList.toggle("flip"); });
+  renderCard();
+
+  /* ---------- study timer ---------- */
+  var tLeft=25*60, tTimer=null;
+  function fmt(n){ var m=Math.floor(n/60), s=n%60; return (m<10?"0":"")+m+":"+(s<10?"0":"")+s; }
+  function renderClock(){ $("clock").textContent=fmt(tLeft); }
+  $("tmStart").addEventListener("click", function(){
+    if(tTimer) return;
+    tLeft = (parseInt($("tmMin").value,10)||25)*60;
+    tTimer=setInterval(function(){
+      tLeft--; renderClock();
+      if(tLeft<=0){ clearInterval(tTimer); tTimer=null; $("tmDone").textContent="session complete!"; toast("Time's up — take a break."); }
+    },1000);
+  });
+  $("tmPause").addEventListener("click", function(){ if(tTimer){ clearInterval(tTimer); tTimer=null; } });
+  $("tmReset").addEventListener("click", function(){ if(tTimer){ clearInterval(tTimer); tTimer=null; } tLeft=(parseInt($("tmMin").value,10)||25)*60; $("tmDone").textContent=""; renderClock(); });
+  renderClock();
+
+  /* ---------- the door: type 9999 ---------- */
+  var buf="";
+  document.addEventListener("keydown", function(e){
+    if(e.key>="0"&&e.key<="9"){ buf=(buf+e.key).slice(-4); if(buf==="9999"){ window.location.href="index.html"; } }
+    else if(e.key.length===1){ buf=""; }
+  });
+})();
+</script>
+</body>
+</html>

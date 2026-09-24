@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='UTF-8'>
+    <title>City Time-Lapse</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; background: #222; }
+        #instructions {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: monospace;
+            font-size: 16px;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="instructions">Click to grow the city over time</div>
+    <canvas id="game"></canvas>
+    <script>
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        let buildings = [];
+        let frame = 0;
+        let audioCtx;
+        const sound = new Audio('https://raw.githubusercontent.com/neal.fun/website/main/assets/sounds/sfx_ambient_city.mp3');
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+
+        function draw() {
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            buildings.forEach((b, i) => {
+                ctx.fillStyle = `hsl(${Math.random()*360}, 100%, 60%)`;
+                ctx.fillRect(b.x, b.y, b.width + frame * 0.5, b.height);
+                ctx.beginPath();
+                ctx.arc(b.x + b.width/2, b.y - 10, 5, 0, Math.PI*2);
+                ctx.fillStyle = '#fff';
+                ctx.fill();
+            });
+        }
+
+        function addBuilding() {
+            buildings.push({
+                x: Math.random() * (canvas.width - 100),
+                y: Math.random() * (canvas.height - 100),
+                width: 50 + Math.random()*50,
+                height: 50 + Math.random()*50
+            });
+        }
+
+        function init() {
+            for (let i = 0; i < 5; i++) {
+                addBuilding();
+            }
+            setInterval(addBuilding, 1000);
+            requestAnimationFrame(gameLoop);
+        }
+
+        function gameLoop() {
+            frame++;
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        document.addEventListener('pointerdown', () => {
+            if (audioCtx) return;
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            sound.play().then(() => audioCtx.resume()).catch(e => console.error(e));
+        });
+
+        init();
+    </script>
+</body>
+</html>

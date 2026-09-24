@@ -35,6 +35,25 @@
     "warnings": []
   },
   {
+    "file": "build.html",
+    "title": "Build everything.html",
+    "ok": true,
+    "errors": [],
+    "warnings": [
+      "id \"viewer\" used in code but not defined in the HTML",
+      "id \"frame\" used in code but not defined in the HTML",
+      "id \"vtitle\" used in code but not defined in the HTML",
+      "id \"vopen\" used in code but not defined in the HTML"
+    ]
+  },
+  {
+    "file": "everything.html",
+    "title": "My Games — everything (single file)",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
     "file": "gloop-escape.html",
     "title": "Gloop's Great Escape",
     "ok": true,
@@ -79,20 +98,6 @@
   {
     "file": "drops/2026-09-21-dropworks.html",
     "title": "DROPWORKS — 2D Vehicle &amp; Machine Sandbox",
-    "ok": true,
-    "errors": [],
-    "warnings": []
-  },
-  {
-    "file": "games/a-fake-daily-horoscope-generator-with-.html",
-    "title": "Fake Daily Horoscope",
-    "ok": true,
-    "errors": [],
-    "warnings": []
-  },
-  {
-    "file": "games/a-screensaver-that-reacts-to-your-mous.html",
-    "title": "Mouse Screen Saver",
     "ok": true,
     "errors": [],
     "warnings": []
@@ -223,6 +228,41 @@
   {
     "file": "games/a-markdown-editor-with-live-preview-auto.html",
     "title": "Markdown Forge",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "games/a-stock-ticker-of-fake-companies.html",
+    "title": "Fake Stock Ticker",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "games/a-fake-daily-horoscope-generator-with-.html",
+    "title": "Fake Daily Horoscope",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "games/a-time-lapse-of-a-city-growing.html",
+    "title": "City Time-Lapse",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "games/an-endless-runner-where-you-are-a-rain.html",
+    "title": "Raindrop Runner",
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  {
+    "file": "games/a-screensaver-that-reacts-to-your-mous.html",
+    "title": "Mouse Screen Saver",
     "ok": true,
     "errors": [],
     "warnings": []
